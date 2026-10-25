@@ -43,7 +43,7 @@ Número máximo de pessoas que um Espaço comporta.
 _Evitar_: lotação, tamanho
 
 **Recurso restrito**:
-Recurso cujas Reservas só valem depois de aprovadas por um Gestor.
+Recurso cujas Reservas só valem depois de aprovadas pelo Gestor responsável por ele, que é o Gestor que o cadastrou.
 _Evitar_: recurso especial, recurso protegido
 
 **Horário de funcionamento**:
@@ -65,7 +65,7 @@ Período com início e fim, no mesmo dia, em múltiplos de 30 minutos. Dois Inte
 _Evitar_: horário, período, slot
 
 **Pedido**:
-Reserva em Recurso restrito que ainda aguarda decisão do Gestor (status Pendente).
+Reserva em Recurso restrito que ainda aguarda decisão do Gestor (status Pendente). Já ocupa o Intervalo, como toda Reserva ativa.
 _Evitar_: solicitação, requisição
 
 **Reserva ativa**:
@@ -133,7 +133,7 @@ Conjunto de limites aplicados a cada Perfil: Antecedência, Duração máxima, C
 _Evitar_: regras, configuração, parâmetros
 
 **Antecedência**:
-Tempo entre a criação da Reserva e o início do Intervalo. A Política define um mínimo e um máximo por Perfil.
+Tempo entre a criação da Reserva e o início do Intervalo. A Política define um mínimo e um máximo por Perfil, e um mínimo maior para Recurso restrito.
 _Evitar_: prazo, janela
 
 **Duração máxima**:

@@ -53,7 +53,7 @@ Formato: *Como [ator], quero [ação] para [objetivo].* Cada história tem crit�
 
 **US01: Entrar no sistema.** Como Usuário, quero entrar com meu e-mail institucional para acessar as minhas Reservas.
 - Só aceita e-mails `@unifesp.br`.
-- O Perfil vem do cadastro (os usuários de demonstração já vêm carregados no banco).
+- O Perfil vem do cadastro: todos os Usuários, com o seu Perfil, já vêm carregados no banco de demonstração. Um e-mail que não está cadastrado não entra, e o Perfil não muda pelo sistema.
 
 **US02: Ver minha conduta.** Como Aluno ou Docente, quero ver minhas Penalidades e se estou suspenso para entender o que posso fazer.
 - Mostra cada Penalidade com data, motivo e Reserva de origem.
@@ -68,6 +68,7 @@ Formato: *Como [ator], quero [ação] para [objetivo].* Cada história tem crit�
 **US04: Cadastrar Recurso.** Como Gestor, quero cadastrar Espaços e Equipamentos com seus dados para que possam ser reservados.
 - Espaço: nome, local, Capacidade, Horário de funcionamento, se é Recurso restrito.
 - Equipamento: nome, número de patrimônio (único), Horário de funcionamento, se é Recurso restrito.
+- Quem cadastra o Recurso fica como o Gestor responsável por ele (RN13).
 - O Gestor só edita os Recursos pelos quais é responsável.
 
 **US05: Cadastrar Indisponibilidade.** Como Gestor, quero marcar um Recurso como indisponível num Intervalo para fazer manutenção ou eventos.
@@ -141,6 +142,7 @@ Cada RN precisa de **pelo menos um teste automatizado** com o ID dela no nome (p
 | Limite | Aluno | Docente |
 |---|---|---|
 | Antecedência mínima | 1 hora | 1 hora |
+| Antecedência mínima em Recurso restrito | 24 horas | 24 horas |
 | Antecedência máxima | 14 dias | 60 dias |
 | Duração máxima (Espaço) | 2 horas | 4 horas |
 | Duração máxima (Equipamento) | 4 horas | 8 horas |
@@ -151,10 +153,13 @@ Cada RN precisa de **pelo menos um teste automatizado** com o ID dela no nome (p
 
 Valores da tabela confirmados no ticket [Regras de conduta e valores da Política](https://github.com/tapajosgustavo-collab/reservas-campus/issues/6).
 
+A Antecedência mínima em Recurso restrito foi decidida no ticket [Regras de Pedido e ocupação](https://github.com/tapajosgustavo-collab/reservas-campus/issues/4).
+
 O Gestor não cria Reservas: para eventos institucionais ele usa Indisponibilidade.
 
-**RN05: Antecedência.** O início do Intervalo fica entre a Antecedência mínima e a máxima do Perfil, contadas a partir de agora.
+**RN05: Antecedência.** O início do Intervalo fica entre a Antecedência mínima e a máxima do Perfil, contadas a partir de agora. Em Recurso restrito vale a Antecedência mínima em Recurso restrito (24h), para o Gestor sempre ter tempo de decidir antes do Prazo de decisão (RN12).
 - Aluno, agora 25/10 às 9h. Pedir 25/10 às 9h30 → recusado (menos de 1h). Pedir 10/11 → recusado (mais de 14 dias).
+- Aluno, agora 25/10 às 12h30. Pedir um laboratório restrito para 25/10 às 14h → recusado (menos de 24h). Pedir para 26/10 às 14h → aceito, nasce Pendente.
 
 **RN06: Duração máxima.** A duração do Intervalo não passa da Duração máxima do Perfil para aquele tipo de Recurso.
 - Aluno pede sala por 2h30 → recusado. Docente pede a mesma sala por 2h30 → aceito.
@@ -168,7 +173,9 @@ O Gestor não cria Reservas: para eventos institucionais ele usa Indisponibilida
 
 **RN09: Suspenso não reserva.** Um Usuário com Suspensão em vigor não pode criar Reservas nem Séries.
 
-**RN10: Restrito começa Pendente.** A Reserva em Recurso restrito nasce Pendente. Nos demais Recursos, nasce Confirmada. **Uma Reserva Pendente já ocupa o Intervalo**: quem pediu primeiro tem a vez.
+**RN10: Restrito começa Pendente.** A Reserva em Recurso restrito nasce Pendente. Nos demais Recursos, nasce Confirmada. **Uma Reserva Pendente já ocupa o Intervalo**: quem pediu primeiro tem a vez, e o Pedido conta na Cota como qualquer Reserva ativa.
+- Ana pede o laboratório restrito para terça 14h–16h às 8h. Bruno pede o mesmo Intervalo às 9h → **recusado** por Conflito (RN01).
+- O Gestor recusa o Pedido da Ana, ou ele expira → o Intervalo fica livre. Bruno pede de novo → aceito, nasce Pendente. Não existe fila de espera.
 
 ### Pedidos
 
@@ -176,7 +183,8 @@ O Gestor não cria Reservas: para eventos institucionais ele usa Indisponibilida
 
 **RN12: Expiração.** Se o Pedido não for decidido até **2 horas antes do início**, ele vira Expirado automaticamente, libera o Intervalo e o Usuário é notificado. Expiração não gera Penalidade.
 
-**RN13: Gestor do Recurso.** Só um Gestor responsável pelo Recurso pode decidir os Pedidos dele.
+**RN13: Gestor do Recurso.** Cada Recurso tem exatamente um Gestor responsável: o Gestor que o cadastrou. Só ele decide os Pedidos do Recurso.
+- Carlos cadastra o projetor P-123. Dora, que também é Gestora, tenta aprovar um Pedido do P-123 → recusado.
 
 ### Uso
 
@@ -269,10 +277,10 @@ Cada incremento termina com uma release (tag) no GitHub e algo funcionando de po
 
 Decisões que o grupo precisa tomar. A proposta atual está entre parênteses e já está aplicada no documento acima.
 
-1. **Pedido Pendente ocupa o horário?** Dois Alunos querem o mesmo laboratório restrito na terça às 14h. (Proposta: sim, quem pediu primeiro tem a vez. A alternativa é aceitar vários Pedidos e o Gestor escolher um, o que é mais justo mas bem mais complexo.)
+1. ~~**Pedido Pendente ocupa o horário?**~~ **Decidido** ([#4](https://github.com/tapajosgustavo-collab/reservas-campus/issues/4)): sim, quem pediu primeiro tem a vez, sem fila de espera (RN10). Vários Pedidos para o Gestor escolher fica como melhoria futura.
 2. **Equipamentos iguais.** O campus tem 5 projetores idênticos. O Usuário escolhe "o projetor de patrimônio 123" ou só "um projetor"? (Proposta: cada Equipamento é uma unidade e o Usuário escolhe qual. "Qualquer um livre" seria uma melhoria futura.)
 3. **Equipamento não devolvido.** O notebook da Reserva das 10h–12h não voltou, e outra pessoa tem Reserva às 13h. O que acontece com ela? (Proposta: o Check-in dela fica bloqueado até a Devolução, ela não leva Penalidade e o Gestor é notificado.)
 4. ~~**Docente leva Penalidade?**~~ **Decidido** ([#6](https://github.com/tapajosgustavo-collab/reservas-campus/issues/6)): sim, mesmas regras do Aluno.
 5. ~~**Suspensão e Reservas futuras.**~~ **Decidido** ([#6](https://github.com/tapajosgustavo-collab/reservas-campus/issues/6)): elas continuam valendo (RN19).
 6. ~~**Série na Cota.**~~ **Decidido** ([#7](https://github.com/tapajosgustavo-collab/reservas-campus/issues/7)): a Série conta como 1 na Cota enquanto tiver alguma Ocorrência ativa (RN21).
-7. **Quem define que alguém é Docente ou Gestor?** (Proposta: no MVP vem do banco de demonstração. Uma tela de administração fica para depois.)
+7. ~~**Quem define que alguém é Docente ou Gestor?**~~ **Decidido** ([#4](https://github.com/tapajosgustavo-collab/reservas-campus/issues/4)): todos os Usuários e Perfis vêm do banco de demonstração e o Perfil não muda pelo sistema (US01). Cada Recurso tem um único Gestor responsável, quem o cadastrou (RN13). Tela de administração fica para depois.
