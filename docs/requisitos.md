@@ -32,6 +32,7 @@ O sistema centraliza as **Reservas**, impede **Conflitos** automaticamente, apli
 - Vários campi.
 - Docente "tomar" o horário de um Aluno por prioridade (preempção).
 - App mobile nativo (a interface web precisa funcionar no celular).
+- Calendário acadêmico (feriados e recessos) cadastrado no sistema. Por enquanto o Docente deixa essas datas de fora ao criar a Série (RN21).
 
 ## 4. Módulos e responsáveis
 
@@ -88,6 +89,8 @@ Formato: *Como [ator], quero [ação] para [objetivo].* Cada história tem crit�
 - RN: RN01 a RN10.
 
 **US09: Criar Série.** Como Docente, quero reservar o mesmo Intervalo toda semana até uma data para minhas aulas do semestre.
+- Antes de confirmar, a tela mostra todas as datas da Série, e o Docente pode desmarcar as que não quer (feriados, recessos, provas em outro lugar).
+- Se alguma data falhar, a resposta lista as datas e a regra que falhou em cada uma. O Docente pode desmarcar essas datas e tentar de novo.
 - RN: RN21.
 
 **US10: Minhas reservas.** Como Usuário, quero ver as minhas Reservas futuras e passadas, com o Status de cada uma.
@@ -97,6 +100,7 @@ Formato: *Como [ator], quero [ação] para [objetivo].* Cada história tem crit�
 **US11: Decidir Pedidos.** Como Gestor, quero ver a fila de Pedidos dos meus Recursos e aprovar ou recusar cada um.
 - A fila vem ordenada pelo início do Intervalo (o mais urgente primeiro).
 - Se quem pediu está com Suspensão em vigor, o Pedido mostra "Usuário suspenso até DD/MM". O Gestor pode aprovar normalmente ou recusar com justificativa; nada é automático.
+- Os Pedidos de uma mesma Série aparecem como um item só, com as datas, e são decididos juntos (RN21).
 - RN: RN11, RN12, RN13.
 
 **US12: Fazer Check-in.** Como Usuário, quero registrar que cheguei ou retirei o Equipamento para não perder a Reserva.
@@ -158,6 +162,7 @@ O Gestor não cria Reservas: para eventos institucionais ele usa Indisponibilida
 
 **RN07: Cota.** O Usuário não pode passar da Cota de Reservas ativas do Perfil dele.
 - Aluno com 3 Reservas ativas tenta a 4ª → recusado. Cancela uma e tenta de novo → aceito.
+- Docente com 4 Séries ativas (de 18 Ocorrências cada) e 5 Reservas avulsas ativas usa 9 de 10. Pode criar mais uma Reserva avulsa ou mais uma Série (RN21).
 
 **RN08: Capacidade.** Ao reservar um Espaço, o Usuário informa o número de participantes, que não pode passar da Capacidade.
 
@@ -197,7 +202,13 @@ O Gestor não cria Reservas: para eventos institucionais ele usa Indisponibilida
 
 ### Séries
 
-**RN21: Série tudo-ou-nada.** Só Docentes criam Séries. A Série repete o mesmo Intervalo toda semana até uma data final de no máximo 18 semanas depois. Cada Ocorrência passa pelas RN01 a RN09, **exceto a Antecedência máxima**. Se **qualquer** Ocorrência falhar, nenhuma é criada, e a resposta lista quais datas falharam e por quê. A Série conta como **1** na Cota. O Docente pode cancelar uma Ocorrência só ou a Série inteira a partir de uma data.
+**RN21: Série tudo-ou-nada.** Só Docentes criam Séries. A Série repete o mesmo Intervalo toda semana até uma data final de no máximo 18 semanas depois. Cada Ocorrência passa pelas RN01 a RN09, **exceto a Antecedência máxima**. Se **qualquer** Ocorrência falhar, nenhuma é criada, e a resposta lista quais datas falharam e por quê. Decidido no ticket [Séries e Cota](https://github.com/tapajosgustavo-collab/reservas-campus/issues/7):
+- **Datas de fora.** Na criação, o Docente pode desmarcar datas. As datas desmarcadas não viram Ocorrência e não são validadas; o tudo-ou-nada vale só para as datas que sobraram. O sistema não conhece o calendário acadêmico: feriados e recessos são desmarcados pelo Docente na criação ou cancelados depois.
+  - Série de terça de 04/08 a 01/12 com 17/11 desmarcada → 17 Ocorrências; 17/11 nem é validada, mesmo que exista Indisponibilidade nesse dia.
+- **Cota.** A Série conta como **1** na Cota, junto com as Reservas avulsas, enquanto tiver pelo menos uma Ocorrência ativa. Cancelar uma Ocorrência só não devolve nada da Cota; a Série só deixa de contar quando nenhuma Ocorrência dela está mais ativa.
+- **Cada Ocorrência é uma Reserva comum.** Depois de criada, cada Ocorrência segue o ciclo de vida normal: Check-in, Não comparecimento e Cancelamento tardio geram Penalidade como numa Reserva avulsa (RN15, RN16). O Docente pode cancelar uma Ocorrência só ou a Série inteira a partir de uma data; cada Ocorrência cancelada segue a RN16.
+  - O Docente esquece de cancelar a Ocorrência de um feriado e não faz Check-in → Não comparecimento e Penalidade.
+- **Série em Recurso restrito.** As Ocorrências nascem Pendentes (RN10) e o Gestor decide a Série inteira de uma vez: a Aprovação confirma todas as Ocorrências Pendentes, e a Recusa (com justificativa, RN11) recusa todas. Se ninguém decidir até o Prazo de decisão da primeira Ocorrência, todas expiram juntas (RN12). Depois de decididas, as Ocorrências seguem cada uma a sua vida.
 
 ### Privacidade
 
@@ -263,5 +274,5 @@ Decisões que o grupo precisa tomar. A proposta atual está entre parênteses e 
 3. **Equipamento não devolvido.** O notebook da Reserva das 10h–12h não voltou, e outra pessoa tem Reserva às 13h. O que acontece com ela? (Proposta: o Check-in dela fica bloqueado até a Devolução, ela não leva Penalidade e o Gestor é notificado.)
 4. ~~**Docente leva Penalidade?**~~ **Decidido** ([#6](https://github.com/tapajosgustavo-collab/reservas-campus/issues/6)): sim, mesmas regras do Aluno.
 5. ~~**Suspensão e Reservas futuras.**~~ **Decidido** ([#6](https://github.com/tapajosgustavo-collab/reservas-campus/issues/6)): elas continuam valendo (RN19).
-6. **Série na Cota.** Um Docente com uma Série de 18 aulas gasta 18 da Cota de 10? (Proposta: a Série conta como 1.)
+6. ~~**Série na Cota.**~~ **Decidido** ([#7](https://github.com/tapajosgustavo-collab/reservas-campus/issues/7)): a Série conta como 1 na Cota enquanto tiver alguma Ocorrência ativa (RN21).
 7. **Quem define que alguém é Docente ou Gestor?** (Proposta: no MVP vem do banco de demonstração. Uma tela de administração fica para depois.)

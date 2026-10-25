@@ -77,7 +77,7 @@ Situação em que duas Reservas ativas do mesmo Recurso têm Intervalos que se s
 _Evitar_: choque, colisão, sobreposição
 
 **Série**:
-Conjunto de Reservas de um Docente, no mesmo Recurso e no mesmo Intervalo, repetidas toda semana até uma data final. Cada repetição é uma Reserva própria, chamada de Ocorrência.
+Conjunto de Reservas de um Docente, no mesmo Recurso e no mesmo Intervalo, repetidas toda semana até uma data final. Cada repetição é uma Reserva própria, chamada de Ocorrência. Ao criar a Série, o Docente pode deixar datas de fora, como feriados e recessos.
 _Evitar_: reserva recorrente, reserva fixa, evento
 
 **Ocorrência**:
@@ -141,7 +141,7 @@ Maior Intervalo que um Perfil pode reservar de uma vez em um tipo de Recurso.
 _Evitar_: tempo máximo, limite de horas
 
 **Cota**:
-Número máximo de Reservas ativas que um Usuário pode ter ao mesmo tempo.
+Número máximo de Reservas ativas que um Usuário pode ter ao mesmo tempo. As Ocorrências ativas de uma mesma Série contam juntas, como uma só.
 _Evitar_: limite, quota, franquia
 
 **Prazo de decisão**:
