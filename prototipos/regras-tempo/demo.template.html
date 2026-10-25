@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Regras de tempo · protótipo</title>
+<style>
+  :root { --tinta:#1d2330; --suave:#5d6577; --linha:#e3e6ec; --fundo:#f7f8fa; --acento:#2459d6; --acento-claro:#e8eefc; --ruim:#b42318; --ruim-claro:#fdecea; --bom:#1a7f37; --bom-claro:#e7f5ec; }
+  * { box-sizing:border-box }
+  body { margin:0; font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--tinta); background:var(--fundo) }
+  main { max-width:1180px; margin:0 auto; padding:24px 16px 64px }
+  h1 { font-size:22px; margin:0 0 4px }
+  h2 { font-size:15px; margin:0 0 10px; text-transform:uppercase; letter-spacing:.04em; color:var(--suave) }
+  .aviso { background:#fff8e1; border:1px solid #f0d98a; padding:8px 12px; border-radius:8px; font-size:13px; margin:8px 0 16px }
+  .card { background:#fff; border:1px solid var(--linha); border-radius:10px; padding:16px; margin-bottom:16px }
+  .grade { display:grid; grid-template-columns: 1fr 1fr; gap:16px }
+  @media (max-width:860px){ .grade { grid-template-columns:1fr } }
+  .relogio { font-size:28px; font-weight:650; font-variant-numeric:tabular-nums }
+  .linha { display:flex; flex-wrap:wrap; gap:8px; align-items:center }
+  button { font:inherit; font-size:14px; border:1px solid var(--linha); background:#fff; color:var(--tinta); padding:6px 12px; border-radius:7px; cursor:pointer }
+  button:hover { border-color:var(--acento) }
+  button.primario { background:var(--acento); border-color:var(--acento); color:#fff }
+  button:disabled { opacity:.45; cursor:default }
+  button.mini { padding:2px 8px; font-size:12px }
+  label.opcao { display:flex; gap:6px; align-items:center; border:1px solid var(--linha); border-radius:7px; padding:6px 10px; cursor:pointer; font-size:14px }
+  label.opcao.ativo { border-color:var(--acento); background:var(--acento-claro) }
+  .explica { font-size:13px; color:var(--suave); margin:6px 0 0 }
+  table { width:100%; border-collapse:collapse; font-size:13.5px }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--linha); vertical-align:top }
+  th { color:var(--suave); font-weight:600; font-size:12.5px }
+  .tag { display:inline-block; padding:1px 8px; border-radius:99px; font-size:12px; background:#eef0f4 }
+  .tag.ativo { background:var(--acento-claro); color:var(--acento) }
+  .tag.ruim { background:var(--ruim-claro); color:var(--ruim) }
+  .tag.bom { background:var(--bom-claro); color:var(--bom) }
+  .diverge { background:var(--ruim-claro) }
+  .abas { display:flex; flex-wrap:wrap; gap:4px; border-bottom:1px solid var(--linha); margin-bottom:12px }
+  .aba { border:none; border-bottom:2px solid transparent; border-radius:0; padding:8px 10px; background:none; color:var(--suave) }
+  .aba.ativa { color:var(--acento); border-bottom-color:var(--acento) }
+  ol.passos { padding-left:20px; margin:8px 0 }
+  ol.passos li { margin:6px 0 }
+  .feito { color:var(--suave); text-decoration:line-through }
+  .log { max-height:300px; overflow:auto; font-size:13px }
+  .log div { padding:4px 0; border-bottom:1px dashed var(--linha) }
+  .log .erro { color:var(--ruim) }
+  .log .tempo { color:var(--acento) }
+  .log .novo { background:#fffbe6 }
+  .vazio { color:var(--suave); font-size:13px }
+  form.criar { display:flex; flex-wrap:wrap; gap:8px; align-items:end; font-size:13px }
+  form.criar label { display:flex; flex-direction:column; gap:2px }
+  select, input { font:inherit; font-size:13.5px; padding:4px 6px; border:1px solid var(--linha); border-radius:6px }
+  .atrasado { color:var(--ruim); font-weight:600 }
+</style>
+</head>
+<body>
+<main>
+  <h1>Quando as regras de tempo acontecem?</h1>
+  <p style="margin:0;color:var(--suave)">Expiração, Não comparecimento, Devolução atrasada, conclusão automática, fim da Suspensão e lembrete dependem do relógio. Este protótipo deixa você mudar <b>quando</b> o sistema aplica essas regras e ver o que muda nas Reservas, nas Penalidades e nas Notificações.</p>
+  <div class="aviso">Protótipo descartável do ticket <i>Como as regras de tempo rodam e são testadas</i>. Nada é salvo: recarregar a página zera tudo. O relógio é falso de propósito: é o "relógio injetável" da RNF02.</div>
+
+  <div class="card">
+    <div class="grade">
+      <div>
+        <h2>Relógio</h2>
+        <div class="relogio" id="relogio"></div>
+        <div class="linha" style="margin-top:8px" id="botoesRelogio"></div>
+        <p class="explica">Avançar o relógio é "o tempo passando sem ninguém usar o sistema". Só o job (se existir e se o servidor estiver acordado) roda nesse meio-tempo.</p>
+      </div>
+      <div>
+        <h2>Como o sistema aplica as regras de tempo</h2>
+        <div class="linha" id="modos"></div>
+        <p class="explica" id="explicaModo"></p>
+        <div class="linha" style="margin-top:8px">
+          <label class="opcao" id="optDormir"><input type="checkbox" id="dormindo"> Servidor dormindo (Render Free hiberna após 15 min sem acesso): o job não roda</label>
+          <button id="abrirTela">Alguém abre a tela agora (uma requisição)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Roteiros guiados</h2>
+    <div class="abas" id="abas"></div>
+    <div id="roteiro"></div>
+  </div>
+
+  <div class="card">
+    <h2>Reservas</h2>
+    <div id="reservas"></div>
+    <p class="explica"><b>Gravado no banco</b> é o que a exclusion constraint, a Cota e os outros comandos enxergam. <b>Se calculasse agora</b> é o que o núcleo diria com o relógio atual. Linha vermelha = o banco está atrasado em relação ao relógio.</p>
+    <h2 style="margin-top:16px">Criar Reserva (livre)</h2>
+    <form class="criar" id="formCriar">
+      <label>Usuário <select name="usuario"><option>Ana</option><option>Bruno</option><option>Bia</option></select></label>
+      <label>Recurso <select name="recurso"><option value="SALA">Sala 101 (Espaço)</option><option value="LAB">Lab 214 (Espaço restrito)</option><option value="NB">Notebook N-07 (Equipamento)</option></select></label>
+      <label>Início <input type="datetime-local" name="inicio" step="1800" required></label>
+      <label>Fim <input type="time" name="fim" step="1800" required></label>
+      <button class="primario">Reservar</button>
+    </form>
+  </div>
+
+  <div class="grade">
+    <div class="card">
+      <h2>Próximos vencimentos (no banco)</h2>
+      <div id="vencimentos"></div>
+    </div>
+    <div class="card">
+      <h2>Conduta</h2>
+      <div id="conduta"></div>
+    </div>
+  </div>
+
+  <div class="grade">
+    <div class="card">
+      <h2>Notificações</h2>
+      <div id="notificacoes"></div>
+    </div>
+    <div class="card">
+      <h2>O que aconteceu</h2>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+/*NUCLEO*/
+</script>
+<script>
+// ---------------- casca da demo (descartável) ----------------
+// MIN, HORA e DIA vêm do núcleo.
+const sp = (dia, h, m = 0) => Date.UTC(2026, 10, dia, h + 3, m) // novembro/2026, America/Sao_Paulo = UTC-3
+const hora = t => new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }).format(t)
+
+const RECURSOS = [
+  { id: 'SALA', nome: 'Sala 101', tipo: 'Espaço', restrito: false, gestor: 'Carlos (Gestor)' },
+  { id: 'LAB', nome: 'Lab 214', tipo: 'Espaço', restrito: true, gestor: 'Carlos (Gestor)' },
+  { id: 'NB', nome: 'Notebook N-07', tipo: 'Equipamento', restrito: false, gestor: 'Carlos (Gestor)' },
+]
+const nomeRecurso = id => RECURSOS.find(r => r.id === id).nome
+const mundoVazio = () => ({ recursos: RECURSOS, reservas: [], penalidades: [], suspensoes: [], notificacoes: [] })
+
+const MODOS = {
+  misto: { nome: 'Misto (proposta)', explica: 'Toda requisição sincroniza antes de agir, e um job de 1 em 1 minuto faz o mesmo quando ninguém acessa. Os efeitos levam a data do vencimento, então o atraso do job não muda o resultado.', tique: 1 * MIN, sincronizaNaRequisicao: true },
+  job: { nome: 'Só job (a cada 5 min)', explica: 'Um job agendado de 5 em 5 minutos aplica o que venceu. As requisições não sincronizam. Como todo prazo cai em múltiplo de 15 min, com o servidor acordado o tique acerta o horário; o problema é quando o servidor dorme e ninguém roda o job.', tique: 5 * MIN, sincronizaNaRequisicao: false },
+  leitura: { nome: 'Só na leitura', explica: 'Nada é gravado com o tempo: a tela calcula o Status na hora. Mas o banco continua com o Status antigo, e é ele que a exclusion constraint, a Cota e a Suspensão enxergam.', tique: null, sincronizaNaRequisicao: false },
+}
+
+let st, seq = 0, logs = []
+function reiniciar({ agora = sp(3, 8), reservas = [], dormindo = false } = {}) {
+  seq = reservas.length
+  st = { agora, banco: { ...mundoVazio(), reservas }, dormindo, novos: 0 }
+  logs = []
+  registrar(`Mundo reiniciado em ${fmt(agora)}.`, 'tempo')
+}
+function registrar(texto, tipo = '') { logs.unshift({ texto, tipo, novo: true }) }
+
+function relatarAplicados(aplicados, origem) {
+  for (const a of aplicados) {
+    const atraso = a.processadoEm - a.em
+    registrar(`<b>${a.regra}</b> · ${a.descricao}: ${a.resultado}. Venceu ${fmt(a.em)}${atraso > 0 ? `, <span class="atrasado">aplicado ${fmt(a.processadoEm)}</span>` : ''} (${origem}).`)
+  }
+}
+
+function avancar(ms) {
+  const fimT = st.agora + ms
+  const modo = MODOS[modoAtual()]
+  if (modo.tique && !st.dormindo) {
+    // Só roda os tiques em que algo venceu: o resultado é o mesmo de rodar todos.
+    for (;;) {
+      const v = vencimentos(st.banco)[0]
+      if (!v) break
+      const tique = Math.max(Math.ceil(v.em / modo.tique) * modo.tique, st.agora)
+      if (tique > fimT) break
+      const r = sincronizar(st.banco, tique)
+      st.banco = r.mundo
+      relatarAplicados(r.aplicados, `tique do job às ${hora(tique)}`)
+    }
+  }
+  st.agora = fimT
+  registrar(`Relógio avançou para ${fmt(fimT)}${st.dormindo && modo.tique ? ' (servidor dormindo: o job não rodou)' : ''}.`, 'tempo')
+  render()
+}
+
+function requisicao(descricao, comando) {
+  const modo = MODOS[modoAtual()]
+  if (modo.sincronizaNaRequisicao) {
+    const r = sincronizar(st.banco, st.agora)
+    st.banco = r.mundo
+    relatarAplicados(r.aplicados, 'sincronizado no começo da requisição')
+  }
+  if (!comando) { registrar(`Requisição às ${hora(st.agora)}: ${descricao}.`); render(); return }
+  const res = comando(st.banco, st.agora)
+  if (res.ok) { st.banco = res.mundo; registrar(`${descricao}: ${res.msg}.`) }
+  else registrar(`${descricao}: recusado. ${res.erro}`, 'erro')
+  render()
+}
+
+function novaReserva(usuario, recurso, inicio, fim) {
+  const id = `R${++seq}`
+  requisicao(`${usuario} pede ${nomeRecurso(recurso)} ${fmt(inicio)}–${hora(fim)}`, (m, agora) => criarReserva(m, agora, { id, usuario, recurso, inicio, fim }))
+}
+const acao = (rotulo, fn, id) => requisicao(`${rotulo} ${id}`, (m, agora) => fn(m, agora, id))
+
+// ---------------- roteiros ----------------
+const reserva = (id, usuario, recurso, inicio, fim, status, extra = {}) => ({ id, usuario, recurso, inicio, fim, status, ...extra })
+const ROTEIROS = [
+  {
+    nome: 'Pedido expira (RN12)',
+    texto: 'Ana pede o Lab 214, que é restrito, para quarta 14h–16h. Ninguém decide até 2h antes (12h) e, como é hora de almoço, ninguém usa o sistema: o servidor está dormindo. Às 12h02 o Gestor abre a fila e tenta aprovar. <b>Rode nos três modos</b>: no Misto a requisição sincroniza primeiro e a Aprovação é recusada (o Pedido já expirou); no Só job e no Só na leitura o banco ainda diz Pendente e o Gestor aprova um Pedido que deveria estar Expirado.',
+    inicio: () => reiniciar({ agora: sp(3, 9), dormindo: true }),
+    passos: [
+      ['Ana pede o Lab 214 para qua 04/11, 14h–16h', () => novaReserva('Ana', 'LAB', sp(4, 14), sp(4, 16))],
+      ['Avançar até qua 12h02 (servidor dormindo)', () => avancar(sp(4, 12, 2) - st.agora)],
+      ['O Gestor tenta aprovar o Pedido da Ana (R1)', () => acao('Gestor aprova', aprovar, 'R1')],
+    ],
+  },
+  {
+    nome: 'Servidor dormindo (RN15 + lembrete)',
+    texto: 'Bruno tem a Sala 101 terça 10h–12h e não aparece. O servidor está hibernando (ninguém acessou desde as 8h). Às 13h alguém abre o sistema. Repare: a Penalidade é registrada com a data das <b>10h15</b>, não 13h, e o lembrete das 9h foi <b>descartado</b> porque já passou do início. Esse descarte é uma das perguntas para decidir.',
+    inicio: () => reiniciar({ agora: sp(3, 8), dormindo: true, reservas: [reserva('R1', 'Bruno', 'SALA', sp(3, 10), sp(3, 12), 'Confirmada')] }),
+    passos: [
+      ['Avançar até 13h (servidor dormindo)', () => avancar(sp(3, 13) - st.agora)],
+      ['Alguém abre a tela às 13h', () => requisicao('Alguém abre a lista de Reservas')],
+    ],
+  },
+  {
+    nome: 'Notebook volta a tempo (RN23)',
+    texto: 'Ana está com o Notebook N-07 (10h–12h) e não devolve. Bia reservou o mesmo notebook das 13h às 15h. O Check-in da Bia é recusado às 13h05; o notebook volta às 13h10; a Bia faz Check-in às 13h12. A Ana leva uma Penalidade só, datada das 12h15 (RN17).',
+    inicio: () => reiniciar({ agora: sp(3, 12), reservas: [reserva('R1', 'Ana', 'NB', sp(3, 10), sp(3, 12), 'Em uso', { checkIn: sp(3, 10), lembreteTratado: true }), reserva('R2', 'Bia', 'NB', sp(3, 13), sp(3, 15), 'Confirmada', { lembreteTratado: true })] }),
+    passos: [
+      ['Avançar até 13h05', () => avancar(sp(3, 13, 5) - st.agora)],
+      ['Bia tenta o Check-in da R2', () => acao('Check-in da Bia', fazerCheckIn, 'R2')],
+      ['Avançar até 13h10', () => avancar(sp(3, 13, 10) - st.agora)],
+      ['Gestor registra a Devolução da R1', () => acao('Gestor registra Devolução', registrarDevolucao, 'R1')],
+      ['Avançar até 13h12', () => avancar(sp(3, 13, 12) - st.agora)],
+      ['Bia tenta o Check-in da R2 de novo', () => acao('Check-in da Bia', fazerCheckIn, 'R2')],
+    ],
+  },
+  {
+    nome: 'Duas regras no mesmo instante (RN17 + RN23)',
+    texto: 'Reservas do notebook que se encostam: Ana 10h–12h (Em uso) e Bia 12h–14h. Às 12h15 vencem ao mesmo tempo a Tolerância de Devolução da Ana e a Tolerância do Check-in da Bia. O núcleo aplica em ordem fixa: a Ana leva a Penalidade e a Bia tem Cancelamento pelo sistema, sem Penalidade.',
+    inicio: () => reiniciar({ agora: sp(3, 11, 50), reservas: [reserva('R1', 'Ana', 'NB', sp(3, 10), sp(3, 12), 'Em uso', { checkIn: sp(3, 10), lembreteTratado: true }), reserva('R2', 'Bia', 'NB', sp(3, 12), sp(3, 14), 'Confirmada', { lembreteTratado: true })] }),
+    passos: [
+      ['Avançar até 12h20', () => avancar(sp(3, 12, 20) - st.agora)],
+      ['Alguém abre a tela', () => requisicao('Alguém abre a lista de Reservas')],
+      ['Gestor registra a Devolução da R1 (sem nova Penalidade)', () => acao('Gestor registra Devolução', registrarDevolucao, 'R1')],
+    ],
+  },
+  {
+    nome: 'Três faltas, Suspensão depois (RN19)',
+    texto: 'Bruno falta terça, quarta e quinta (Sala 101, 10h–11h) e ninguém usa o sistema a semana toda. Sexta às 9h ele tenta reservar. No Misto, a sincronização aplica as três faltas em ordem, cria a Suspensão a partir da 3ª (qui 10h15, por 7 dias) e a Reserva é recusada pela RN09. No Só na leitura nada disso foi gravado e ele reserva normalmente.',
+    inicio: () => reiniciar({ agora: sp(2, 8), dormindo: true, reservas: [3, 4, 5].map((d, i) => reserva(`R${i + 1}`, 'Bruno', 'SALA', sp(d, 10), sp(d, 11), 'Confirmada'))}),
+    passos: [
+      ['Avançar até sex 06/11 9h (servidor dormindo)', () => avancar(sp(6, 9) - st.agora)],
+      ['Bruno pede a Sala 101 sex 14h–15h', () => novaReserva('Bruno', 'SALA', sp(6, 14), sp(6, 15))],
+      ['Avançar até qui 12/11 10h20', () => avancar(sp(12, 10, 20) - st.agora)],
+      ['Bruno pede a Sala 101 qui 14h–15h', () => novaReserva('Bruno', 'SALA', sp(12, 14), sp(12, 15))],
+    ],
+  },
+]
+let abaAtual = 0, passoAtual = 0
+function iniciarRoteiro(i) { abaAtual = i; passoAtual = 0; ROTEIROS[i].inicio(); render() }
+
+// ---------------- render ----------------
+const modoAtual = () => document.querySelector('input[name=modo]:checked').value
+const statusTag = s => `<span class="tag ${['Pendente', 'Confirmada', 'Em uso'].includes(s) ? 'ativo' : s === 'Concluída' ? 'bom' : ['Não comparecimento', 'Expirada', 'Cancelada', 'Recusada'].includes(s) ? 'ruim' : ''}">${s}</span>`
+
+function render() {
+  document.getElementById('relogio').textContent = fmt(st.agora)
+  document.getElementById('dormindo').checked = st.dormindo
+  document.getElementById('optDormir').classList.toggle('ativo', st.dormindo)
+  document.getElementById('explicaModo').textContent = MODOS[modoAtual()].explica
+  document.querySelectorAll('#modos label').forEach(l => l.classList.toggle('ativo', l.querySelector('input').checked))
+
+  // roteiros
+  document.getElementById('abas').innerHTML = ROTEIROS.map((r, i) => `<button class="aba ${i === abaAtual ? 'ativa' : ''}" onclick="iniciarRoteiro(${i})">${r.nome}</button>`).join('')
+  const ro = ROTEIROS[abaAtual]
+  document.getElementById('roteiro').innerHTML = `<p style="margin-top:0">${ro.texto}</p><ol class="passos">${ro.passos.map(([t], i) =>
+    `<li class="${i < passoAtual ? 'feito' : ''}"><button class="${i === passoAtual ? 'primario' : ''}" ${i !== passoAtual ? 'disabled' : ''} onclick="passo(${i})">${t}</button></li>`).join('')}</ol>
+    <button class="mini" onclick="iniciarRoteiro(${abaAtual})">Recomeçar este roteiro</button>`
+
+  // reservas
+  const calculado = sincronizar(st.banco, st.agora).mundo
+  const linhas = st.banco.reservas.map(r => {
+    const c = calculado.reservas.find(x => x.id === r.id)
+    const rec = RECURSOS.find(x => x.id === r.recurso)
+    const diverge = c.status !== r.status
+    const extras = [r.checkIn && `Check-in ${hora(r.checkIn)}`, r.devolucao && `Devolução ${hora(r.devolucao)}`, r.atrasoPenalizado && 'Devolução atrasada'].filter(Boolean).join(' · ')
+    const botoes = [
+      r.status === 'Pendente' && `<button class="mini" onclick="acao('Gestor aprova', aprovar, '${r.id}')">Aprovar</button>`,
+      r.status === 'Confirmada' && `<button class="mini" onclick="acao('Check-in de ${r.usuario}', fazerCheckIn, '${r.id}')">Check-in</button>`,
+      r.status === 'Em uso' && rec.tipo === 'Equipamento' && `<button class="mini" onclick="acao('Gestor registra Devolução', registrarDevolucao, '${r.id}')">Devolução</button>`,
+      ['Pendente', 'Confirmada'].includes(r.status) && `<button class="mini" onclick="acao('${r.usuario} cancela', cancelar, '${r.id}')">Cancelar</button>`,
+    ].filter(Boolean).join(' ')
+    return `<tr class="${diverge ? 'diverge' : ''}"><td><b>${r.id}</b></td><td>${r.usuario}</td><td>${rec.nome}</td><td>${fmt(r.inicio)}–${hora(r.fim)}</td><td>${statusTag(r.status)}</td><td>${diverge ? statusTag(c.status) : '<span class="vazio">igual</span>'}</td><td>${extras}</td><td>${botoes}</td></tr>`
+  }).join('')
+  document.getElementById('reservas').innerHTML = st.banco.reservas.length
+    ? `<table><tr><th>Id</th><th>Usuário</th><th>Recurso</th><th>Intervalo</th><th>Gravado no banco</th><th>Se calculasse agora</th><th>Detalhes</th><th>Ações</th></tr>${linhas}</table>`
+    : '<p class="vazio">Nenhuma Reserva ainda.</p>'
+
+  // vencimentos
+  const vs = vencimentos(st.banco).slice(0, 8)
+  document.getElementById('vencimentos').innerHTML = vs.length
+    ? `<table><tr><th>Vence em</th><th>Regra</th><th>O quê</th></tr>${vs.map(v => `<tr><td>${fmt(v.em)}${v.em <= st.agora ? ' <span class="atrasado">· vencido, esperando</span>' : ''}</td><td>${v.regra}</td><td>${v.descricao}</td></tr>`).join('')}</table>`
+    : '<p class="vazio">Nada para vencer.</p>'
+
+  // conduta
+  const usuarios = ['Ana', 'Bruno', 'Bia']
+  document.getElementById('conduta').innerHTML = `<table><tr><th>Usuário</th><th>Penalidades (data)</th><th>Suspensão agora</th></tr>${usuarios.map(u => {
+    const ps = st.banco.penalidades.filter(p => p.usuario === u)
+    const s = suspensaoEmVigor(st.banco, u, st.agora)
+    return `<tr><td>${u}</td><td>${ps.length ? ps.map(p => `${p.motivo} · ${fmt(p.em)}${p.usadaEmSuspensao ? ' <span class="tag">já suspendeu</span>' : ''}`).join('<br>') : '<span class="vazio">nenhuma</span>'}</td><td>${s ? `<span class="tag ruim">suspenso até ${fmt(s.fim)}</span>` : '<span class="vazio">não</span>'}</td></tr>`
+  }).join('')}</table><p class="explica">A Suspensão é gravada com início e fim quando nasce a 3ª Penalidade. "Em vigor" é calculado na leitura: o fim da Suspensão não precisa de job, só a Notificação de fim.</p>`
+
+  // notificações
+  const ns = [...st.banco.notificacoes].reverse()
+  document.getElementById('notificacoes').innerHTML = ns.length
+    ? `<table><tr><th>Para</th><th>Sobre</th><th>Mensagem</th></tr>${ns.map(n => `<tr><td>${n.para}</td><td>${fmt(n.em)}${n.processadaEm > n.em ? `<br><span class="atrasado">saiu ${fmt(n.processadaEm)}</span>` : ''}</td><td>${n.texto}</td></tr>`).join('')}</table>`
+    : '<p class="vazio">Nenhuma Notificação.</p>'
+
+  document.getElementById('log').innerHTML = logs.map(l => `<div class="${l.tipo} ${l.novo ? 'novo' : ''}">${l.texto}</div>`).join('')
+  logs.forEach(l => l.novo = false)
+}
+
+function passo(i) { ROTEIROS[abaAtual].passos[i][1](); passoAtual = i + 1; render() }
+
+// ---------------- montagem ----------------
+document.getElementById('modos').innerHTML = Object.entries(MODOS).map(([k, m]) => `<label class="opcao"><input type="radio" name="modo" value="${k}" ${k === 'misto' ? 'checked' : ''}> ${m.nome}</label>`).join('')
+document.querySelectorAll('input[name=modo]').forEach(i => i.addEventListener('change', () => { registrar(`Modo trocado para "${MODOS[i.value].nome}". Dica: recomece o roteiro para comparar.`, 'tempo'); render() }))
+document.getElementById('botoesRelogio').innerHTML = [['+1 min', MIN], ['+5 min', 5 * MIN], ['+15 min', 15 * MIN], ['+1 hora', HORA], ['+1 dia', DIA]].map(([t, ms]) => `<button onclick="avancar(${ms})">${t}</button>`).join('')
+document.getElementById('dormindo').addEventListener('change', e => { st.dormindo = e.target.checked; registrar(st.dormindo ? 'O servidor dormiu.' : 'O servidor acordou.', 'tempo'); render() })
+document.getElementById('abrirTela').addEventListener('click', () => requisicao('Alguém abre a lista de Reservas'))
+document.getElementById('formCriar').addEventListener('submit', e => {
+  e.preventDefault()
+  const f = new FormData(e.target)
+  const [d, h] = String(f.get('inicio')).split('T'), [, mes, dia] = d.split('-').map(Number), [hh, mm] = h.split(':').map(Number)
+  const [fh, fm] = String(f.get('fim')).split(':').map(Number)
+  const inicio = Date.UTC(2026, mes - 1, dia, hh + 3, mm), fim = Date.UTC(2026, mes - 1, dia, fh + 3, fm)
+  novaReserva(f.get('usuario'), f.get('recurso'), inicio, fim)
+})
+iniciarRoteiro(0)
+</script>
+</body>
+</html>
