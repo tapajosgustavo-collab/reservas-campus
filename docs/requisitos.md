@@ -116,10 +116,12 @@ Formato: *Como [ator], quero [ação] para [objetivo].* Cada história tem crit�
 - RN: RN13, RN17.
 
 **US15: Regras automáticas de tempo.** Como Sistema, quero aplicar Expiração, Não comparecimento, conclusão automática e Devolução atrasada no momento certo.
+- Cada efeito (Status, Penalidade, Notificação) leva a data e hora em que o prazo venceu, mesmo que o sistema só aplique a regra depois (por exemplo, com o servidor parado). Decidido no ticket [Como as regras de tempo rodam e são testadas](https://github.com/tapajosgustavo-collab/reservas-campus/issues/12).
 - RN: RN12, RN15, RN17, RN18, RN23.
 
 **US16: Notificações.** Como Usuário, quero ser avisado do que acontece com minhas Reservas para não ser pego de surpresa.
 - Eventos: Aprovação, Recusa (com justificativa), Expiração, Cancelamento pelo sistema, Penalidade, Devolução atrasada (para o Usuário e para o Gestor do Equipamento), início e fim de Suspensão, lembrete 1h antes do início.
+- Se o lembrete só puder sair depois do início da Reserva (o sistema estava parado), ele não é enviado.
 
 ## 6. Regras de negócio
 
@@ -263,7 +265,7 @@ Reservas ativas: **Pendente, Confirmada e Em uso.**
 | ID | Requisito |
 |---|---|
 | RNF01 | Toda RN tem teste unitário com o ID dela no nome. Cobertura mínima de 80% no código das regras de negócio. |
-| RNF02 | As regras que dependem do tempo recebem o "agora" de fora (relógio injetável), para os testes poderem simular qualquer data e hora. |
+| RNF02 | As regras que dependem do tempo recebem o "agora" de fora (relógio injetável), para os testes poderem simular qualquer data e hora. Na demo, o relógio da API pode ser avançado ao vivo, só com `DEMO=1`. |
 | RNF03 | Testes de integração na API para cada história e testes ponta a ponta para os 3 fluxos principais: reservar, decidir Pedido, Check-in. |
 | RNF04 | Todo PR roda lint e testes no GitHub Actions. Nada entra na `main` com o CI falhando ou sem 1 aprovação. |
 | RNF05 | O projeto sobe com um comando (por exemplo `docker compose up`) e o README explica como rodar e testar. |
