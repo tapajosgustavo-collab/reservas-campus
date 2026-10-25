@@ -1,0 +1,715 @@
+<!doctype html>
+<!--
+  PROTÓTIPO DESCARTÁVEL. Não é código de produção e não vai para a main.
+  Ticket: "Protótipo das telas principais" (issue #8 do mapa #1).
+
+  Pergunta: como devem ser e como devem se comportar as três telas centrais?
+  Plano: 3 variantes de cada tela, trocadas pela barra flutuante (◀ ▶ ou setas do teclado),
+  num único HTML sem dependências. Dê dois cliques para abrir.
+    - Agenda semanal do Recurso:  ?agenda=A|B|C
+    - Criação de Reserva:         ?reserva=A|B|C
+    - Fila de Pedidos do Gestor:  ?fila=A|B|C
+  Dados falsos em memória, "agora" fixo em seg 26/10/2026 09:00. As regras RN01–RN13
+  são simuladas aqui só para as mensagens aparecerem; nada disso é a implementação.
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTÓTIPO · Telas do Reservas do Campus</title>
+<style>
+:root{--azul:#1d4ed8;--azul-claro:#dbeafe;--verde:#15803d;--verde-claro:#dcfce7;--verm:#b91c1c;--verm-claro:#fee2e2;--amar:#a16207;--amar-claro:#fef3c7;--cinza:#6b7280;--borda:#e5e7eb;--texto:#111827}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--texto);background:#f8fafc;font-size:14px;padding-bottom:90px}
+h1{font-size:20px;margin:0 0 4px} h2{font-size:18px;margin:0} h3{font-size:15px;margin:0 0 4px}
+h4{margin:14px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#475569}
+.mini{font-size:12px;color:var(--cinza)}
+.proto{background:#fef9c3;border-bottom:2px dashed #ca8a04;padding:6px 12px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12px}
+.proto b{color:#854d0e} .proto select,.proto button{font-size:12px}
+header.app{display:flex;align-items:center;gap:16px;padding:8px 16px;background:#0f2a5a;color:#fff;flex-wrap:wrap}
+.marca{font-weight:700;font-size:16px}
+nav{display:flex;gap:4px;flex:1;flex-wrap:wrap}
+.tab{background:transparent;border:0;color:#cbd5e1;padding:8px 12px;border-radius:6px;cursor:pointer;font:inherit}
+.tab.on{background:#1e40af;color:#fff}
+.cont{background:#f59e0b;color:#000;border-radius:10px;padding:0 6px;font-size:11px;font-weight:700}
+.eu{font-size:13px}
+.badge{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;background:#e5e7eb;color:#374151;font-weight:600;vertical-align:middle;white-space:nowrap}
+.badge.amar{background:var(--amar-claro);color:var(--amar)} .badge.verm{background:var(--verm-claro);color:var(--verm)} .badge.verde{background:var(--verde-claro);color:var(--verde)}
+.badge.grande{font-size:13px;padding:4px 10px}
+.pag{max-width:1100px;margin:0 auto;padding:16px}
+.pag.com-sheet{padding-bottom:300px}
+.card{background:#fff;border:1px solid var(--borda);border-radius:10px;padding:16px}
+.ag-topo{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.sel-rec{font:inherit;font-size:16px;font-weight:700;padding:6px 8px;border-radius:6px;border:1px solid #cbd5e1;max-width:100%}
+.rec-info{color:#475569;font-size:13px}
+.ag-sub{margin:12px 0 8px;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.leg{display:inline-flex;flex-wrap:wrap;gap:10px;font-size:11px;color:#475569;margin-left:10px}
+.leg i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px;border:1px solid #cbd5e1}
+.dica{font-size:12px;color:var(--cinza);margin-top:8px}
+/* estados de horário */
+.c-livre{background:#fff;cursor:pointer}
+.c-ocupado{background:#cbd5e1;color:#334155}
+.c-meu{background:#2563eb;color:#fff}
+.c-meupend{background:repeating-linear-gradient(45deg,#dbeafe,#dbeafe 6px,#bfdbfe 6px,#bfdbfe 12px);color:#1e3a8a}
+.c-pend{background:repeating-linear-gradient(45deg,#fef3c7,#fef3c7 6px,#fde68a 6px,#fde68a 12px);color:#78350f}
+.c-indisp{background:repeating-linear-gradient(-45deg,#fee2e2,#fee2e2 6px,#fecaca 6px,#fecaca 12px);color:#991b1b}
+.c-fechado{background:#e5e7eb}
+.c-passado{background:#f1f5f9}
+.novo{animation:pisca 1s 4}
+@keyframes pisca{50%{box-shadow:inset 0 0 0 3px #f59e0b}}
+/* agenda A: grade */
+.grade-wrap{overflow:auto;border:1px solid var(--borda);border-radius:8px;background:#fff;max-height:68vh}
+.grade{border-collapse:collapse;width:100%;min-width:720px;table-layout:fixed;user-select:none}
+.grade thead th{position:sticky;top:0;background:#fff;z-index:3;padding:6px;font-weight:600;border-bottom:1px solid var(--borda);font-size:13px}
+.grade thead th.hoje{color:var(--azul)}
+.grade tbody th{position:sticky;left:0;z-index:2;background:#fff;width:52px;font-weight:400;color:var(--cinza);font-size:11px;vertical-align:top;text-align:right;padding:0 6px}
+.grade thead th:first-child{width:52px}
+.grade td{border:1px solid #eef2f7;height:22px;padding:0;vertical-align:top}
+.grade td.c-livre:hover{background:#eff6ff}
+.grade .mais{display:none;font-size:10px;color:var(--azul);padding-left:4px}
+.grade td.c-livre:hover .mais{display:block}
+.c-arr,.c-sel{background:#bfdbfe!important;outline:2px solid var(--azul);outline-offset:-2px}
+.seg{padding:3px 5px;font-size:11px;line-height:1.25;overflow:hidden}
+.seg small{display:block;opacity:.85}
+/* agenda B: lista do dia */
+.dias{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+.chip-dia{display:flex;flex-direction:column;align-items:center;min-width:76px;padding:8px;border:1px solid var(--borda);border-radius:10px;background:#fff;cursor:pointer;font:inherit}
+.chip-dia.on{border-color:var(--azul);background:var(--azul-claro)}
+.chip-dia small{font-size:10px;color:var(--cinza)}
+.lista{margin-top:12px;background:#fff;border:1px solid var(--borda);border-radius:10px;overflow:hidden}
+.linha{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--borda)}
+.linha .cor{width:6px;align-self:stretch;border-radius:3px;flex:none}
+.linha .hr{width:110px;font-variant-numeric:tabular-nums;font-weight:600;flex:none}
+.linha .desc{flex:1}
+.linha.livre{background:#f0fdf4;cursor:pointer}
+.linha.livre .acao{color:var(--verde);font-weight:600;white-space:nowrap}
+.linha.passado{color:var(--cinza);font-size:12px;padding:6px 14px;background:#f8fafc}
+.inis{display:flex;flex-wrap:wrap;gap:6px;padding:4px 14px 14px;background:#f0fdf4;border-bottom:1px solid var(--borda)}
+.chip{border:1px solid var(--borda);background:#fff;border-radius:16px;padding:6px 12px;cursor:pointer;font:inherit;font-size:13px}
+.chip:hover{border-color:var(--azul)}
+/* agenda C: linha do tempo */
+.tl{background:#fff;border:1px solid var(--borda);border-radius:8px;padding:12px}
+.prox{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px}
+.tl-escala{position:relative;height:16px;margin-left:90px;font-size:10px;color:var(--cinza)}
+.tl-escala span{position:absolute;transform:translateX(-50%)}
+.tl-linha{display:flex;align-items:center;gap:8px;margin:6px 0}
+.tl-dia{width:82px;font-size:12px;font-weight:600;flex:none}
+.tl-dia.hoje{color:var(--azul)}
+.tl-barra{position:relative;flex:1;height:38px;background:#f1f5f9;border-radius:6px;overflow:hidden}
+.tl-barra[data-act]{cursor:pointer}
+.tl-seg{position:absolute;top:0;bottom:0;font-size:11px;padding:3px 4px;overflow:hidden;white-space:nowrap;border-right:1px solid #fff}
+.tl-seg.c-livre{background:#dcfce7}
+.tl-seg.c-livre:hover{background:#bbf7d0}
+.tl-agora{position:absolute;top:0;bottom:0;width:2px;background:#ef4444;z-index:3}
+.tl-sel{position:absolute;top:0;bottom:0;outline:3px solid var(--azul);outline-offset:-3px;background:rgba(37,99,235,.3);z-index:2}
+.destaque{outline:3px solid #f59e0b;outline-offset:-3px;z-index:2}
+/* formulários e botões */
+.form label{display:block;margin-bottom:10px;font-weight:600;font-size:13px}
+.form label small{font-weight:400;color:var(--cinza)}
+.form input,.form select,textarea{display:block;width:100%;margin-top:4px;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font:inherit;font-weight:400}
+.form label.erro input,.form label.erro select{border-color:var(--verm);background:#fef2f2}
+.dupla{display:flex;gap:10px} .dupla label{flex:1}
+.bt{border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:8px 14px;cursor:pointer;font:inherit;font-weight:600}
+.bt.prim{background:var(--azul);border-color:var(--azul);color:#fff}
+.bt.ok{background:var(--verde);border-color:var(--verde);color:#fff}
+.bt.perigo{background:var(--verm);border-color:var(--verm);color:#fff}
+.bt:disabled{opacity:.45;cursor:not-allowed}
+.bt.grande{padding:12px 18px;font-size:15px}
+.x{border:0;background:transparent;font-size:24px;cursor:pointer;line-height:1;color:#475569}
+.rn{font-weight:700;white-space:nowrap}
+/* reserva A: janela */
+.overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:flex-start;justify-content:center;padding:40px 12px;z-index:50;overflow:auto}
+.modal{background:#fff;border-radius:12px;width:100%;max-width:520px;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.modal-cab{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--borda)}
+.modal .form{padding:14px 18px 4px}
+.modal-pe{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--borda)}
+.erros{margin:14px 18px 0;padding:10px 12px;background:var(--verm-claro);border:1px solid #fca5a5;border-radius:8px;color:#7f1d1d}
+.erros ul{margin:6px 0 0;padding-left:18px} .erros li{margin:4px 0}
+.aviso{margin:0 18px 12px;padding:8px 10px;border-radius:6px;font-size:12px}
+.aviso.amar{background:var(--amar-claro);color:#713f12}
+/* reserva B: checklist */
+.voltar{color:var(--azul);cursor:pointer;font-size:13px;display:inline-block;margin-bottom:8px}
+.rb-cols{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;align-items:start;margin-top:12px}
+.oque{background:#f8fafc;border:1px solid var(--borda);border-radius:8px;padding:10px;margin:6px 0 12px;font-size:13px}
+#resultado .bt{width:100%}
+.ck{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9}
+.ck .ic{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none;font-size:12px}
+.ck.ok .ic{background:var(--verde-claro);color:var(--verde)}
+.ck.falha .ic{background:var(--verm-claro);color:var(--verm)}
+.ck.na .ic{background:#f3f4f6;color:#9ca3af}
+.ck small{display:block;color:#4b5563}
+.ck.falha small{color:var(--verm)}
+.ck.na{opacity:.6}
+/* reserva C: barra */
+.sheet{position:fixed;left:50%;transform:translateX(-50%);bottom:62px;width:min(680px,calc(100% - 24px));background:#fff;border-radius:14px;box-shadow:0 -6px 30px rgba(0,0,0,.25);padding:12px 16px;z-index:40;border-top:4px solid var(--azul)}
+.sh-l1{display:flex;align-items:center;gap:8px} .sh-l1 .x{margin-left:auto}
+.sh-l2{display:flex;align-items:baseline;gap:12px;margin:4px 0}
+.sh-hora{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}
+.sh-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;color:var(--cinza)}
+.sh-ctl button{border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:4px 8px;cursor:pointer;font:inherit}
+.sh-ctl .sep{width:10px}
+.sh-part input{width:80px;padding:5px;margin-left:4px;border:1px solid #cbd5e1;border-radius:6px;font:inherit}
+.sh-erro{margin:10px 0 0;padding:10px;background:var(--verm-claro);border-radius:8px;color:#7f1d1d;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sheet .bt.prim{width:100%;margin-top:10px}
+/* fila */
+.fila-cab{margin-bottom:12px}
+.tab-wrap{overflow-x:auto;background:#fff;border:1px solid var(--borda);border-radius:10px}
+.tabela{width:100%;border-collapse:collapse;font-size:13px}
+.tabela th{text-align:left;padding:8px 10px;background:#f8fafc;border-bottom:1px solid var(--borda);font-size:12px;color:#475569}
+.tabela td{padding:8px 10px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+.nowrap{white-space:nowrap}
+.recusa-linha td{background:#fef2f2}
+.recusa label{display:block;font-weight:600;font-size:13px}
+.recusa label small{font-weight:400;color:var(--cinza)}
+.recusa textarea{min-height:60px}
+.linha-bts{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.fa-acoes{display:flex;gap:12px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.fb{display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start}
+.fb-lista{display:flex;flex-direction:column;gap:6px}
+.fb-grupo{font-size:11px;text-transform:uppercase;color:var(--cinza);margin:8px 0 2px;font-weight:700}
+.fb-item{text-align:left;background:#fff;border:1px solid var(--borda);border-radius:8px;padding:10px;cursor:pointer;font:inherit;display:flex;flex-direction:column;gap:2px}
+.fb-item.on{border-color:var(--azul);box-shadow:0 0 0 2px var(--azul-claro)}
+.det-cab{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.det-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.det-grid p{margin:4px 0}
+.det-acoes{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;border-top:1px solid var(--borda);padding-top:12px}
+.det-acoes .recusa{flex:1}
+.tri{max-width:560px;margin:0 auto;text-align:center}
+.tri-prog{height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;margin-bottom:6px}
+.tri-prog div{height:100%;background:var(--azul)}
+.tri-card{margin-top:12px;padding:24px}
+.tri-tempo{display:inline-flex;flex-direction:column;padding:8px 18px;border-radius:12px;background:#f3f4f6;margin-bottom:10px}
+.tri-tempo b{font-size:28px}
+.tri-tempo.verm{background:var(--verm-claro);color:var(--verm)} .tri-tempo.amar{background:var(--amar-claro);color:var(--amar)}
+.tri-quando{font-size:18px;margin:4px 0 10px}
+.tri-bts{display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap}
+.tri .recusa{text-align:left;margin-top:12px}
+.vazio{padding:40px;text-align:center;color:var(--cinza);background:#fff;border:1px dashed #cbd5e1;border-radius:10px}
+.decididos{margin-top:20px}
+/* barra flutuante do protótipo */
+.switch{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;border-radius:999px;display:flex;align-items:center;gap:4px;padding:6px;box-shadow:0 6px 20px rgba(0,0,0,.35);z-index:60;font-size:13px;white-space:nowrap;max-width:calc(100% - 16px)}
+.switch button{background:#374151;color:#fff;border:0;border-radius:50%;width:32px;height:32px;cursor:pointer;flex:none}
+.switch span{padding:0 10px;overflow:hidden;text-overflow:ellipsis}
+.switch small{color:#fbbf24;margin-right:6px;text-transform:uppercase;font-size:10px;letter-spacing:.05em}
+.estado{position:fixed;top:0;right:0;bottom:0;width:min(460px,100%);background:#0b1220;color:#e5e7eb;font:11px/1.45 ui-monospace,Consolas,monospace;overflow:auto;padding:12px;z-index:70}
+.estado table{width:100%;border-collapse:collapse}
+.estado td{padding:2px 4px;border-bottom:1px solid #1f2937}
+.estado .at{color:#86efac}
+.estado h3{color:#fbbf24;font-size:12px;margin:12px 0 4px}
+#toasts{position:fixed;top:12px;right:12px;display:flex;flex-direction:column;gap:8px;z-index:80;max-width:min(440px,calc(100% - 24px))}
+.toast{background:#1e293b;color:#fff;padding:10px 14px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.25);font-size:13px;border-left:5px solid #60a5fa}
+.toast.verde{border-color:#22c55e} .toast.amar{border-color:#f59e0b} .toast.verm{border-color:#ef4444}
+@media(max-width:720px){
+  .rb-cols,.fb,.det-grid{grid-template-columns:1fr}
+  .linha .hr{width:92px}
+  .tl-dia{width:56px} .tl-escala{margin-left:64px}
+  nav{order:3;flex-basis:100%;flex-wrap:nowrap;overflow-x:auto} .tab{white-space:nowrap}
+  .switch{font-size:12px}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toasts"></div>
+<script>
+// ---------- utilidades de data (tudo em minutos desde 00:00) ----------
+const pad=n=>String(n).padStart(2,'0');
+const DS=['dom','seg','ter','qua','qui','sex','sáb'];
+const DSL=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+const PLUR=['aos domingos','às segundas','às terças','às quartas','às quintas','às sextas','aos sábados'];
+const AGORA_DIA='2026-10-26', AGORA_MIN=9*60;
+const SEMANA=['2026-10-26','2026-10-27','2026-10-28','2026-10-29','2026-10-30','2026-10-31'];
+const h=(H,M=0)=>H*60+M;
+const pd=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const addDias=(s,n)=>{const d=pd(s);d.setDate(d.getDate()+n);return ymd(d)};
+const difDias=(a,b)=>Math.round((pd(a)-pd(b))/864e5);
+const abs=(dia,min)=>difDias(dia,AGORA_DIA)*1440+min;
+const fDia=s=>{const d=pd(s);return DS[d.getDay()]+' '+pad(d.getDate())+'/'+pad(d.getMonth()+1)};
+const fDiaL=s=>{const d=pd(s);return DSL[d.getDay()]+', '+pad(d.getDate())+'/'+pad(d.getMonth()+1)};
+const hm=m=>pad(Math.floor(m/60))+':'+pad(m%60);
+const fDur=m=>{const H=Math.floor(m/60),r=m%60;return H?(r?H+'h'+pad(r):H+'h'):r+' min'};
+const fRest=m=>{if(m<=0)return 'prazo vencido';if(m<60)return m+' min';if(m<1440)return fDur(m);const d=Math.floor(m/1440);return d+(d>1?' dias':' dia')};
+const urg=m=>m<120?'verm':m<1440?'amar':'';
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---------- dados falsos ----------
+const ATIVAS=['Pendente','Confirmada','Em uso'];
+const POL={Aluno:{antMin:60,antMaxD:14,durMax:{'Espaço':120,'Equipamento':240},cota:3},
+           Docente:{antMin:60,antMaxD:60,durMax:{'Espaço':240,'Equipamento':480},cota:10}};
+const CEN={normal:'Normal',cota:'Aluno com Cota cheia',suspenso:'Aluno suspenso'};
+const JUST=['O Recurso está reservado para uma atividade acadêmica nesse horário','O número de participantes não é adequado ao Recurso','A finalidade não é compatível com o Recurso','Faltam informações: descreva melhor a atividade'];
+const VAR={agenda:{A:'Grade semanal',B:'Lista do dia (celular primeiro)',C:'Linha do tempo + próximos livres'},
+           reserva:{A:'Janela com erros ao enviar',B:'Página com checklist ao vivo',C:'Barra de confirmação rápida'},
+           fila:{A:'Tabela com ações na linha',B:'Caixa de entrada com contexto',C:'Triagem um por vez'}};
+const NOMETELA={agenda:'Agenda',reserva:'Criação de Reserva',fila:'Fila de Pedidos'};
+let ID=100;
+
+function dadosIniciais(cenario){
+  ID=100;
+  const UTIL={1:[h(7),h(23)],2:[h(7),h(23)],3:[h(7),h(23)],4:[h(7),h(23)],5:[h(7),h(23)]};
+  const d={
+    usuarios:{
+      ana:{nome:'Ana Souza',perfil:'Aluno',email:'ana.souza@unifesp.br'},
+      bruno:{nome:'Bruno Lima',perfil:'Aluno',email:'bruno.lima@unifesp.br'},
+      julia:{nome:'Júlia Castro',perfil:'Aluno',email:'julia.castro@unifesp.br'},
+      marcos:{nome:'Marcos Oliveira',perfil:'Docente',email:'marcos.oliveira@unifesp.br'},
+      paula:{nome:'Paula Reis',perfil:'Docente',email:'paula.reis@unifesp.br'},
+      lucas:{nome:'Lucas Ferreira',perfil:'Docente',email:'lucas.ferreira@unifesp.br'},
+      carla:{nome:'Carla Mendes',perfil:'Gestor',email:'carla.mendes@unifesp.br'}},
+    penalidades:[
+      {usuario:'bruno',data:'2026-10-08',motivo:'Não comparecimento'},
+      {usuario:'bruno',data:'2026-10-19',motivo:'Cancelamento tardio'},
+      {usuario:'julia',data:'2026-09-12',motivo:'Não comparecimento'}],
+    suspensoes:{},
+    recursos:[
+      {id:'lab3',nome:'Laboratório de Informática 3',tipo:'Espaço',local:'Prédio Central, 2º andar',cap:30,restrito:true,gestor:'carla',func:{...UTIL,6:[h(8),h(12)]}},
+      {id:'aud',nome:'Auditório Principal',tipo:'Espaço',local:'Bloco A, térreo',cap:120,restrito:true,gestor:'carla',func:{...UTIL}},
+      {id:'s204',nome:'Sala 204',tipo:'Espaço',local:'Bloco B, 2º andar',cap:45,restrito:false,gestor:'carla',func:{...UTIL,6:[h(8),h(12)]}},
+      {id:'proj',nome:'Projetor Epson (patrimônio 004512)',tipo:'Equipamento',local:'Retirada na secretaria do Bloco B',restrito:false,gestor:'carla',func:{1:[h(8),h(22)],2:[h(8),h(22)],3:[h(8),h(22)],4:[h(8),h(22)],5:[h(8),h(22)]}}],
+    indisp:[
+      {id:1,recurso:'lab3',dia:'2026-10-29',ini:h(13),fim:h(18),motivo:'Manutenção dos computadores'},
+      {id:2,recurso:'aud',dia:'2026-10-30',ini:h(7),fim:h(23),motivo:'Colação de grau'}],
+    reservas:[]};
+  const R=(recurso,usuario,dia,ini,fim,status,participantes,finalidade)=>d.reservas.push({id:++ID,recurso,usuario,dia,ini,fim,status,participantes,finalidade});
+  R('lab3','marcos','2026-10-26',h(7),h(9),'Concluída',25,'Aula de Algoritmos');
+  R('lab3','marcos','2026-10-26',h(10),h(12),'Confirmada',28,'Aula de Algoritmos');
+  R('lab3','julia','2026-10-26',h(14),h(16),'Pendente',6,'Grupo de estudos de Cálculo');
+  R('lab3','marcos','2026-10-27',h(8),h(10),'Confirmada',28,'Aula de Algoritmos');
+  R('lab3','bruno','2026-10-27',h(13),h(15),'Pendente',4,'Treino para a maratona de programação');
+  R('lab3','ana','2026-10-27',h(19),h(21),'Pendente',3,'Projeto de Engenharia de Software');
+  R('lab3','paula','2026-10-28',h(10),h(12),'Pendente',30,'Minicurso de Python');
+  R('lab3','marcos','2026-10-29',h(8),h(10),'Confirmada',28,'Aula de Algoritmos');
+  R('lab3','ana','2026-10-30',h(9),h(11),'Confirmada',3,'Projeto de Engenharia de Software');
+  R('lab3','lucas','2026-10-30',h(14),h(17),'Confirmada',20,'Monitoria de Banco de Dados');
+  R('lab3','bruno','2026-10-31',h(9),h(11),'Pendente',5,'Hackathon interno');
+  R('aud','paula','2026-10-26',h(11,30),h(13),'Pendente',90,'Palestra de boas-vindas aos calouros');
+  R('aud','lucas','2026-10-27',h(19),h(22),'Confirmada',100,'Semana da Computação');
+  R('aud','julia','2026-10-28',h(14),h(16),'Pendente',80,'Ensaio do centro acadêmico');
+  R('s204','bruno','2026-10-26',h(10),h(12),'Confirmada',8,'Reunião de grupo');
+  R('s204','marcos','2026-10-27',h(14),h(18),'Confirmada',40,'Aula de Estruturas de Dados');
+  R('s204','julia','2026-10-28',h(8),h(9,30),'Confirmada',5,'Estudo');
+  R('proj','marcos','2026-10-26',h(10),h(12),'Confirmada',null,'Aula');
+  R('proj','julia','2026-10-27',h(13),h(17),'Confirmada',null,'Seminário');
+  if(cenario==='cota') R('proj','ana','2026-10-28',h(8),h(12),'Confirmada',null,'Apresentação de TCC');
+  if(cenario==='suspenso'){
+    d.suspensoes.ana='2026-10-31';
+    d.penalidades.push({usuario:'ana',data:'2026-10-05',motivo:'Não comparecimento'},{usuario:'ana',data:'2026-10-16',motivo:'Cancelamento tardio'},{usuario:'ana',data:'2026-10-24',motivo:'Não comparecimento'});
+  }
+  return d;
+}
+
+// ---------- estado da tela ----------
+const q=new URLSearchParams(location.search);
+const okV=v=>['A','B','C'].includes(v)?v:'A';
+const S={tela:['agenda','reserva','fila'].includes(q.get('tela'))?q.get('tela'):'agenda',
+  v:{agenda:okV(q.get('agenda')),reserva:okV(q.get('reserva')),fila:okV(q.get('fila'))},
+  perfil:['Aluno','Docente','Gestor'].includes(q.get('perfil'))?q.get('perfil'):'Aluno',
+  cenario:'normal',recursoSel:'lab3',diaSel:AGORA_DIA,mostraEstado:false,abertoB:null,pedSel:null};
+function aplicarCenario(c){Object.assign(S,dadosIniciais(c),{cenario:c,draft:null,erros:null,decididos:[],notificacoes:[],selA:new Set(),recusando:null,justTxt:'',triIdx:0,novo:null})}
+aplicarCenario('normal');
+if(S.tela==='reserva') S.draft=novoDraft();
+
+const uid=()=>({Aluno:'ana',Docente:'marcos',Gestor:'carla'})[S.perfil];
+const recurso=id=>S.recursos.find(r=>r.id===id);
+const ativasDe=u=>S.reservas.filter(r=>r.usuario===u&&ATIVAS.includes(r.status));
+const pen30=u=>S.penalidades.filter(p=>p.usuario===u&&difDias(AGORA_DIA,p.data)<=30);
+const pedidos=()=>S.reservas.filter(r=>r.status==='Pendente'&&recurso(r.recurso).gestor==='carla').sort((a,b)=>abs(a.dia,a.ini)-abs(b.dia,b.ini));
+const restante=r=>abs(r.dia,r.ini)-120-AGORA_MIN;
+const fPrazo=r=>fDia(r.dia)+' às '+hm(r.ini-120);
+function novoDraft(){return {recurso:S.recursoSel,dia:'2026-10-27',ini:h(10),fim:h(11),participantes:'',finalidade:''}}
+
+// ---------- regras simuladas (só para gerar as mensagens) ----------
+function validar(d){
+  const u=uid(), perfil=S.usuarios[u].perfil, p=POL[perfil], rec=recurso(d.recurso), ck=[];
+  const add=(rn,nome,ok,msg,campo)=>ck.push({rn,nome,ok,msg,campo});
+  const susp=S.suspensoes[u];
+  add('RN09','Suspensão',!susp,susp?`Você está suspenso até ${fDia(susp)} (3 Penalidades em 30 dias) e não pode criar Reservas.`:'Você não está suspenso.',null);
+  const ok2=d.fim>d.ini&&d.ini%30===0&&d.fim%30===0;
+  add('RN02','Intervalo válido',ok2,d.fim<=d.ini?'O fim precisa ser depois do início.':!ok2?'Início e fim precisam ser múltiplos de 30 minutos.':`${hm(d.ini)}–${hm(d.fim)}, ${fDur(d.fim-d.ini)}.`,'fim');
+  const wd=pd(d.dia).getDay(), f=rec.func[wd], ok3=!!f&&d.ini>=f[0]&&d.fim<=f[1];
+  add('RN03','Horário de funcionamento',ok3,!f?`${rec.nome} não funciona ${PLUR[wd]}.`:ok3?`Funciona das ${hm(f[0])} às ${hm(f[1])} nesse dia.`:`${rec.nome} funciona das ${hm(f[0])} às ${hm(f[1])} ${PLUR[wd]}; o Intervalo precisa caber nesse horário.`,'ini');
+  const ind=S.indisp.find(i=>i.recurso===rec.id&&i.dia===d.dia&&i.ini<d.fim&&d.ini<i.fim);
+  add('RN04','Indisponibilidade',!ind,ind?`O Recurso está indisponível ${fDia(d.dia)} das ${hm(ind.ini)} às ${hm(ind.fim)} (${ind.motivo}).`:'Sem Indisponibilidade no Intervalo.','ini');
+  const conf=S.reservas.find(r=>r.recurso===rec.id&&r.dia===d.dia&&ATIVAS.includes(r.status)&&r.ini<d.fim&&d.ini<r.fim);
+  add('RN01','Conflito',!conf,conf?(conf.usuario===u?`Você já tem uma Reserva neste Recurso das ${hm(conf.ini)} às ${hm(conf.fim)}.`:`O Recurso já está ocupado das ${hm(conf.ini)} às ${hm(conf.fim)}.`):'Nenhuma outra Reserva no Intervalo.','ini');
+  const a=abs(d.dia,d.ini)-AGORA_MIN, maxA=p.antMaxD*1440;
+  add('RN05','Antecedência',a>=p.antMin&&a<=maxA,a<0?'Esse horário já passou.':a<p.antMin?`O início precisa ser daqui a pelo menos 1 hora (agora são ${hm(AGORA_MIN)} de ${fDia(AGORA_DIA)}).`:a>maxA?`O ${perfil} pode reservar com até ${p.antMaxD} dias de antecedência (até ${fDia(addDias(AGORA_DIA,p.antMaxD))}).`:`Começa daqui a ${fRest(a)}.`,'dia');
+  const dur=d.fim-d.ini, mx=p.durMax[rec.tipo];
+  add('RN06','Duração máxima',dur<=mx,dur>mx?`O ${perfil} pode reservar ${rec.tipo==='Espaço'?'um Espaço':'um Equipamento'} por no máximo ${fDur(mx)}; você pediu ${fDur(dur)}.`:`Até ${fDur(mx)} para ${perfil} em ${rec.tipo}.`,'fim');
+  const at=ativasDe(u).length;
+  add('RN07','Cota',at<p.cota,at>=p.cota?`Você já tem ${at} Reservas ativas; o limite do ${perfil} é ${p.cota}. Cancele uma para fazer outra.`:`Você tem ${at} de ${p.cota} Reservas ativas.`,null);
+  if(rec.tipo==='Espaço'){
+    const n=parseInt(d.participantes,10);
+    if(!n||n<1) add('RN08','Capacidade',false,'Informe o número de participantes.','participantes');
+    else add('RN08','Capacidade',n<=rec.cap,n>rec.cap?`${rec.nome} comporta ${rec.cap} pessoas; você informou ${n}.`:`${n} de ${rec.cap} lugares.`,'participantes');
+  } else add('RN08','Capacidade',null,'Não se aplica a Equipamento.',null);
+  return ck;
+}
+const falhas=d=>validar(d).filter(c=>c.ok===false);
+// sugestão de horário parecido que passa nas regras de tempo
+function sugerir(d,errs){
+  if(!errs.some(e=>['RN01','RN02','RN03','RN04','RN05','RN06'].includes(e.rn))) return null;
+  if(errs.some(e=>['RN09','RN07'].includes(e.rn))) return null;
+  const rec=recurso(d.recurso), p=POL[S.usuarios[uid()].perfil];
+  const dur=Math.min(Math.max(d.fim-d.ini,60),p.durMax[rec.tipo]);
+  for(let k=0;k<7;k++){
+    const dia=addDias(d.dia,k), f=rec.func[pd(dia).getDay()]; if(!f) continue;
+    const cands=[]; for(let t=f[0];t+dur<=f[1];t+=30) cands.push(t);
+    cands.sort((x,y)=>Math.abs(x-d.ini)-Math.abs(y-d.ini));
+    for(const t of cands){const c={...d,dia,ini:t,fim:t+dur}; if(!falhas(c).some(e=>e.rn!=='RN08')) return c;}
+  }
+  return null;
+}
+
+// ---------- estado de cada meia hora na agenda ----------
+function statusCel(rec,dia,t){
+  const f=rec.func[pd(dia).getDay()];
+  if(!f||t<f[0]||t>=f[1]) return {tipo:'fechado',key:'fechado'};
+  if(abs(dia,t)+30<=AGORA_MIN) return {tipo:'passado',key:'passado'};
+  const ind=S.indisp.find(i=>i.recurso===rec.id&&i.dia===dia&&i.ini<t+30&&t<i.fim);
+  if(ind) return {tipo:'indisp',key:'i'+ind.id,ind};
+  const r=S.reservas.find(r=>r.recurso===rec.id&&r.dia===dia&&ATIVAS.includes(r.status)&&r.ini<t+30&&t<r.fim);
+  if(r) return {tipo:'ocupado',key:'r'+r.id,r};
+  return {tipo:'livre',key:'livre'};
+}
+// RN22: nomes só para o dono e para o Gestor do Recurso
+function rotulo(st,rec){
+  const u=uid();
+  if(st.tipo==='ocupado'){const r=st.r;
+    if(r.usuario===u) return {cls:r.status==='Pendente'?'c-meupend':'c-meu',txt:'Sua reserva',sub:r.status};
+    if(rec.gestor===u) return {cls:r.status==='Pendente'?'c-pend':'c-ocupado',txt:S.usuarios[r.usuario].nome,sub:r.status};
+    return {cls:'c-ocupado',txt:'Ocupado',sub:''};}
+  if(st.tipo==='indisp') return {cls:'c-indisp',txt:'Indisponível',sub:st.ind.motivo};
+  if(st.tipo==='fechado') return {cls:'c-fechado',txt:'Fechado',sub:''};
+  if(st.tipo==='passado') return {cls:'c-passado',txt:'',sub:'já passou'};
+  return {cls:'c-livre',txt:'Livre',sub:''};
+}
+function segmentos(rec,dia,de,ate,juntarLivres){
+  const out=[];
+  for(let t=de;t<ate;t+=30){const st=statusCel(rec,dia,t);const k=st.tipo==='livre'&&!juntarLivres?'livre'+t:st.key;const ult=out[out.length-1];
+    if(ult&&ult.key===k) ult.fim=t+30; else out.push({key:k,ini:t,fim:t+30,st});}
+  return out;
+}
+function faixa(rec){let de=1440,ate=0;SEMANA.forEach(d=>{const f=rec.func[pd(d).getDay()];if(f){de=Math.min(de,f[0]);ate=Math.max(ate,f[1])}});return {de,ate}}
+
+// ---------- telas ----------
+function render(){
+  const tela=S.tela==='reserva'&&S.perfil==='Gestor'?gestorNaoReserva():S.tela==='agenda'?agenda():S.tela==='fila'?fila():
+    S.v.reserva==='B'?reservaB():agenda()+(S.v.reserva==='A'?reservaA():reservaC());
+  document.getElementById('app').innerHTML=topo()+tela+switcher()+(S.mostraEstado?estado():'');
+  if(S.recusando){const ta=document.querySelector('textarea[data-just]');if(ta&&document.activeElement!==ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length)}}
+}
+function syncUrl(){try{history.replaceState(null,'','?'+new URLSearchParams({tela:S.tela,agenda:S.v.agenda,reserva:S.v.reserva,fila:S.v.fila,perfil:S.perfil}))}catch(e){}}
+function go(t){S.tela=t;syncUrl();render()}
+function toast(msg,cor='azul'){const t=document.createElement('div');t.className='toast '+cor;t.textContent=msg;document.getElementById('toasts').appendChild(t);setTimeout(()=>t.remove(),8000)}
+
+function topo(){
+  const u=S.usuarios[uid()], np=pedidos().length;
+  const tab=(t,l)=>`<button class="tab ${S.tela===t?'on':''}" data-act="tab" data-tela="${t}">${l}</button>`;
+  return `<div class="proto"><b>PROTÓTIPO DESCARTÁVEL</b><span>dados falsos em memória · agora = ${fDia(AGORA_DIA)}/2026, ${hm(AGORA_MIN)}</span>
+  <label>Perfil <select data-ctl="perfil">${['Aluno','Docente','Gestor'].map(p=>`<option ${p===S.perfil?'selected':''}>${p}</option>`).join('')}</select></label>
+  <label>Cenário <select data-ctl="cenario">${Object.entries(CEN).map(([k,v])=>`<option value="${k}" ${k===S.cenario?'selected':''}>${v}</option>`).join('')}</select></label>
+  <button data-act="estado">${S.mostraEstado?'Fechar estado':'Ver estado'}</button><button data-act="reiniciar">Reiniciar dados</button></div>
+  <header class="app"><div class="marca">Reservas do Campus</div>
+  <nav>${tab('agenda','Agenda')}${tab('reserva','Nova reserva')}${tab('fila',`Pedidos${S.perfil==='Gestor'?'':' (Gestor)'} <span class="cont">${np}</span>`)}</nav>
+  <div class="eu">${u.nome} <span class="badge">${u.perfil}</span></div></header>`;
+}
+function legenda(){
+  const it=(c,t)=>`<span><i class="${c}"></i>${t}</span>`;
+  return `<span class="leg">${it('c-livre','Livre')}${it('c-ocupado','Ocupado')}${it('c-meu','Sua reserva')}${it('c-meupend','Seu pedido pendente')}${S.perfil==='Gestor'?it('c-pend','Pedido pendente'):''}${it('c-indisp','Indisponível')}${it('c-fechado','Fechado')}</span>`;
+}
+function agenda(){
+  const rec=recurso(S.recursoSel);
+  const dica={A:'Clique num horário livre para reservar 1h a partir dele, ou arraste na coluna para escolher o Intervalo.',
+    B:'Escolha o dia, toque num bloco livre e depois no horário de início.',
+    C:'Clique numa faixa verde da linha do tempo ou num dos próximos horários livres.'}[S.v.agenda];
+  return `<main class="pag ${S.tela==='reserva'&&S.v.reserva==='C'?'com-sheet':''}">
+  <div class="ag-topo"><select data-ctl="recurso" class="sel-rec">${S.recursos.map(r=>`<option value="${r.id}" ${r.id===rec.id?'selected':''}>${r.nome}</option>`).join('')}</select>
+  <div class="rec-info">${rec.tipo} · ${rec.local}${rec.tipo==='Espaço'?` · ${rec.cap} lugares`:''} ${rec.restrito?'<span class="badge amar">Restrito: precisa de Aprovação do Gestor</span>':''}</div></div>
+  <div class="ag-sub"><b>Semana de ${fDia(SEMANA[0])} a ${fDia(SEMANA[5])}</b>${legenda()}</div>
+  ${({A:agendaA,B:agendaB,C:agendaC})[S.v.agenda](rec)}
+  <p class="dica">${dica} ${rec.gestor===uid()?'Como Gestor deste Recurso, você vê quem reservou.':'Das Reservas dos outros você vê só livre, ocupado e indisponível (RN22).'}</p></main>`;
+}
+function emDraft(dia,t){const d=S.draft;return S.tela==='reserva'&&d&&d.recurso===S.recursoSel&&d.dia===dia&&t>=d.ini&&t<d.fim}
+function agendaA(rec){
+  const {de,ate}=faixa(rec), segs=SEMANA.map(d=>segmentos(rec,d,de,ate,false));
+  let s=`<div class="grade-wrap"><table class="grade"><thead><tr><th></th>${SEMANA.map(d=>`<th class="${d===AGORA_DIA?'hoje':''}">${fDia(d)}${d===AGORA_DIA?' · hoje':''}</th>`).join('')}</tr></thead><tbody>`;
+  for(let t=de;t<ate;t+=30){
+    s+=`<tr><th>${t%60===0?hm(t):''}</th>`;
+    SEMANA.forEach((d,i)=>{const g=segs[i].find(x=>x.ini===t); if(!g) return;
+      if(g.st.tipo==='livre'){s+=`<td class="c-livre ${emDraft(d,t)?'c-sel':''}" data-livre data-dia="${d}" data-t="${t}" title="Livre · ${hm(t)}"><span class="mais">+ ${hm(t)}</span></td>`;return}
+      const n=(g.fim-g.ini)/30, ro=rotulo(g.st,rec);
+      s+=`<td rowspan="${n}" class="${ro.cls} ${g.st.r&&g.st.r.id===S.novo?'novo':''}" title="${hm(g.ini)}–${hm(g.fim)} ${ro.txt} ${ro.sub}">${ro.txt&&g.st.tipo!=='fechado'?`<div class="seg"><b>${ro.txt}</b>${n>=2?`<small>${hm(g.ini)}–${hm(g.fim)}${ro.sub?' · '+esc(ro.sub):''}</small>`:''}</div>`:''}</td>`;});
+    s+='</tr>';
+  }
+  return s+'</tbody></table></div>';
+}
+function agendaB(rec){
+  const dia=S.diaSel, {de,ate}=faixa(rec);
+  const chips=SEMANA.map(d=>{const liv=segmentos(rec,d,de,ate,true).filter(g=>g.st.tipo==='livre').reduce((a,g)=>a+g.fim-g.ini,0);
+    return `<button class="chip-dia ${d===dia?'on':''}" data-act="dia" data-dia="${d}"><b>${DS[pd(d).getDay()]} ${pd(d).getDate()}</b><small>${liv?fDur(liv)+' livre':'sem horário livre'}</small></button>`}).join('');
+  const segs=segmentos(rec,dia,de,ate,true).filter(g=>g.st.tipo!=='fechado');
+  let linhas='';
+  if(!segs.length) linhas=`<div class="linha"><div class="desc">${rec.nome} não funciona ${PLUR[pd(dia).getDay()]}.</div></div>`;
+  segs.forEach(g=>{const ro=rotulo(g.st,rec);
+    if(g.st.tipo==='passado'){linhas+=`<div class="linha passado">Até ${hm(g.fim)} · já passou</div>`;return}
+    if(g.st.tipo==='livre'){const ab=S.abertoB===g.ini;
+      linhas+=`<div class="linha livre" data-act="abrirB" data-ini="${g.ini}"><div class="cor" style="background:#22c55e"></div><div class="hr">${hm(g.ini)}–${hm(g.fim)}</div><div class="desc"><b>Livre</b> <span class="mini">${fDur(g.fim-g.ini)} seguidas</span></div><div class="acao">${ab?'Escolha o início ▾':'Reservar ›'}</div></div>`;
+      if(ab){let c='';for(let t=g.ini;t<g.fim;t+=30)c+=`<button class="chip" data-act="iniB" data-dia="${dia}" data-t="${t}" data-fim="${g.fim}">${hm(t)}</button>`;linhas+=`<div class="inis">${c}</div>`}
+      return}
+    linhas+=`<div class="linha ${g.st.r&&g.st.r.id===S.novo?'novo':''}"><div class="cor ${ro.cls}"></div><div class="hr">${hm(g.ini)}–${hm(g.fim)}</div><div class="desc"><b>${ro.txt}</b>${ro.sub?` <span class="mini">· ${esc(ro.sub)}</span>`:''}</div></div>`;});
+  return `<div class="dias">${chips}</div><div class="lista">${linhas}</div>`;
+}
+function barra(rec,dia,de,ate,clicavel,destaque){
+  const W=ate-de;
+  const segs=segmentos(rec,dia,de,ate,true).map(g=>{const ro=rotulo(g.st,rec),w=(g.fim-g.ini)/W*100;
+    return `<div class="tl-seg ${ro.cls} ${g.st.r&&destaque&&g.st.r.id===destaque.id?'destaque':''} ${g.st.r&&g.st.r.id===S.novo?'novo':''}" style="left:${(g.ini-de)/W*100}%;width:${w}%" title="${hm(g.ini)}–${hm(g.fim)} · ${esc(ro.txt||'já passou')} ${esc(ro.sub)}">${w>10&&g.st.tipo!=='livre'&&g.st.tipo!=='passado'?esc(ro.txt):''}</div>`}).join('');
+  const agora=dia===AGORA_DIA?`<div class="tl-agora" style="left:${(AGORA_MIN-de)/W*100}%" title="agora"></div>`:'';
+  const d=S.draft, sel=clicavel&&S.tela==='reserva'&&d&&d.recurso===rec.id&&d.dia===dia?`<div class="tl-sel" style="left:${(d.ini-de)/W*100}%;width:${(d.fim-d.ini)/W*100}%"></div>`:'';
+  return `<div class="tl-barra" ${clicavel?`data-act="barra" data-dia="${dia}" data-de="${de}" data-ate="${ate}"`:''}>${segs}${agora}${sel}</div>`;
+}
+function escala(de,ate,semDia){let s='';for(let H=Math.ceil(de/60);H<=ate/60;H+=2)s+=`<span style="left:${(H*60-de)/(ate-de)*100}%">${H}h</span>`;return `<div class="tl-escala" ${semDia?'style="margin-left:0"':''}>${s}</div>`}
+function proximosLivres(rec,n){
+  const out=[], {de,ate}=faixa(rec);
+  for(const dia of SEMANA){for(const g of segmentos(rec,dia,de,ate,true)){if(g.st.tipo!=='livre')continue;
+    let t=g.ini; while(abs(dia,t)<AGORA_MIN+60) t+=30;
+    if(t+60<=g.fim) out.push({dia,t}); if(out.length>=n) return out;}}
+  return out;
+}
+function agendaC(rec){
+  const {de,ate}=faixa(rec);
+  const prox=proximosLivres(rec,6).map(p=>`<button class="chip" data-act="prox" data-dia="${p.dia}" data-t="${p.t}">${p.dia===AGORA_DIA?'Hoje':p.dia===addDias(AGORA_DIA,1)?'Amanhã':fDia(p.dia)} · ${hm(p.t)}</button>`).join('');
+  return `<div class="tl"><div class="prox"><b>Próximos horários livres (1h):</b> ${prox||'<span class="mini">nenhum nesta semana</span>'}</div>
+  ${escala(de,ate)}${SEMANA.map(d=>`<div class="tl-linha"><div class="tl-dia ${d===AGORA_DIA?'hoje':''}">${fDia(d)}</div>${barra(rec,d,de,ate,true)}</div>`).join('')}</div>`;
+}
+
+function campos(d,ec){
+  const rec=recurso(d.recurso), e=c=>ec&&ec.has(c)?'erro':'';
+  const opts=(sel,de,ate)=>{let o='';for(let t=de;t<=ate;t+=30)o+=`<option value="${t}" ${t===sel?'selected':''}>${hm(t)}</option>`;return o};
+  return `<label>Recurso<select data-campo="recurso">${S.recursos.map(r=>`<option value="${r.id}" ${r.id===d.recurso?'selected':''}>${r.nome}${r.restrito?' (restrito)':''}</option>`).join('')}</select></label>
+  <label class="${e('dia')}">Data<input type="date" data-campo="dia" value="${d.dia}"></label>
+  <div class="dupla"><label class="${e('ini')}">Início<select data-campo="ini">${opts(d.ini,h(6),h(23,30))}</select></label>
+  <label class="${e('fim')}">Fim<select data-campo="fim">${opts(d.fim,h(6,30),h(24))}</select></label></div>
+  ${rec.tipo==='Espaço'?`<label class="${e('participantes')}">Participantes <small>(até ${rec.cap})</small><input type="number" min="1" data-campo="participantes" value="${esc(d.participantes)}" placeholder="Quantas pessoas?"></label>`:''}
+  <label>Finalidade <small>(opcional)</small><input type="text" data-campo="finalidade" value="${esc(d.finalidade)}" placeholder="Ex.: reunião do grupo de projeto"></label>`;
+}
+const nomeGestor=rec=>S.usuarios[rec.gestor].nome;
+function reservaA(){
+  const d=S.draft, rec=recurso(d.recurso), errs=S.erros, ec=errs?new Set(errs.map(x=>x.campo).filter(Boolean)):null;
+  return `<div class="overlay" data-act="fecharFundo"><div class="modal" role="dialog">
+  <div class="modal-cab"><h2>Nova Reserva</h2><button class="x" data-act="cancelar" title="Fechar">×</button></div>
+  ${errs&&errs.length?`<div class="erros"><b>Não foi possível reservar. ${errs.length===1?'1 regra impede':errs.length+' regras impedem'} esta Reserva:</b><ul>${errs.map(x=>`<li><span class="rn">${x.rn} · ${x.nome}:</span> ${x.msg}</li>`).join('')}</ul></div>`:''}
+  <div class="form">${campos(d,ec)}</div>
+  ${rec.restrito?`<p class="aviso amar">Recurso restrito: a Reserva nasce <b>Pendente</b> e ${nomeGestor(rec)} precisa aprovar até 2h antes do início, senão o Pedido expira (RN10, RN12).</p>`:''}
+  <div class="modal-pe"><button data-act="cancelar" class="bt">Cancelar</button><button data-act="enviar" class="bt prim">${rec.restrito?'Enviar pedido':'Reservar'}</button></div></div></div>`;
+}
+function reservaB(){
+  return `<main class="pag"><a class="voltar" data-act="cancelar">‹ Voltar para a agenda</a><h1>Nova Reserva</h1>
+  <div class="rb-cols"><section class="card"><div class="form">${campos(S.draft,null)}</div><div id="resultado">${resultadoB()}</div></section>
+  <aside class="card"><h3>Regras desta Reserva</h3><p class="mini">Atualiza enquanto você preenche.</p><div id="checklist">${checklist()}</div></aside></div></main>`;
+}
+function resultadoB(){
+  const d=S.draft, rec=recurso(d.recurso), n=falhas(d).length;
+  const oque=rec.restrito?`Vai nascer <b>Pendente</b>. ${nomeGestor(rec)} decide até ${fDia(d.dia)} às ${hm(d.ini-120)}; se não decidir, o Pedido expira e o horário é liberado.`
+    :`Vai nascer <b>Confirmada</b>. Faça o Check-in entre ${hm(d.ini-15)} e ${hm(d.ini+15)}, senão vira Não comparecimento.`;
+  return `<div class="oque">${oque}</div><button class="bt prim grande" data-act="enviar" ${n?'disabled':''}>${n?`Corrija ${n} ${n===1?'regra':'regras'} para reservar`:rec.restrito?'Enviar pedido ao Gestor':'Reservar'}</button>`;
+}
+function checklist(){
+  return validar(S.draft).map(c=>`<div class="ck ${c.ok===true?'ok':c.ok===false?'falha':'na'}"><span class="ic">${c.ok===true?'✓':c.ok===false?'✗':'–'}</span><div><b>${c.rn} · ${c.nome}</b><small>${c.msg}</small></div></div>`).join('');
+}
+function reservaC(){
+  const d=S.draft, rec=recurso(d.recurso), errs=S.erros, sug=errs&&errs.length?sugerir(d,errs):null;
+  return `<div class="sheet"><div class="sh-l1"><b>${rec.nome}</b><span class="mini">${rec.tipo}${rec.restrito?' · restrito':''}</span><button class="x" data-act="cancelar" title="Fechar">×</button></div>
+  <div class="sh-l2"><span>${fDiaL(d.dia)}</span><span class="sh-hora">${hm(d.ini)}–${hm(d.fim)}</span><span class="mini">${fDur(Math.max(0,d.fim-d.ini))}</span></div>
+  <div class="sh-ctl"><span>Mover</span><button data-act="mover" data-n="-30">◀ 30 min</button><button data-act="mover" data-n="30">30 min ▶</button><span class="sep"></span>
+  <span>Duração</span><button data-act="dur" data-n="-30">− 30</button><button data-act="dur" data-n="30">+ 30</button><span class="sep"></span>
+  ${rec.tipo==='Espaço'?`<label class="sh-part">Participantes<input type="number" min="1" data-campo="participantes" value="${esc(d.participantes)}" placeholder="até ${rec.cap}"></label>`:''}</div>
+  ${errs&&errs.length?`<div class="sh-erro"><span><b>${errs[0].rn} · ${errs[0].nome}:</b> ${errs[0].msg}${errs.length>1?` <span class="mini">(e mais ${errs.length-1} ${errs.length===2?'regra':'regras'})</span>`:''}</span>${sug?`<button class="bt" data-act="sug" data-dia="${sug.dia}" data-ini="${sug.ini}" data-fim="${sug.fim}">Usar ${sug.dia!==d.dia?fDia(sug.dia)+' ':''}${hm(sug.ini)}–${hm(sug.fim)}</button>`:''}</div>`:''}
+  <button class="bt prim grande" data-act="enviar">${rec.restrito?'Enviar pedido ao Gestor':'Confirmar Reserva'}</button>
+  <div class="mini" style="margin-top:6px">Para trocar de horário, clique em outro horário livre na agenda.</div></div>`;
+}
+function gestorNaoReserva(){
+  return `<main class="pag"><div class="vazio"><h2>O Gestor não cria Reservas</h2><p>Para eventos institucionais, o Gestor cadastra uma Indisponibilidade no Recurso (fora deste protótipo).</p><p class="mini">Troque o Perfil na barra amarela para Aluno ou Docente.</p></div></main>`;
+}
+
+// ---------- fila do Gestor ----------
+function solic(u,comPen=true){const x=S.usuarios[u],n=pen30(u).length;return `${x.nome} <span class="badge">${x.perfil}</span>${comPen&&n?` <span class="badge verm">${n} Penalidade${n>1?'s':''} em 30 dias</span>`:''}`}
+function formRecusa(r,chips){
+  const v=S.justTxt||'';
+  return `<div class="recusa"><label>Justificativa da Recusa <small>(obrigatória; vai na Notificação para ${S.usuarios[r.usuario].nome} · RN11)</small>
+  ${chips?`<div class="chips">${JUST.map(j=>`<button class="chip" data-act="just" data-txt="${j}">${j}</button>`).join('')}</div>`:''}
+  <textarea data-just rows="2" placeholder="Explique por que o Pedido foi recusado">${esc(v)}</textarea></label>
+  <div class="linha-bts"><button class="bt" data-act="cancRecusa">Cancelar</button><button class="bt perigo" data-act="confRecusa" data-id="${r.id}" ${v.trim()?'':'disabled'}>Recusar pedido</button></div></div>`;
+}
+function fila(){
+  const ps=pedidos();
+  const corpo=ps.length?({A:filaA,B:filaB,C:filaC})[S.v.fila](ps):'<div class="vazio">Nenhum Pedido pendente.</div>';
+  const dec=S.decididos.length?`<div class="decididos"><h3>Decididos nesta sessão</h3><ul class="mini">${S.decididos.map(x=>`<li><b>${x.acao}</b> · ${recurso(x.r.recurso).nome}, ${fDia(x.r.dia)} ${hm(x.r.ini)}–${hm(x.r.fim)} · ${S.usuarios[x.r.usuario].nome}${x.just?` · “${esc(x.just)}”`:''}</li>`).join('')}</ul></div>`:'';
+  return `<main class="pag"><div class="fila-cab"><h1>Pedidos dos seus Recursos</h1><p class="mini">${ps.length} pendente${ps.length===1?'':'s'} · do início mais próximo para o mais distante · cada Pedido expira 2h antes do início (RN12)</p></div>${corpo}${dec}</main>`;
+}
+function filaA(ps){
+  const todos=ps.every(r=>S.selA.has(r.id));
+  return `<div class="fa-acoes"><button class="bt ok" data-act="aprovarSel" ${S.selA.size?'':'disabled'}>Aprovar selecionados (${S.selA.size})</button><span class="mini">A Recusa é sempre individual, porque cada uma precisa de justificativa.</span></div>
+  <div class="tab-wrap"><table class="tabela"><thead><tr><th><input type="checkbox" data-act="selTodos" ${todos?'checked':''}></th><th>Início</th><th>Expira em</th><th>Recurso</th><th>Solicitante</th><th>Pessoas</th><th>Finalidade</th><th></th></tr></thead><tbody>
+  ${ps.map(r=>{const rec=recurso(r.recurso),rest=restante(r);
+    return `<tr><td><input type="checkbox" data-act="selA" data-id="${r.id}" ${S.selA.has(r.id)?'checked':''}></td><td class="nowrap"><b>${fDia(r.dia)}</b><br>${hm(r.ini)}–${hm(r.fim)}</td><td><span class="badge ${urg(rest)}">${fRest(rest)}</span></td><td>${rec.nome}</td><td>${solic(r.usuario)}</td><td>${r.participantes??'–'}${rec.cap?' / '+rec.cap:''}</td><td>${esc(r.finalidade)}</td>
+    <td class="nowrap"><button class="bt ok" data-act="aprovar" data-id="${r.id}">Aprovar</button> <button class="bt" data-act="recusar" data-id="${r.id}">Recusar</button></td></tr>
+    ${S.recusando===r.id?`<tr class="recusa-linha"><td></td><td colspan="7">${formRecusa(r,false)}</td></tr>`:''}`}).join('')}
+  </tbody></table></div>`;
+}
+function detalhe(r){
+  const rec=recurso(r.recurso), u=S.usuarios[r.usuario], pens=pen30(r.usuario), rest=restante(r), {de,ate}=faixa(rec);
+  return `<div class="det-cab"><div><h2>${rec.nome}</h2><div>${fDiaL(r.dia)} · ${hm(r.ini)}–${hm(r.fim)} (${fDur(r.fim-r.ini)})</div></div><span class="badge grande ${urg(rest)}">expira em ${fRest(rest)}</span></div>
+  <p class="mini">Prazo de decisão: ${fPrazo(r)} (2h antes do início, RN12).</p>
+  <div class="det-grid"><section><h4>Solicitante</h4><p>${u.nome} <span class="badge">${u.perfil}</span><br><span class="mini">${u.email}</span></p>
+  <p>Reservas ativas: ${ativasDe(r.usuario).length} de ${POL[u.perfil].cota}</p>
+  <p>${pens.length?`<span class="badge verm">${pens.length} Penalidade${pens.length>1?'s':''} nos últimos 30 dias</span></p><ul class="mini">${pens.map(p=>`<li>${fDia(p.data)}: ${p.motivo}</li>`).join('')}</ul>`:'Sem Penalidades nos últimos 30 dias.</p>'}</section>
+  <section><h4>Pedido</h4><p>${esc(r.finalidade)||'<i>sem finalidade</i>'}</p><p>${r.participantes} pessoas · Capacidade ${rec.cap}</p></section></div>
+  <h4>Agenda do Recurso em ${fDia(r.dia)}</h4>${escala(de,ate,true)}<div class="tl-linha" style="margin:0">${barra(rec,r.dia,de,ate,false,r)}</div>
+  <div class="det-acoes">${S.recusando===r.id?formRecusa(r,true):`<button class="bt" data-act="recusar" data-id="${r.id}">Recusar…</button><button class="bt ok grande" data-act="aprovar" data-id="${r.id}">Aprovar</button>`}</div>`;
+}
+function filaB(ps){
+  const sel=ps.find(r=>r.id===S.pedSel)||ps[0];
+  let lista='', grupo=null;
+  ps.forEach(r=>{const g=r.dia===AGORA_DIA?'Hoje':r.dia===addDias(AGORA_DIA,1)?'Amanhã':fDia(r.dia);
+    if(g!==grupo){lista+=`<div class="fb-grupo">${g}</div>`;grupo=g}
+    const rest=restante(r);
+    lista+=`<button class="fb-item ${r.id===sel.id?'on':''}" data-act="pedSel" data-id="${r.id}"><div><b>${hm(r.ini)}–${hm(r.fim)}</b> <span class="badge ${urg(rest)}">${fRest(rest)}</span></div><div>${recurso(r.recurso).nome}</div><div class="mini">${S.usuarios[r.usuario].nome} · ${S.usuarios[r.usuario].perfil}${pen30(r.usuario).length?' · ⚠ Penalidades':''}</div></button>`;});
+  return `<div class="fb"><div class="fb-lista">${lista}</div><div class="card">${detalhe(sel)}</div></div>`;
+}
+function filaC(ps){
+  const i=Math.min(S.triIdx,ps.length-1); S.triIdx=i;
+  const r=ps[i], rec=recurso(r.recurso), rest=restante(r);
+  return `<div class="tri"><div class="tri-prog"><div style="width:${(i+1)/ps.length*100}%"></div></div><div class="mini">Pedido ${i+1} de ${ps.length} · atalhos: A aprova · R recusa · P pula</div>
+  <div class="tri-card card"><div class="tri-tempo ${urg(rest)}"><small>expira em</small><b>${fRest(rest)}</b></div>
+  <h2>${rec.nome}</h2><div class="tri-quando">${fDiaL(r.dia)}, ${hm(r.ini)}–${hm(r.fim)}</div><div>${solic(r.usuario)}</div>
+  <p>“${esc(r.finalidade)}”</p><p class="mini">${r.participantes} de ${rec.cap} lugares · ${ativasDe(r.usuario).length} Reservas ativas</p>
+  ${S.recusando===r.id?formRecusa(r,true):`<div class="tri-bts"><button class="bt perigo grande" data-act="recusar" data-id="${r.id}">Recusar</button><button class="bt grande" data-act="pular">Pular</button><button class="bt ok grande" data-act="aprovar" data-id="${r.id}">Aprovar</button></div>`}</div></div>`;
+}
+function aprovar(id,silencioso){
+  const r=S.reservas.find(x=>x.id===id); r.status='Confirmada';
+  const msg=`Seu pedido do ${recurso(r.recurso).nome} para ${fDia(r.dia)} ${hm(r.ini)}–${hm(r.fim)} foi aprovado.`;
+  S.notificacoes.unshift({para:r.usuario,msg}); S.decididos.unshift({r,acao:'Aprovado'}); S.selA.delete(id); S.recusando=null;
+  if(!silencioso) toast(`Aprovado. Notificação para ${S.usuarios[r.usuario].nome}: “${msg}”`,'verde');
+}
+function recusar(id){
+  const just=(S.justTxt||'').trim();
+  if(!just){toast('RN11 · Recusa justificada: escreva a justificativa antes de recusar.','verm');return}
+  const r=S.reservas.find(x=>x.id===id); r.status='Recusada';
+  const msg=`Seu pedido do ${recurso(r.recurso).nome} para ${fDia(r.dia)} ${hm(r.ini)}–${hm(r.fim)} foi recusado: ${just}`;
+  S.notificacoes.unshift({para:r.usuario,msg}); S.decididos.unshift({r,acao:'Recusado',just}); S.selA.delete(id); S.recusando=null; S.justTxt='';
+  toast(`Recusado. Notificação para ${S.usuarios[r.usuario].nome}: “${msg}”`,'amar'); render();
+}
+
+// ---------- criação ----------
+function abrirReserva(p){
+  if(S.perfil==='Gestor'){toast('O Gestor não cria Reservas. Para eventos institucionais, use Indisponibilidade.','amar');return}
+  S.draft={recurso:S.recursoSel,dia:p.dia,ini:p.ini,fim:p.fim,participantes:S.draft&&S.draft.recurso===S.recursoSel?S.draft.participantes:'',finalidade:''};
+  S.erros=null; go('reserva');
+}
+function enviar(){
+  const errs=falhas(S.draft);
+  if(errs.length){S.erros=errs;render();return}
+  const d=S.draft, rec=recurso(d.recurso), st=rec.restrito?'Pendente':'Confirmada';
+  const r={id:++ID,recurso:rec.id,usuario:uid(),dia:d.dia,ini:d.ini,fim:d.fim,status:st,participantes:rec.tipo==='Espaço'?+d.participantes:null,finalidade:d.finalidade||''};
+  S.reservas.push(r); S.novo=r.id; S.recursoSel=rec.id; if(SEMANA.includes(d.dia)) S.diaSel=d.dia;
+  const quando=`${fDia(d.dia)} ${hm(d.ini)}–${hm(d.fim)}`;
+  if(st==='Pendente') toast(`Pedido enviado: ${rec.nome}, ${quando}. ${nomeGestor(rec)} precisa decidir até ${fPrazo(r)}; senão o Pedido expira.`,'amar');
+  else toast(`Reserva Confirmada: ${rec.nome}, ${quando}. Check-in de ${hm(d.ini-15)} a ${hm(d.ini+15)}.`,'verde');
+  S.draft=null; S.erros=null; go('agenda');
+}
+
+// ---------- barra do protótipo ----------
+function switcher(){
+  const k=S.tela, v=S.v[k];
+  return `<div class="switch"><button data-act="var" data-n="-1" title="Variante anterior (←)">◀</button><span><small>${NOMETELA[k]}</small>${v} · ${VAR[k][v]}</span><button data-act="var" data-n="1" title="Próxima variante (→)">▶</button></div>`;
+}
+function mudarVariante(n){
+  const k=S.tela, vs=['A','B','C']; S.v[k]=vs[(vs.indexOf(S.v[k])+n+3)%3];
+  if(k==='reserva'&&!S.draft) S.draft=novoDraft();
+  S.erros=null; S.recusando=null; syncUrl(); render();
+}
+function estado(){
+  const u=uid();
+  return `<aside class="estado"><b>ESTADO EM MEMÓRIA</b> · Usuário atual: ${u} (${S.perfil}) · Reservas ativas: ${ativasDe(u).length}
+  ${S.suspensoes[u]?` · suspenso até ${S.suspensoes[u]}`:''}
+  <h3>draft da Reserva</h3>${S.draft?esc(JSON.stringify(S.draft)):'—'}
+  <h3>erros</h3>${S.erros?S.erros.map(e=>e.rn).join(', '):'—'}
+  <h3>reservas</h3><table>${S.reservas.map(r=>`<tr class="${ATIVAS.includes(r.status)?'at':''}"><td>${r.id}</td><td>${r.recurso}</td><td>${r.usuario}</td><td>${fDia(r.dia)}</td><td>${hm(r.ini)}–${hm(r.fim)}</td><td>${r.status}</td></tr>`).join('')}</table>
+  <h3>notificações</h3>${S.notificacoes.map(n=>`<div>→ ${n.para}: ${esc(n.msg)}</div>`).join('')||'—'}</aside>`;
+}
+
+// ---------- eventos ----------
+const ACT={
+  tab(el){const t=el.dataset.tela;
+    if(t==='reserva'){if(!S.draft)S.draft=novoDraft();S.erros=null}
+    if(t==='fila'&&S.perfil!=='Gestor'){S.perfil='Gestor';toast('Perfil trocado para Gestor: só o Gestor do Recurso decide os Pedidos (RN13).')}
+    S.recusando=null; go(t)},
+  estado(){S.mostraEstado=!S.mostraEstado;render()},
+  reiniciar(){aplicarCenario(S.cenario);if(S.tela==='reserva')S.draft=novoDraft();toast('Dados reiniciados.');render()},
+  var(el){mudarVariante(+el.dataset.n)},
+  dia(el){S.diaSel=el.dataset.dia;S.abertoB=null;render()},
+  abrirB(el){const i=+el.dataset.ini;S.abertoB=S.abertoB===i?null:i;render()},
+  iniB(el){const t=+el.dataset.t;abrirReserva({dia:el.dataset.dia,ini:t,fim:Math.min(t+60,+el.dataset.fim)})},
+  prox(el){const t=+el.dataset.t;abrirReserva({dia:el.dataset.dia,ini:t,fim:t+60})},
+  barra(el,e){const b=el.getBoundingClientRect(),de=+el.dataset.de,ate=+el.dataset.ate,dia=el.dataset.dia,rec=recurso(S.recursoSel);
+    const t=de+Math.floor((e.clientX-b.left)/b.width*(ate-de)/30)*30;
+    if(statusCel(rec,dia,t).tipo!=='livre'){toast(`${fDia(dia)} ${hm(t)} não está livre.`);return}
+    abrirReserva({dia,ini:t,fim:statusCel(rec,dia,t+30).tipo==='livre'?t+60:t+30})},
+  cancelar(){S.draft=null;S.erros=null;go('agenda')},
+  fecharFundo(el,e){if(e.target===el)ACT.cancelar()},
+  enviar(){enviar()},
+  mover(el){const n=+el.dataset.n;S.draft.ini+=n;S.draft.fim+=n;S.erros=null;render()},
+  dur(el){const n=+el.dataset.n;if(S.draft.fim+n>S.draft.ini){S.draft.fim+=n;S.erros=null;render()}},
+  sug(el){Object.assign(S.draft,{dia:el.dataset.dia,ini:+el.dataset.ini,fim:+el.dataset.fim});if(SEMANA.includes(el.dataset.dia))S.diaSel=el.dataset.dia;S.erros=null;render()},
+  aprovar(el){aprovar(+el.dataset.id);render()},
+  recusar(el){S.recusando=+el.dataset.id;S.justTxt='';render()},
+  cancRecusa(){S.recusando=null;render()},
+  confRecusa(el){recusar(+el.dataset.id)},
+  just(el){S.justTxt=el.dataset.txt;render()},
+  selA(el){const id=+el.dataset.id;el.checked?S.selA.add(id):S.selA.delete(id);render()},
+  selTodos(el){if(el.checked)pedidos().forEach(r=>S.selA.add(r.id));else S.selA.clear();render()},
+  aprovarSel(){const ids=[...S.selA];ids.forEach(id=>aprovar(id,true));toast(`${ids.length} Pedido${ids.length>1?'s aprovados':' aprovado'}; os solicitantes foram notificados.`,'verde');render()},
+  pedSel(el){S.pedSel=+el.dataset.id;S.recusando=null;render()},
+  pular(){S.triIdx=(S.triIdx+1)%pedidos().length;S.recusando=null;render()},
+};
+document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(el&&ACT[el.dataset.act])ACT[el.dataset.act](el,e)});
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(t.matches('textarea[data-just]')){S.justTxt=t.value;const b=document.querySelector('[data-act=confRecusa]');if(b)b.disabled=!t.value.trim();return}
+  const c=t.dataset.campo;
+  if(c){let v=t.value;if(c==='dia'&&!v)return;if(c==='ini'||c==='fim')v=+v;S.draft[c]=v;
+    if(c==='recurso'){S.recursoSel=v;S.erros=null;render();return}
+    if(S.v.reserva==='B'&&S.tela==='reserva'){document.getElementById('checklist').innerHTML=checklist();document.getElementById('resultado').innerHTML=resultadoB()}
+    return}
+  const k=t.dataset.ctl;
+  if(k==='perfil'){S.perfil=t.value;S.recusando=null;if(S.tela==='fila'&&t.value!=='Gestor')S.tela='agenda';syncUrl();render()}
+  if(k==='cenario'){aplicarCenario(t.value);if(t.value!=='normal')S.perfil='Aluno';if(S.tela==='reserva')S.draft=novoDraft();syncUrl();render()}
+  if(k==='recurso'){S.recursoSel=t.value;S.abertoB=null;if(S.draft){S.draft.recurso=t.value;S.erros=null}render()}
+});
+document.addEventListener('keydown',e=>{
+  const f=document.activeElement;
+  if(f&&(f.matches('input,textarea,select')||f.isContentEditable))return;
+  if(e.key==='ArrowLeft')mudarVariante(-1);
+  if(e.key==='ArrowRight')mudarVariante(1);
+  if(S.tela==='fila'&&S.v.fila==='C'&&!S.recusando&&pedidos().length){
+    const r=pedidos()[Math.min(S.triIdx,pedidos().length-1)];
+    if(e.key==='a'){aprovar(r.id);render()} if(e.key==='r'){S.recusando=r.id;S.justTxt='';render()} if(e.key==='p')ACT.pular();
+  }
+});
+// arrastar na grade (agenda A)
+let arr=null;
+const celLivre=(dia,t)=>!!document.querySelector(`td[data-livre][data-dia="${dia}"][data-t="${t}"]`);
+function pintar(){document.querySelectorAll('td[data-livre]').forEach(td=>{const t=+td.dataset.t;td.classList.toggle('c-arr',!!arr&&td.dataset.dia===arr.dia&&t>=arr.ini&&t<arr.fim)})}
+document.addEventListener('pointerdown',e=>{const td=e.target.closest('td[data-livre]');if(!td)return;e.preventDefault();const t=+td.dataset.t;arr={dia:td.dataset.dia,anc:t,ini:t,fim:t+30,moveu:false};pintar()});
+document.addEventListener('pointermove',e=>{if(!arr)return;const el=document.elementFromPoint(e.clientX,e.clientY),td=el&&el.closest('td[data-livre]');if(!td||td.dataset.dia!==arr.dia)return;
+  const t=+td.dataset.t,ini=Math.min(arr.anc,t),fim=Math.max(arr.anc,t)+30;for(let x=ini;x<fim;x+=30)if(!celLivre(arr.dia,x))return;
+  if(ini!==arr.ini||fim!==arr.fim){arr.ini=ini;arr.fim=fim;arr.moveu=true;pintar()}});
+document.addEventListener('pointerup',()=>{if(!arr)return;let{dia,ini,fim,moveu}=arr;arr=null;if(!moveu&&celLivre(dia,ini+30))fim=ini+60;abrirReserva({dia,ini,fim})});
+
+render();
+</script>
+</body>
+</html>
