@@ -84,6 +84,7 @@ Formato: *Como [ator], quero [ação] para [objetivo].* Cada história tem crit�
 **US08: Reservar.** Como Aluno ou Docente, quero reservar um Recurso num Intervalo para garantir o uso.
 - Se qualquer regra falhar, a mensagem diz **qual regra** falhou (por exemplo: "Você já tem 3 reservas ativas, o limite do seu perfil é 3").
 - Recurso comum → Confirmada. Recurso restrito → Pendente.
+- Se o início estiver a menos de 2 horas (dentro do prazo de Cancelamento tardio), a tela avisa antes de confirmar que cancelar já vai gerar Penalidade.
 - RN: RN01 a RN10.
 
 **US09: Criar Série.** Como Docente, quero reservar o mesmo Intervalo toda semana até uma data para minhas aulas do semestre.
@@ -95,6 +96,7 @@ Formato: *Como [ator], quero [ação] para [objetivo].* Cada história tem crit�
 
 **US11: Decidir Pedidos.** Como Gestor, quero ver a fila de Pedidos dos meus Recursos e aprovar ou recusar cada um.
 - A fila vem ordenada pelo início do Intervalo (o mais urgente primeiro).
+- Se quem pediu está com Suspensão em vigor, o Pedido mostra "Usuário suspenso até DD/MM". O Gestor pode aprovar normalmente ou recusar com justificativa; nada é automático.
 - RN: RN11, RN12, RN13.
 
 **US12: Fazer Check-in.** Como Usuário, quero registrar que cheguei ou retirei o Equipamento para não perder a Reserva.
@@ -143,6 +145,8 @@ Cada RN precisa de **pelo menos um teste automatizado** com o ID dela no nome (p
 | Cancelamento sem Penalidade | até 2h antes do início | até 2h antes do início |
 | Suspensão | 3 Penalidades em 30 dias → 7 dias | igual |
 
+Valores da tabela confirmados no ticket [Regras de conduta e valores da Política](https://github.com/tapajosgustavo-collab/reservas-campus/issues/6).
+
 O Gestor não cria Reservas: para eventos institucionais ele usa Indisponibilidade.
 
 **RN05: Antecedência.** O início do Intervalo fica entre a Antecedência mínima e a máxima do Perfil, contadas a partir de agora.
@@ -150,6 +154,7 @@ O Gestor não cria Reservas: para eventos institucionais ele usa Indisponibilida
 
 **RN06: Duração máxima.** A duração do Intervalo não passa da Duração máxima do Perfil para aquele tipo de Recurso.
 - Aluno pede sala por 2h30 → recusado. Docente pede a mesma sala por 2h30 → aceito.
+- Aluno reserva a sala 10h–12h e depois 12h–14h → as duas são aceitas (Reservas seguidas são permitidas; cada uma conta 1 na Cota).
 
 **RN07: Cota.** O Usuário não pode passar da Cota de Reservas ativas do Perfil dele.
 - Aluno com 3 Reservas ativas tenta a 4ª → recusado. Cancela uma e tenta de novo → aceito.
@@ -183,7 +188,9 @@ O Gestor não cria Reservas: para eventos institucionais ele usa Indisponibilida
 
 ### Conduta
 
-**RN19: Suspensão.** Quando o Usuário chega a **3 Penalidades nos últimos 30 dias**, ele fica suspenso por **7 dias** a partir da 3ª. As Reservas que ele já tinha continuam valendo.
+**RN19: Suspensão.** Quando o Usuário chega a **3 Penalidades nos últimos 30 dias**, ele fica suspenso por **7 dias** a partir da 3ª. Vale igual para Aluno e Docente. Os 30 dias são uma janela móvel, contada para trás a partir de cada nova Penalidade. A Penalidade nunca sai do histórico; ela só deixa de contar depois de 30 dias ou depois de causar uma Suspensão (RN20).
+- As Reservas que ele já tinha continuam valendo: ele ainda pode fazer Check-in, cancelar, e os Pedidos Pendentes dele ainda podem ser aprovados.
+- Penalidades recebidas durante a Suspensão contam normalmente. Suspenso de 01/11 a 08/11, falta às 3 Reservas que já tinha (02, 03 e 04/11) → nova Suspensão de 7 dias a partir da 3ª, e o fim passa a ser 11/11. Se uma nova Suspensão terminasse antes da atual, vale o fim mais distante.
 
 **RN20: Penalidade conta uma vez.** As Penalidades que já causaram uma Suspensão não contam para a próxima.
 - 3 Penalidades → suspenso. Volta, leva a 4ª Penalidade dentro dos mesmos 30 dias → **não** é suspenso de novo (conta só 1).
@@ -254,7 +261,7 @@ Decisões que o grupo precisa tomar. A proposta atual está entre parênteses e 
 1. **Pedido Pendente ocupa o horário?** Dois Alunos querem o mesmo laboratório restrito na terça às 14h. (Proposta: sim, quem pediu primeiro tem a vez. A alternativa é aceitar vários Pedidos e o Gestor escolher um, o que é mais justo mas bem mais complexo.)
 2. **Equipamentos iguais.** O campus tem 5 projetores idênticos. O Usuário escolhe "o projetor de patrimônio 123" ou só "um projetor"? (Proposta: cada Equipamento é uma unidade e o Usuário escolhe qual. "Qualquer um livre" seria uma melhoria futura.)
 3. **Equipamento não devolvido.** O notebook da Reserva das 10h–12h não voltou, e outra pessoa tem Reserva às 13h. O que acontece com ela? (Proposta: o Check-in dela fica bloqueado até a Devolução, ela não leva Penalidade e o Gestor é notificado.)
-4. **Docente leva Penalidade?** (Proposta: sim, mesmas regras do Aluno.)
-5. **Suspensão e Reservas futuras.** Ao ser suspenso, o Usuário perde as Reservas que já tinha? (Proposta: não, elas continuam valendo.)
+4. ~~**Docente leva Penalidade?**~~ **Decidido** ([#6](https://github.com/tapajosgustavo-collab/reservas-campus/issues/6)): sim, mesmas regras do Aluno.
+5. ~~**Suspensão e Reservas futuras.**~~ **Decidido** ([#6](https://github.com/tapajosgustavo-collab/reservas-campus/issues/6)): elas continuam valendo (RN19).
 6. **Série na Cota.** Um Docente com uma Série de 18 aulas gasta 18 da Cota de 10? (Proposta: a Série conta como 1.)
 7. **Quem define que alguém é Docente ou Gestor?** (Proposta: no MVP vem do banco de demonstração. Uma tela de administração fica para depois.)

@@ -153,7 +153,7 @@ Registro de mau uso no histórico do Usuário, gerado por Não comparecimento, C
 _Evitar_: advertência, multa, falta, strike
 
 **Suspensão**:
-Período em que o Usuário não pode criar Reservas, aplicado quando ele acumula Penalidades demais em pouco tempo.
+Período em que o Usuário não pode criar Reservas, aplicado quando ele acumula Penalidades demais em pouco tempo. As Reservas que ele já tinha continuam valendo.
 _Evitar_: bloqueio, banimento, punição
 
 **Notificação**:
