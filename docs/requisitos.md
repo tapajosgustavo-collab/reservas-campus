@@ -17,7 +17,7 @@ O sistema centraliza as **Reservas**, impede **Conflitos** automaticamente, apli
 | **Aluno** | Busca Recursos, faz Reservas avulsas, faz Check-in, cancela as próprias Reservas |
 | **Docente** | Tudo o que o Aluno faz, com limites maiores, e também cria **Séries** |
 | **Gestor** | Cadastra os seus Recursos, define Indisponibilidades, decide Pedidos, registra Devoluções |
-| **Sistema (relógio)** | Aplica as regras que dependem do tempo: Expiração, Não comparecimento, conclusão automática, fim da Suspensão |
+| **Sistema (relógio)** | Aplica as regras que dependem do tempo: Expiração, Não comparecimento, conclusão automática, Devolução atrasada, fim da Suspensão |
 
 ## 3. Escopo
 
@@ -76,6 +76,7 @@ Formato: *Como [ator], quero [ação] para [objetivo].* Cada história tem crit�
 
 **US06: Buscar Recurso livre.** Como Usuário, quero buscar Recursos por tipo, Capacidade mínima e Intervalo desejado para achar algo livre rápido.
 - Só aparecem Recursos sem Conflito, sem Indisponibilidade e dentro do Horário de funcionamento naquele Intervalo.
+- Equipamentos são reservados por unidade (número de patrimônio). Quem procura "um projetor" vê todos os projetores livres naquele Intervalo e escolhe um. "Qualquer um livre", com o sistema escolhendo a unidade, fica como melhoria futura.
 
 **US07: Agenda do Recurso.** Como Usuário, quero ver a agenda da semana de um Recurso para escolher um horário livre.
 - Mostra ocupado, livre e indisponível. Clicar num horário livre abre a criação de Reserva já preenchida.
@@ -105,19 +106,20 @@ Formato: *Como [ator], quero [ação] para [objetivo].* Cada história tem crit�
 - RN: RN11, RN12, RN13.
 
 **US12: Fazer Check-in.** Como Usuário, quero registrar que cheguei ou retirei o Equipamento para não perder a Reserva.
-- RN: RN14.
+- RN: RN14, RN23.
 
 **US13: Cancelar.** Como Usuário, quero cancelar uma Reserva para liberar o Recurso.
 - RN: RN16.
 
 **US14: Registrar Devolução.** Como Gestor, quero registrar que o Equipamento voltou para encerrar a Reserva.
-- RN: RN17.
+- A Devolução tem um campo de observação, obrigatório quando o Equipamento não voltou (perdido ou roubado). Nesse caso o Gestor registra a Devolução mesmo assim, para encerrar a Reserva, e cria uma Indisponibilidade no Equipamento (RN04).
+- RN: RN13, RN17.
 
-**US15: Regras automáticas de tempo.** Como Sistema, quero aplicar Expiração, Não comparecimento e conclusão automática no momento certo.
-- RN: RN12, RN15, RN18.
+**US15: Regras automáticas de tempo.** Como Sistema, quero aplicar Expiração, Não comparecimento, conclusão automática e Devolução atrasada no momento certo.
+- RN: RN12, RN15, RN17, RN18, RN23.
 
 **US16: Notificações.** Como Usuário, quero ser avisado do que acontece com minhas Reservas para não ser pego de surpresa.
-- Eventos: Aprovação, Recusa (com justificativa), Expiração, Cancelamento pelo sistema, Penalidade, início e fim de Suspensão, lembrete 1h antes do início.
+- Eventos: Aprovação, Recusa (com justificativa), Expiração, Cancelamento pelo sistema, Penalidade, Devolução atrasada (para o Usuário e para o Gestor do Equipamento), início e fim de Suspensão, lembrete 1h antes do início.
 
 ## 6. Regras de negócio
 
@@ -135,7 +137,7 @@ Cada RN precisa de **pelo menos um teste automatizado** com o ID dela no nome (p
 **RN03: Dentro do Horário de funcionamento.** O Intervalo inteiro precisa caber no Horário de funcionamento do Recurso.
 - Funcionamento 7h–23h. Pedir 22h–23h30 → recusado.
 
-**RN04: Indisponibilidade.** Não é possível reservar um Intervalo que se sobrepõe a uma Indisponibilidade. Quando um Gestor cria uma Indisponibilidade em cima de Reservas ativas, essas Reservas recebem Cancelamento pelo sistema, **sem Penalidade**, e o Usuário recebe uma Notificação.
+**RN04: Indisponibilidade.** Não é possível reservar um Intervalo que se sobrepõe a uma Indisponibilidade. Quando um Gestor cria uma Indisponibilidade em cima de Reservas Pendentes ou Confirmadas, essas Reservas recebem Cancelamento pelo sistema, **sem Penalidade**, e o Usuário recebe uma Notificação. Uma Reserva Em uso não é cancelada: ela continua até a Devolução (ou até o fim do Intervalo, no Espaço), e a RN17 vale normalmente para ela.
 
 ### Política
 
@@ -148,12 +150,15 @@ Cada RN precisa de **pelo menos um teste automatizado** com o ID dela no nome (p
 | Duração máxima (Equipamento) | 4 horas | 8 horas |
 | Cota (Reservas ativas) | 3 | 10 |
 | Tolerância do Check-in | 15 min | 15 min |
+| Tolerância de Devolução | 15 min | 15 min |
 | Cancelamento sem Penalidade | até 2h antes do início | até 2h antes do início |
 | Suspensão | 3 Penalidades em 30 dias → 7 dias | igual |
 
 Valores da tabela confirmados no ticket [Regras de conduta e valores da Política](https://github.com/tapajosgustavo-collab/reservas-campus/issues/6).
 
 A Antecedência mínima em Recurso restrito foi decidida no ticket [Regras de Pedido e ocupação](https://github.com/tapajosgustavo-collab/reservas-campus/issues/4).
+
+A Tolerância de Devolução foi decidida no ticket [Regras de Equipamento](https://github.com/tapajosgustavo-collab/reservas-campus/issues/5).
 
 O Gestor não cria Reservas: para eventos institucionais ele usa Indisponibilidade.
 
@@ -183,19 +188,27 @@ O Gestor não cria Reservas: para eventos institucionais ele usa Indisponibilida
 
 **RN12: Expiração.** Se o Pedido não for decidido até **2 horas antes do início**, ele vira Expirado automaticamente, libera o Intervalo e o Usuário é notificado. Expiração não gera Penalidade.
 
-**RN13: Gestor do Recurso.** Cada Recurso tem exatamente um Gestor responsável: o Gestor que o cadastrou. Só ele decide os Pedidos do Recurso.
-- Carlos cadastra o projetor P-123. Dora, que também é Gestora, tenta aprovar um Pedido do P-123 → recusado.
+**RN13: Gestor do Recurso.** Cada Recurso tem exatamente um Gestor responsável: o Gestor que o cadastrou. Só ele decide os Pedidos do Recurso e registra as Devoluções dele.
+- Carlos cadastra o projetor P-123. Dora, que também é Gestora, tenta aprovar um Pedido do P-123 → recusado. Tenta registrar a Devolução do P-123 → recusado.
 
 ### Uso
 
-**RN14: Janela de Check-in.** O Check-in é aceito de 15 minutos antes do início até o fim da Tolerância (15 minutos depois do início), e só pelo dono da Reserva. Reserva Pendente não aceita Check-in.
+**RN14: Janela de Check-in.** O Check-in é aceito de 15 minutos antes do início até o fim da Tolerância (15 minutos depois do início), e só pelo dono da Reserva. Reserva Pendente não aceita Check-in. Vale igual para Espaço e Equipamento: no Equipamento, o Check-in é a retirada, e quem registra é o próprio Usuário. No Equipamento, o Check-in também é recusado enquanto a Reserva anterior dele estiver sem Devolução (RN23).
 - Reserva às 10h. Check-in às 9h40 → recusado. 9h50 → aceito. 10h14 → aceito. 10h16 → recusado.
 
-**RN15: Não comparecimento.** Uma Reserva Confirmada sem Check-in até o fim da Tolerância vira Não comparecimento, libera o restante do Intervalo para outras Reservas e gera uma Penalidade.
+**RN15: Não comparecimento.** Uma Reserva Confirmada sem Check-in até o fim da Tolerância vira Não comparecimento, libera o restante do Intervalo para outras Reservas e gera uma Penalidade. A exceção é a Reserva de Equipamento cuja Reserva anterior ainda está sem Devolução nesse momento: ela segue a RN23.
 
 **RN16: Cancelamento.** O Usuário pode cancelar Reservas Pendentes ou Confirmadas até o início do Intervalo. Cancelar uma Reserva **Confirmada** com menos de 2 horas de antecedência é Cancelamento tardio e gera Penalidade. Cancelar uma Pendente nunca gera Penalidade.
 
-**RN17: Devolução atrasada.** Uma Reserva de Equipamento só termina com a Devolução. Se a Devolução for registrada depois do fim do Intervalo, o Usuário recebe uma Penalidade.
+**RN17: Devolução atrasada.** Uma Reserva de Equipamento Em uso só termina com a Devolução, registrada pelo Gestor responsável (RN13). Se o fim da Tolerância de Devolução (15 minutos depois do fim do Intervalo) chega sem Devolução, a Reserva fica em Devolução atrasada. Nesse momento o sistema gera **uma** Penalidade, e o Usuário e o Gestor recebem uma Notificação. Devolução atrasada não é um Status: a Reserva continua Em uso, conta na Cota e o Equipamento aparece ocupado até a Devolução. A Devolução que vier depois encerra a Reserva (Concluída) sem gerar outra Penalidade.
+- Reserva 10h–12h. Devolução às 12h10 → Concluída, sem Penalidade. Devolução às 12h20 → Concluída, com 1 Penalidade, gerada às 12h15.
+- Reserva 10h–12h e o notebook só volta dois dias depois → 1 Penalidade só, gerada às 12h15 do primeiro dia.
+- **Devolução antecipada.** Reserva 10h–14h, Devolução às 11h → Concluída na hora, sem Penalidade, e o trecho 11h–14h fica livre para outras Reservas.
+- **Equipamento perdido ou roubado.** O Gestor registra a Devolução mesmo assim, com observação obrigatória, e cria uma Indisponibilidade no Equipamento (RN04). A Penalidade por atraso, se o prazo já tinha passado, continua valendo.
+
+**RN23: Equipamento ainda fora.** O Check-in de uma Reserva de Equipamento é recusado enquanto a Reserva anterior do mesmo Equipamento estiver sem Devolução, e a mensagem diz que o Equipamento ainda não foi devolvido. Se o Equipamento voltar antes do fim da Tolerância do Check-in, o Check-in segue normal. Se não voltar, no fim da Tolerância a Reserva recebe Cancelamento pelo sistema, **sem Penalidade** e com Notificação, mesmo que o Usuário nem tenha tentado o Check-in.
+- Notebook com Reserva 10h–12h que não voltou; Bia tem 13h–15h. Check-in da Bia às 13h05 → recusado. O notebook volta às 13h10 e a Bia faz Check-in às 13h12 → aceito. Se não voltar até 13h15 → a Reserva da Bia é cancelada pelo sistema, sem Penalidade.
+- Reservas que se encostam (10h–12h e 12h–14h): às 12h15, sem Devolução, a primeira gera a Penalidade (RN17) e a segunda é cancelada pelo sistema, no mesmo instante.
 
 **RN18: Conclusão automática.** Uma Reserva de Espaço Em uso vira Concluída automaticamente no fim do Intervalo.
 
@@ -270,7 +283,7 @@ Cada incremento termina com uma release (tag) no GitHub e algo funcionando de po
 | 1. MVP | Login, cadastro de Recurso, reservar, minhas reservas, agenda simples | RN01–RN03 |
 | 2. Política | Antecedência, duração, Cota, Capacidade, Cancelamento, Indisponibilidade | RN04–RN08, RN16 (sem Penalidade ainda) |
 | 3. Pedidos | Recursos restritos, fila do Gestor, Aprovação, Recusa, Expiração, Notificações | RN10–RN13 |
-| 4. Conduta | Check-in, Não comparecimento, Devolução, Penalidade, Suspensão | RN09, RN14–RN20 |
+| 4. Conduta | Check-in, Não comparecimento, Devolução, Penalidade, Suspensão | RN09, RN14–RN20, RN23 |
 | 5. Séries e polimento | Séries, privacidade da agenda, testes ponta a ponta, ensaio da apresentação | RN21, RN22 |
 
 ## 10. Questões em aberto
@@ -278,8 +291,8 @@ Cada incremento termina com uma release (tag) no GitHub e algo funcionando de po
 Decisões que o grupo precisa tomar. A proposta atual está entre parênteses e já está aplicada no documento acima.
 
 1. ~~**Pedido Pendente ocupa o horário?**~~ **Decidido** ([#4](https://github.com/tapajosgustavo-collab/reservas-campus/issues/4)): sim, quem pediu primeiro tem a vez, sem fila de espera (RN10). Vários Pedidos para o Gestor escolher fica como melhoria futura.
-2. **Equipamentos iguais.** O campus tem 5 projetores idênticos. O Usuário escolhe "o projetor de patrimônio 123" ou só "um projetor"? (Proposta: cada Equipamento é uma unidade e o Usuário escolhe qual. "Qualquer um livre" seria uma melhoria futura.)
-3. **Equipamento não devolvido.** O notebook da Reserva das 10h–12h não voltou, e outra pessoa tem Reserva às 13h. O que acontece com ela? (Proposta: o Check-in dela fica bloqueado até a Devolução, ela não leva Penalidade e o Gestor é notificado.)
+2. ~~**Equipamentos iguais.**~~ **Decidido** ([#5](https://github.com/tapajosgustavo-collab/reservas-campus/issues/5)): por unidade. O Usuário escolhe o Equipamento pelo número de patrimônio, e a busca lista as unidades livres (US06). "Qualquer um livre" fica como melhoria futura.
+3. ~~**Equipamento não devolvido.**~~ **Decidido** ([#5](https://github.com/tapajosgustavo-collab/reservas-campus/issues/5)): o Check-in da próxima Reserva fica bloqueado até a Devolução. Se o Equipamento não voltar até o fim da Tolerância dela, ela é cancelada pelo sistema, sem Penalidade (RN23). Quem atrasou leva uma Penalidade no fim da Tolerância de Devolução (RN17).
 4. ~~**Docente leva Penalidade?**~~ **Decidido** ([#6](https://github.com/tapajosgustavo-collab/reservas-campus/issues/6)): sim, mesmas regras do Aluno.
 5. ~~**Suspensão e Reservas futuras.**~~ **Decidido** ([#6](https://github.com/tapajosgustavo-collab/reservas-campus/issues/6)): elas continuam valendo (RN19).
 6. ~~**Série na Cota.**~~ **Decidido** ([#7](https://github.com/tapajosgustavo-collab/reservas-campus/issues/7)): a Série conta como 1 na Cota enquanto tiver alguma Ocorrência ativa (RN21).

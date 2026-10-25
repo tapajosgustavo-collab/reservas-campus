@@ -35,7 +35,7 @@ Recurso físico onde as pessoas ficam durante o uso, como sala, laboratório ou 
 _Evitar_: sala (sala é só um tipo de Espaço), local, ambiente
 
 **Equipamento**:
-Recurso móvel que é retirado e precisa ser devolvido, como projetor ou notebook. Cada Equipamento é uma unidade física única, identificada pelo número de patrimônio.
+Recurso móvel que é retirado e precisa ser devolvido, como projetor ou notebook. Cada Equipamento é uma unidade física única, identificada pelo número de patrimônio, e a Reserva é sempre de uma unidade específica, nunca de "um projetor qualquer".
 _Evitar_: material, dispositivo, item
 
 **Capacidade**:
@@ -103,7 +103,7 @@ Encerramento automático de um Pedido que não foi decidido até o Prazo de deci
 _Evitar_: vencimento, timeout
 
 **Cancelamento**:
-Encerramento de uma Reserva ativa antes do início do uso, feito pelo próprio Usuário ou pelo sistema quando surge uma Indisponibilidade.
+Encerramento de uma Reserva ativa antes do início do uso, feito pelo próprio Usuário ou pelo sistema, quando surge uma Indisponibilidade ou quando o Equipamento não volta a tempo da Reserva seguinte.
 _Evitar_: desistência, exclusão
 
 **Cancelamento tardio**:
@@ -115,7 +115,7 @@ Registro de que o uso começou: o Usuário chegou ao Espaço ou retirou o Equipa
 _Evitar_: entrada, retirada, confirmação de presença
 
 **Tolerância**:
-Tempo após o início do Intervalo em que o Check-in ainda é aceito.
+Tempo após o início do Intervalo em que o Check-in ainda é aceito. Não confundir com Tolerância de Devolução.
 _Evitar_: atraso permitido, margem
 
 **Não comparecimento**:
@@ -123,13 +123,21 @@ Status da Reserva Confirmada sem Check-in até o fim da Tolerância. Libera o Re
 _Evitar_: falta, no-show, ausência
 
 **Devolução**:
-Registro, feito pelo Gestor, de que o Equipamento voltou. Encerra a Reserva de Equipamento.
+Registro, feito pelo Gestor responsável pelo Equipamento, de que o Equipamento voltou. Encerra a Reserva de Equipamento. Se o Equipamento foi perdido ou roubado, o Gestor registra a Devolução mesmo assim, com uma observação explicando.
 _Evitar_: entrega, retorno
+
+**Tolerância de Devolução**:
+Tempo após o fim do Intervalo em que a Devolução ainda não conta como atrasada.
+_Evitar_: prazo de devolução, carência
+
+**Devolução atrasada**:
+Situação da Reserva de Equipamento que continua Em uso depois do fim da Tolerância de Devolução. Não é um Status. Gera uma Penalidade e impede o Check-in da Reserva seguinte do mesmo Equipamento.
+_Evitar_: atraso, pendência, não devolução
 
 ## Política e conduta
 
 **Política**:
-Conjunto de limites aplicados a cada Perfil: Antecedência, Duração máxima, Cota, Tolerância, Prazo de decisão e as regras de Penalidade e Suspensão.
+Conjunto de limites aplicados a cada Perfil: Antecedência, Duração máxima, Cota, Tolerância, Tolerância de Devolução, Prazo de decisão e as regras de Penalidade e Suspensão.
 _Evitar_: regras, configuração, parâmetros
 
 **Antecedência**:
