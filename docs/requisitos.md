@@ -94,6 +94,7 @@ Formato: *Como [ator], quero [ação] para [objetivo].* Cada história tem crit�
 - Se qualquer regra falhar, a mensagem diz **qual regra** falhou (por exemplo: "Você já tem 3 reservas ativas, o limite do seu perfil é 3").
 - Recurso comum → Confirmada. Recurso restrito → Pendente.
 - Se o início estiver a menos de 2 horas (dentro do prazo de Cancelamento tardio), a tela avisa antes de confirmar que cancelar já vai gerar Penalidade.
+- O Usuário pode escrever uma Finalidade (opcional, até 200 caracteres) para ajudar o Gestor a decidir o Pedido. Na Série, ela vale para todas as Ocorrências. Só o dono e o Gestor do Recurso veem a Finalidade (RN22).
 - RN: RN01 a RN10.
 
 **US09: Criar Série.** Como Docente, quero reservar o mesmo Intervalo toda semana até uma data para minhas aulas do semestre.
@@ -102,6 +103,8 @@ Formato: *Como [ator], quero [ação] para [objetivo].* Cada história tem crit�
 - RN: RN21.
 
 **US10: Minhas reservas.** Como Usuário, quero ver as minhas Reservas futuras e passadas, com o Status de cada uma.
+- Duas abas, separadas pelo Status e não pela data: **Ativas** (Pendente, Confirmada e Em uso, da mais próxima para a mais distante) e **Encerradas** (as demais, da mais recente para a mais antiga), com 20 por página. Um Equipamento com Devolução atrasada continua em Ativas.
+- O detalhe da Reserva mostra o histórico: quem decidiu, quando, a justificativa da Recusa e a observação da Devolução.
 
 ### M4. Ciclo de vida
 
@@ -242,7 +245,7 @@ O Gestor não cria Reservas: para eventos institucionais ele usa Indisponibilida
 
 ### Privacidade
 
-**RN22: Agenda sem nomes.** A agenda pública de um Recurso mostra só livre, ocupado e indisponível. Quem reservou só aparece para o próprio Usuário e para o Gestor do Recurso.
+**RN22: Agenda sem nomes.** A agenda pública de um Recurso mostra só livre, ocupado e indisponível. Quem reservou só aparece para o próprio Usuário e para o Gestor do Recurso. Os outros também não veem o Status (um Pedido Pendente aparece como ocupado), a Finalidade nem o id da Reserva, e quem tenta abrir a Reserva de outra pessoa é recusado citando esta regra.
 
 ## 7. Ciclo de vida da Reserva
 
