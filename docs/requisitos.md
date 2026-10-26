@@ -36,14 +36,16 @@ O sistema centraliza as **Reservas**, impede **Conflitos** automaticamente, apli
 
 ## 4. Módulos e responsáveis
 
-Cada módulo é uma fatia vertical (backend, frontend e testes) com um responsável principal. Os PRs de um módulo são revisados por alguém de **outro** módulo.
+Cada módulo é uma fatia vertical (backend, frontend e testes) com um responsável principal, que cuida da coerência do módulo e responde as dúvidas sobre ele. Os tickets são puxados por qualquer integrante, não só pelo responsável. Os PRs de um módulo são revisados pelo responsável do módulo seguinte no rodízio (decidido em [#14](https://github.com/tapajosgustavo-collab/reservas-campus/issues/14)).
 
-| # | Módulo | Conteúdo | Responsável |
-|---|---|---|---|
-| M1 | **Usuários e conduta** | Login, Perfis, Penalidades, Suspensão, histórico | _a definir_ |
-| M2 | **Recursos e disponibilidade** | Cadastro de Recursos, Horário de funcionamento, Indisponibilidade, busca, agenda visual | _a definir_ |
-| M3 | **Motor de reservas** | Criação de Reserva e Série, validação de Conflito e da Política, "Minhas reservas" | _a definir_ |
-| M4 | **Ciclo de vida** | Aprovação, Recusa, Expiração, Check-in, Não comparecimento, Cancelamento, Devolução, Notificações | _a definir_ |
+| # | Módulo | Conteúdo | Responsável | Revisor |
+|---|---|---|---|---|
+| M1 | **Usuários e conduta** | Login, Perfis, Penalidades, Suspensão, histórico | Kaio | Gustavo |
+| M2 | **Recursos e disponibilidade** | Cadastro de Recursos, Horário de funcionamento, Indisponibilidade, busca, agenda visual | Gustavo | Rafael |
+| M3 | **Motor de reservas** | Criação de Reserva e Série, validação de Conflito e da Política, "Minhas reservas" | Rafael | Guilherme |
+| M4 | **Ciclo de vida** | Aprovação, Recusa, Expiração, Check-in, Não comparecimento, Cancelamento, Devolução, Notificações | Guilherme | Kaio |
+
+Se o revisor não responder em 24h, qualquer outro integrante pode aprovar.
 
 ## 5. Requisitos funcionais (histórias de usuário)
 

@@ -66,16 +66,22 @@ Quando o mapa não tiver mais tickets abertos:
 
 Para cada ticket de implementação:
 
-1. Atribua o ticket a você no GitHub.
-2. Atualize a `main` e crie uma branch para ele:
+1. Atribua o ticket a você no GitHub e mova o card para "Em andamento" no quadro. **No máximo 1 ticket em andamento por pessoa.**
+2. Atualize a `main` e crie uma branch para ele no repositório principal (não use fork):
    ```bash
    git switch main
    git pull
    git switch -c feat/<numero>-<nome-curto>
    ```
-3. Programe sozinho, ou use `/implement <link do ticket>`. Ele usa TDD, revisa o código e commita **na branch atual**, então crie a branch antes.
-4. Abra o PR ligando o ticket (`Closes #<numero>` na descrição).
-5. **Outro integrante revisa** antes do merge. Revise de verdade: comente, peça mudança quando for o caso.
+   O prefixo é o tipo da mudança: `feat`, `fix`, `docs`, `test`, `refactor` ou `chore`.
+3. Programe sozinho, ou use `/implement <link do ticket>`. Ele usa TDD, revisa o código e commita **na branch atual**, então crie a branch antes. Mensagens de commit no padrão `tipo(módulo): o que mudou (#numero)`, em português. Exemplo: `feat(m3): valida Conflito na criação de Reserva (#42)`.
+4. Abra o PR ligando o ticket (`Closes #<numero>` na descrição). PR pequeno: um ticket por PR, branch com até 2 dias e até umas 400 linhas mudadas. Se crescer além disso, quebre o ticket.
+5. **O revisor do rodízio revisa** em até 24h, usando o checklist do template de PR. Revise de verdade: comente, peça mudança quando for o caso. O rodízio está no [§4 dos requisitos](docs/requisitos.md#4-módulos-e-responsáveis); se o revisor não responder em 24h, qualquer outro integrante pode aprovar.
+6. Com CI verde e 1 aprovação, **quem abriu o PR** faz o merge por *squash* e apaga a branch. O deploy em produção sai sozinho.
+
+**A `main` quebrou** (CI vermelho ou produção fora do ar)? Ninguém faz outro merge. Quem quebrou, ou quem viu primeiro, abre na hora um PR de revert com a label `incidente`, que tem prioridade sobre qualquer revisão. O conserto vem depois, num PR normal.
+
+**Ritmo:** um incremento por semana, terminando com a tag `v0.N` e uma release no GitHub. Uma call por semana junta a review do incremento, uma retrospectiva de 15 minutos (notas na descrição da release) e o planejamento do próximo. O fluxo completo, com a Definition of Done, está no ticket [Fluxo de Git e revisão do grupo](https://github.com/tapajosgustavo-collab/reservas-campus/issues/14).
 
 ### Sem IA: o mesmo processo à mão
 
