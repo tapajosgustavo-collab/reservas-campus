@@ -23,7 +23,7 @@ O sistema centraliza as **Reservas**, impede **Conflitos** automaticamente, apli
 
 **Dentro do escopo**
 - Um único campus, com Espaços e Equipamentos.
-- Login simples com e-mail institucional (sem integração real com o login da UNIFESP).
+- Login simples com e-mail institucional (sem integração real com o login da UNIFESP). **Sem senha: é um risco aceito só para a demo**, porque quem souber um e-mail cadastrado entra como aquela pessoa ([ADR 0002](adr/0002-login-sem-senha.md)).
 - Notificações dentro do sistema.
 
 **Fora do escopo** (pode virar melhoria futura, se sobrar tempo)
@@ -202,7 +202,8 @@ O Gestor não cria Reservas: para eventos institucionais ele usa Indisponibilida
 
 **RN15: Não comparecimento.** Uma Reserva Confirmada sem Check-in até o fim da Tolerância vira Não comparecimento, libera o restante do Intervalo para outras Reservas e gera uma Penalidade. A exceção é a Reserva de Equipamento cuja Reserva anterior ainda está sem Devolução nesse momento: ela segue a RN23.
 
-**RN16: Cancelamento.** O Usuário pode cancelar Reservas Pendentes ou Confirmadas até o início do Intervalo. Cancelar uma Reserva **Confirmada** com menos de 2 horas de antecedência é Cancelamento tardio e gera Penalidade. Cancelar uma Pendente nunca gera Penalidade.
+**RN16: Cancelamento.** O Usuário pode cancelar as **próprias** Reservas Pendentes ou Confirmadas até o início do Intervalo; ninguém cancela a Reserva de outra pessoa. Cancelar uma Reserva **Confirmada** com menos de 2 horas de antecedência é Cancelamento tardio e gera Penalidade. Cancelar uma Pendente nunca gera Penalidade.
+- Reserva da Ana às 14h. O Bruno tenta cancelar → **recusado** (só o dono cancela). A Ana cancela às 12h30 → Cancelamento tardio, com Penalidade.
 
 **RN17: Devolução atrasada.** Uma Reserva de Equipamento Em uso só termina com a Devolução, registrada pelo Gestor responsável (RN13). Se o fim da Tolerância de Devolução (15 minutos depois do fim do Intervalo) chega sem Devolução, a Reserva fica em Devolução atrasada. Nesse momento o sistema gera **uma** Penalidade, e o Usuário e o Gestor recebem uma Notificação. Devolução atrasada não é um Status: a Reserva continua Em uso, conta na Cota e o Equipamento aparece ocupado até a Devolução. A Devolução que vier depois encerra a Reserva (Concluída) sem gerar outra Penalidade.
 - Reserva 10h–12h. Devolução às 12h10 → Concluída, sem Penalidade. Devolução às 12h20 → Concluída, com 1 Penalidade, gerada às 12h15.
@@ -276,7 +277,7 @@ Reservas ativas: **Pendente, Confirmada e Em uso.**
 | RNF08 | Todas as datas usam o fuso `America/Sao_Paulo`. |
 | RNF09 | As mensagens de erro são em português e dizem qual regra impediu a ação. |
 | RNF10 | Banco carregado com dados de demonstração (Usuários de cada Perfil, Recursos, Reservas) para a apresentação. |
-| RNF11 | Concorrência: 10 requisições simultâneas de Reserva para o mesmo Recurso e Intervalo criam exatamente uma Reserva; as outras 9 são recusadas citando a RN01. Verificado por teste de integração desde o incremento 1. |
+| RNF11 | Concorrência: 10 requisições simultâneas de Reserva para o mesmo Recurso e Intervalo criam exatamente uma Reserva; as outras 9 são recusadas citando a RN01. Do mesmo jeito, duas requisições simultâneas de um Usuário com só uma vaga na Cota criam exatamente uma Reserva (RN07). Verificado por teste de integração desde o incremento 1. |
 
 ## 9. Entregas incrementais
 
