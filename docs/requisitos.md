@@ -272,19 +272,21 @@ Reservas ativas: **Pendente, Confirmada e Em uso.**
 
 ## 8. Requisitos não funcionais
 
-| ID | Requisito |
-|---|---|
-| RNF01 | Toda RN tem teste no núcleo (sem I/O) com o ID dela no nome, um por exemplo da §6, escrito com TDD. Cobertura mínima de 80% de linhas e de branches no núcleo, verificada pelo CI (abaixo disso o CI falha). |
-| RNF02 | As regras que dependem do tempo recebem o "agora" de fora (relógio injetável), para os testes poderem simular qualquer data e hora. Na demo, o relógio da API pode ser avançado ao vivo, só com `DEMO=1`. |
-| RNF03 | Testes de integração na API (Postgres real) para cada história, com o ID dela no nome: caminho feliz, uma recusa que confere a regra citada no erro e, quando a rota mexe em algo de outra pessoa, um teste de autorização. Testes ponta a ponta só para os 3 fluxos principais (reservar, decidir Pedido, Check-in), em tela de computador e de celular, cada um entrando no incremento da sua funcionalidade. |
-| RNF04 | Todo PR roda lint, checagem de tipos e as três suítes de teste (núcleo, API e ponta a ponta) no GitHub Actions, com meta de CI verde em menos de 10 minutos. Nada entra na `main` com o CI falhando ou sem 1 aprovação. |
-| RNF05 | O projeto sobe com um comando (por exemplo `docker compose up`) e o README explica como rodar e testar. |
-| RNF06 | A API é documentada (OpenAPI/Swagger). |
-| RNF07 | A interface funciona no celular e no computador. |
-| RNF08 | Todas as datas usam o fuso `America/Sao_Paulo`. |
-| RNF09 | As mensagens de erro são em português e dizem qual regra impediu a ação. |
-| RNF10 | Banco carregado com dados de demonstração (Usuários de cada Perfil, Recursos, Reservas) para a apresentação. |
-| RNF11 | Concorrência: 10 requisições simultâneas de Reserva para o mesmo Recurso e Intervalo criam exatamente uma Reserva; as outras 9 são recusadas citando a RN01. Do mesmo jeito, duas requisições simultâneas de um Usuário com só uma vaga na Cota criam exatamente uma Reserva (RN07). Verificado por teste de integração desde o incremento 1. |
+| ID | Requisito | Como é verificado |
+|---|---|---|
+| RNF01 | Toda RN tem teste no núcleo (sem I/O) com o ID dela no nome, um por exemplo da §6, escrito com TDD. Cobertura mínima de 80% de linhas e de branches no núcleo, verificada pelo CI (abaixo disso o CI falha). | Job `nucleo` do CI, bloqueia. A matriz RN → testes aparece no resumo de todo PR, e o checklist de release exige as RNs do incremento com testes passando. |
+| RNF02 | As regras que dependem do tempo recebem o "agora" de fora (relógio injetável), para os testes poderem simular qualquer data e hora. Na demo, o relógio da API pode ser avançado ao vivo, só com `DEMO=1`. | Job `lint` do CI, bloqueia: a regra de dependência proíbe o núcleo de ler o relógio do sistema. O E2E de Check-in avança o relógio com `DEMO=1`. |
+| RNF03 | Testes de integração na API (Postgres real) para cada história, com o ID dela no nome: caminho feliz, uma recusa que confere a regra citada no erro e, quando a rota mexe em algo de outra pessoa, um teste de autorização. Testes ponta a ponta só para os 3 fluxos principais (reservar, decidir Pedido, Check-in), em tela de computador e de celular, cada um entrando no incremento da sua funcionalidade. | Jobs `api` e `e2e` do CI, bloqueiam. |
+| RNF04 | Todo PR roda lint, checagem de tipos e as três suítes de teste (núcleo, API e ponta a ponta) no GitHub Actions, com meta de CI verde em menos de 10 minutos. Nada entra na `main` com o CI falhando ou sem 1 aprovação. | Proteção da `main` no GitHub (checks obrigatórios `lint`, `nucleo`, `api` e `e2e` e 1 aprovação). A duração aparece em cada execução do Actions. |
+| RNF05 | O projeto sobe com um comando (por exemplo `docker compose up`) e o README explica como rodar e testar. | O job `e2e` sobe a mesma imagem Docker. Checklist de release: subir do zero seguindo o README. |
+| RNF06 | A API é documentada (OpenAPI/Swagger). | Checklist de release: `/api/docs` abre com todas as rotas. |
+| RNF07 | A interface funciona no celular e no computador. Os 3 fluxos ponta a ponta (RNF03) passam no Playwright em dois projetos: computador (1280 × 720) e celular (360 × 640, com toque). No celular, em toda tela desses fluxos: a página não rola na horizontal (só a grade da agenda e a tabela da fila do Gestor rolam na horizontal, cada uma dentro do seu quadro), e a janela de criação de Reserva cabe na tela, com o botão "Reservar" ou "Enviar pedido" visível sem rolar a página. Cada fluxo entra no incremento da sua funcionalidade. | Job `e2e` do CI, bloqueia. |
+| RNF08 | Todas as datas usam o fuso `America/Sao_Paulo`. | Jobs `nucleo` e `api` do CI (exemplos em horário de São Paulo, respostas com o deslocamento de São Paulo), bloqueiam. |
+| RNF09 | As mensagens de erro são em português e dizem qual regra impediu a ação. | Job `api` do CI: a recusa de cada história confere a RN e a mensagem (RNF03), bloqueia. |
+| RNF10 | Banco carregado com dados de demonstração (Usuários de cada Perfil, Recursos, Reservas) para a apresentação. | Teste de fumaça do seed num banco vazio, no CI, bloqueia. |
+| RNF11 | Concorrência: 10 requisições simultâneas de Reserva para o mesmo Recurso e Intervalo criam exatamente uma Reserva; as outras 9 são recusadas citando a RN01. Do mesmo jeito, duas requisições simultâneas de um Usuário com só uma vaga na Cota criam exatamente uma Reserva (RN07). Verificado por teste de integração desde o incremento 1. | Job `api` do CI, bloqueia. |
+| RNF12 | Desempenho: com o servidor acordado (fora do cold start do Render) e o banco do seed, sob carga leve de 10 conexões simultâneas por 30 s contra a mesma imagem Docker do deploy, o p95 de cada rota fica em até 500 ms: criar Reserva (`POST /api/reservas`) e agenda (`GET /api/recursos/:id/agenda`) desde o incremento 1, fila do Gestor (`GET /api/gestao/pedidos`) e Notificações (`GET /api/notificacoes`) desde o incremento 3. Como a API atende uma requisição por vez (ADR 0001), a espera pelas outras requisições entra na medida. O ambiente publicado no Render Free não tem meta de latência. | Script `npm run carga` no job `e2e` do CI: a tabela de p95 por rota aparece no resumo de todo PR, sem bloquear. Checklist de release: na última execução da `main`, todas as rotas do incremento com p95 ≤ 500 ms; acima disso é bug, corrigido antes da tag. |
+| RNF13 | Acessibilidade básica: nas telas dos 3 fluxos ponta a ponta (login, agenda, janela de criação, fila do Gestor, Minhas reservas), o axe (`@axe-core/playwright`, regras WCAG 2.1 A e AA) não acha nenhuma violação "serious" ou "critical", no computador e no celular. Cada tela entra junto com o fluxo dela. | Job `e2e` do CI, bloqueia. |
 
 ## 9. Entregas incrementais
 
