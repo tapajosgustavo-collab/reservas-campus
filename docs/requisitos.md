@@ -1,6 +1,6 @@
 # Requisitos: Reservas do Campus
 
-> **Versão 0.1 (rascunho), 25/10/2026.** Os valores numéricos (prazos, limites, cotas) são **propostas** para o grupo discutir. Todos ficam na Política, então mudar um valor não exige mudar o código.
+> **Versão 0.1 (rascunho), 25/10/2026.** Os valores numéricos (prazos, limites, cotas) são **propostas** para o grupo discutir. Todos ficam na Política, então mudar um valor é mudar a Política, sem mexer nas regras.
 >
 > Os termos em **negrito** seguem o glossário em [`CONTEXT.md`](../CONTEXT.md). Se um termo novo aparecer, ele entra lá primeiro.
 
@@ -71,10 +71,14 @@ Formato: *Como [ator], quero [ação] para [objetivo].* Cada história tem crit�
 - Espaço: nome, local, Capacidade, Horário de funcionamento, se é Recurso restrito.
 - Equipamento: nome, número de patrimônio (único), Horário de funcionamento, se é Recurso restrito.
 - Quem cadastra o Recurso fica como o Gestor responsável por ele (RN13).
-- O Gestor só edita os Recursos pelos quais é responsável.
+- O Gestor só edita os Recursos pelos quais é responsável. A edição só vale para as Reservas criadas depois: mudar o Horário de funcionamento, a Capacidade ou se é Recurso restrito não cancela nada, e os Pedidos já Pendentes continuam esperando decisão. O tipo e o número de patrimônio não mudam.
+- Não existe exclusão de Recurso. Para tirar um Recurso de uso, o Gestor cria uma Indisponibilidade sem fim (RN04).
 
-**US05: Cadastrar Indisponibilidade.** Como Gestor, quero marcar um Recurso como indisponível num Intervalo para fazer manutenção ou eventos.
-- RN: RN04.
+**US05: Cadastrar Indisponibilidade.** Como Gestor, quero marcar um Recurso como indisponível por um período para fazer manutenção ou eventos.
+- Início e fim em múltiplos de 30 minutos. O período pode atravessar vários dias, e o fim pode ficar em branco (sem previsão de volta).
+- O motivo é obrigatório, porque vai na Notificação de quem tiver a Reserva cancelada.
+- Só o Gestor responsável pelo Recurso cria a Indisponibilidade (RN13). Não há edição nem exclusão de Indisponibilidade.
+- RN: RN04, RN13.
 
 **US06: Buscar Recurso livre.** Como Usuário, quero buscar Recursos por tipo, Capacidade mínima e Intervalo desejado para achar algo livre rápido.
 - Só aparecem Recursos sem Conflito, sem Indisponibilidade e dentro do Horário de funcionamento naquele Intervalo.
@@ -114,7 +118,7 @@ Formato: *Como [ator], quero [ação] para [objetivo].* Cada história tem crit�
 - RN: RN16.
 
 **US14: Registrar Devolução.** Como Gestor, quero registrar que o Equipamento voltou para encerrar a Reserva.
-- A Devolução tem um campo de observação, obrigatório quando o Equipamento não voltou (perdido ou roubado). Nesse caso o Gestor registra a Devolução mesmo assim, para encerrar a Reserva, e cria uma Indisponibilidade no Equipamento (RN04).
+- A Devolução tem um campo de observação, obrigatório quando o Equipamento não voltou (perdido ou roubado). Nesse caso o Gestor registra a Devolução mesmo assim, para encerrar a Reserva, e cria uma Indisponibilidade sem fim no Equipamento (RN04).
 - RN: RN13, RN17.
 
 **US15: Regras automáticas de tempo.** Como Sistema, quero aplicar Expiração, Não comparecimento, conclusão automática e Devolução atrasada no momento certo.
@@ -192,8 +196,8 @@ O Gestor não cria Reservas: para eventos institucionais ele usa Indisponibilida
 
 **RN12: Expiração.** Se o Pedido não for decidido até **2 horas antes do início**, ele vira Expirado automaticamente, libera o Intervalo e o Usuário é notificado. Expiração não gera Penalidade.
 
-**RN13: Gestor do Recurso.** Cada Recurso tem exatamente um Gestor responsável: o Gestor que o cadastrou. Só ele decide os Pedidos do Recurso e registra as Devoluções dele.
-- Carlos cadastra o projetor P-123. Dora, que também é Gestora, tenta aprovar um Pedido do P-123 → recusado. Tenta registrar a Devolução do P-123 → recusado.
+**RN13: Gestor do Recurso.** Cada Recurso tem exatamente um Gestor responsável: o Gestor que o cadastrou. Só ele decide os Pedidos do Recurso, registra as Devoluções dele e cria Indisponibilidades nele.
+- Carlos cadastra o projetor P-123. Dora, que também é Gestora, tenta aprovar um Pedido do P-123 → recusado. Tenta registrar a Devolução do P-123 → recusado. Tenta criar uma Indisponibilidade no P-123 → recusado.
 
 ### Uso
 
@@ -209,7 +213,7 @@ O Gestor não cria Reservas: para eventos institucionais ele usa Indisponibilida
 - Reserva 10h–12h. Devolução às 12h10 → Concluída, sem Penalidade. Devolução às 12h20 → Concluída, com 1 Penalidade, gerada às 12h15.
 - Reserva 10h–12h e o notebook só volta dois dias depois → 1 Penalidade só, gerada às 12h15 do primeiro dia.
 - **Devolução antecipada.** Reserva 10h–14h, Devolução às 11h → Concluída na hora, sem Penalidade, e o trecho 11h–14h fica livre para outras Reservas.
-- **Equipamento perdido ou roubado.** O Gestor registra a Devolução mesmo assim, com observação obrigatória, e cria uma Indisponibilidade no Equipamento (RN04). A Penalidade por atraso, se o prazo já tinha passado, continua valendo.
+- **Equipamento perdido ou roubado.** O Gestor registra a Devolução mesmo assim, com observação obrigatória, e cria uma Indisponibilidade sem fim no Equipamento (RN04). A Penalidade por atraso, se o prazo já tinha passado, continua valendo.
 
 **RN23: Equipamento ainda fora.** O Check-in de uma Reserva de Equipamento é recusado enquanto a Reserva anterior do mesmo Equipamento estiver sem Devolução, e a mensagem diz que o Equipamento ainda não foi devolvido. Se o Equipamento voltar antes do fim da Tolerância do Check-in, o Check-in segue normal. Se não voltar, no fim da Tolerância a Reserva recebe Cancelamento pelo sistema, **sem Penalidade** e com Notificação, mesmo que o Usuário nem tenha tentado o Check-in.
 - Notebook com Reserva 10h–12h que não voltou; Bia tem 13h–15h. Check-in da Bia às 13h05 → recusado. O notebook volta às 13h10 e a Bia faz Check-in às 13h12 → aceito. Se não voltar até 13h15 → a Reserva da Bia é cancelada pelo sistema, sem Penalidade.

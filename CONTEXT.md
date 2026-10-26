@@ -21,7 +21,7 @@ Usuário professor. Tem limites maiores que o Aluno e é o único que pode criar
 _Evitar_: professor (na interface pode aparecer, no código e nos documentos usar Docente)
 
 **Gestor**:
-Usuário responsável por um conjunto de Recursos: cadastra os Recursos, decide os Pedidos de Recursos restritos e registra Devoluções.
+Usuário responsável por um conjunto de Recursos: cadastra os Recursos, define as Indisponibilidades deles, decide os Pedidos de Recursos restritos e registra Devoluções.
 _Evitar_: admin, administrador, responsável
 
 ## Recursos
@@ -51,7 +51,7 @@ Faixas da semana em que um Recurso pode ser usado, como segunda a sexta das 7h �
 _Evitar_: expediente, disponibilidade
 
 **Indisponibilidade**:
-Intervalo definido por um Gestor em que o Recurso não pode ser reservado, como manutenção ou evento institucional.
+Período definido pelo Gestor responsável pelo Recurso em que ele não pode ser reservado, como manutenção ou evento institucional. Diferente do Intervalo, pode atravessar vários dias e pode não ter fim (sem previsão de volta, como um Equipamento perdido).
 _Evitar_: bloqueio (bloqueio fica para Suspensão de Usuário), manutenção
 
 ## Reservas
