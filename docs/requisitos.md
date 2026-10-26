@@ -127,7 +127,7 @@ Formato: *Como [ator], quero [ação] para [objetivo].* Cada história tem crit�
 
 ## 6. Regras de negócio
 
-Cada RN precisa de **pelo menos um teste automatizado** com o ID dela no nome (por exemplo `RN01_nao_permite_conflito`). Os exemplos abaixo já são casos de teste prontos.
+Cada RN precisa de **pelo menos um teste automatizado** com o ID dela no nome. Os exemplos abaixo já são casos de teste prontos: cada RN vira um `describe('RN01 · Sem Conflito')` na suíte do núcleo, com um teste por exemplo (por exemplo `'existe 10h–12h, pedir 11h–13h → recusado'`). Estratégia completa em [#13](https://github.com/tapajosgustavo-collab/reservas-campus/issues/13).
 
 ### Intervalo e disponibilidade
 
@@ -266,16 +266,17 @@ Reservas ativas: **Pendente, Confirmada e Em uso.**
 
 | ID | Requisito |
 |---|---|
-| RNF01 | Toda RN tem teste unitário com o ID dela no nome. Cobertura mínima de 80% no código das regras de negócio. |
+| RNF01 | Toda RN tem teste no núcleo (sem I/O) com o ID dela no nome, um por exemplo da §6, escrito com TDD. Cobertura mínima de 80% de linhas e de branches no núcleo, verificada pelo CI (abaixo disso o CI falha). |
 | RNF02 | As regras que dependem do tempo recebem o "agora" de fora (relógio injetável), para os testes poderem simular qualquer data e hora. Na demo, o relógio da API pode ser avançado ao vivo, só com `DEMO=1`. |
-| RNF03 | Testes de integração na API para cada história e testes ponta a ponta para os 3 fluxos principais: reservar, decidir Pedido, Check-in. |
-| RNF04 | Todo PR roda lint e testes no GitHub Actions. Nada entra na `main` com o CI falhando ou sem 1 aprovação. |
+| RNF03 | Testes de integração na API (Postgres real) para cada história, com o ID dela no nome: caminho feliz, uma recusa que confere a regra citada no erro e, quando a rota mexe em algo de outra pessoa, um teste de autorização. Testes ponta a ponta só para os 3 fluxos principais (reservar, decidir Pedido, Check-in), em tela de computador e de celular, cada um entrando no incremento da sua funcionalidade. |
+| RNF04 | Todo PR roda lint, checagem de tipos e as três suítes de teste (núcleo, API e ponta a ponta) no GitHub Actions, com meta de CI verde em menos de 10 minutos. Nada entra na `main` com o CI falhando ou sem 1 aprovação. |
 | RNF05 | O projeto sobe com um comando (por exemplo `docker compose up`) e o README explica como rodar e testar. |
 | RNF06 | A API é documentada (OpenAPI/Swagger). |
 | RNF07 | A interface funciona no celular e no computador. |
 | RNF08 | Todas as datas usam o fuso `America/Sao_Paulo`. |
 | RNF09 | As mensagens de erro são em português e dizem qual regra impediu a ação. |
 | RNF10 | Banco carregado com dados de demonstração (Usuários de cada Perfil, Recursos, Reservas) para a apresentação. |
+| RNF11 | Concorrência: 10 requisições simultâneas de Reserva para o mesmo Recurso e Intervalo criam exatamente uma Reserva; as outras 9 são recusadas citando a RN01. Verificado por teste de integração desde o incremento 1. |
 
 ## 9. Entregas incrementais
 
@@ -284,11 +285,13 @@ Cada incremento termina com uma release (tag) no GitHub e algo funcionando de po
 | Incremento | Entrega | RNs |
 |---|---|---|
 | 0. Fundação | Repositório, CI, esqueleto de back e front, banco, README, este documento | — |
-| 1. MVP | Login, cadastro de Recurso, reservar, minhas reservas, agenda simples | RN01–RN03 |
+| 1. MVP | Login, cadastro de Recurso, reservar, minhas reservas, agenda simples, teste ponta a ponta de reservar | RN01–RN03 |
 | 2. Política | Antecedência, duração, Cota, Capacidade, Cancelamento, Indisponibilidade | RN04–RN08, RN16 (sem Penalidade ainda) |
-| 3. Pedidos | Recursos restritos, fila do Gestor, Aprovação, Recusa, Expiração, Notificações | RN10–RN13 |
-| 4. Conduta | Check-in, Não comparecimento, Devolução, Penalidade, Suspensão | RN09, RN14–RN20, RN23 |
-| 5. Séries e polimento | Séries, privacidade da agenda, testes ponta a ponta, ensaio da apresentação | RN21, RN22 |
+| 3. Pedidos | Recursos restritos, fila do Gestor, Aprovação, Recusa, Expiração, Notificações, teste ponta a ponta de decidir Pedido | RN10–RN13 |
+| 4. Conduta | Check-in, Não comparecimento, Devolução, Penalidade, Suspensão, teste ponta a ponta de Check-in | RN09, RN14–RN20, RN23 |
+| 5. Séries e polimento | Séries, privacidade da agenda, ensaio da apresentação | RN21, RN22 |
+
+Antes da tag de cada incremento, todas as RNs dele precisam ter testes passando (a matriz RN → testes aparece no resumo do CI).
 
 ## 10. Questões em aberto
 
