@@ -287,6 +287,7 @@ Reservas ativas: **Pendente, Confirmada e Em uso.**
 | RNF11 | Concorrência: 10 requisições simultâneas de Reserva para o mesmo Recurso e Intervalo criam exatamente uma Reserva; as outras 9 são recusadas citando a RN01. Do mesmo jeito, duas requisições simultâneas de um Usuário com só uma vaga na Cota criam exatamente uma Reserva (RN07). Verificado por teste de integração desde o incremento 1. | Job `api` do CI, bloqueia. |
 | RNF12 | Desempenho: com o servidor acordado (fora do cold start do Render) e o banco do seed, sob carga leve de 10 conexões simultâneas por 30 s contra a mesma imagem Docker do deploy, o p95 de cada rota fica em até 500 ms: criar Reserva (`POST /api/reservas`) e agenda (`GET /api/recursos/:id/agenda`) desde o incremento 1, fila do Gestor (`GET /api/gestao/pedidos`) e Notificações (`GET /api/notificacoes`) desde o incremento 3. Como a API atende uma requisição por vez (ADR 0001), a espera pelas outras requisições entra na medida. O ambiente publicado no Render Free não tem meta de latência. | Script `npm run carga` no job `e2e` do CI: a tabela de p95 por rota aparece no resumo de todo PR, sem bloquear. Checklist de release: na última execução da `main`, todas as rotas do incremento com p95 ≤ 500 ms; acima disso é bug, corrigido antes da tag. |
 | RNF13 | Acessibilidade básica: nas telas dos 3 fluxos ponta a ponta (login, agenda, janela de criação, fila do Gestor, Minhas reservas), o axe (`@axe-core/playwright`, regras WCAG 2.1 A e AA) não acha nenhuma violação "serious" ou "critical", no computador e no celular. Cada tela entra junto com o fluxo dela. | Job `e2e` do CI, bloqueia. |
+| RNF14 | Segurança automatizada: todo PR passa por auditoria de dependências (falha com vulnerabilidade `high` ou `critical` conhecida, salvo exceção registrada com motivo e prazo) e pelo CodeQL (falha com alerta de segurança High ou acima). O repositório tem secret scanning com push protection e o Dependabot ligado (alertas, correções de segurança e atualização semanal agrupada). | Job `seguranca` do CI (`audit-ci`) e ruleset "Require code scanning results" na `main`, ambos bloqueiam. Checklist de release: nenhum alerta `high` ou `critical` aberto no Dependabot, no CodeQL e no secret scanning, e nenhuma exceção vencida no `audit-ci.jsonc`. |
 
 ## 9. Entregas incrementais
 
@@ -294,7 +295,7 @@ Cada incremento termina com uma release (tag) no GitHub e algo funcionando de po
 
 | Incremento | Entrega | RNs |
 |---|---|---|
-| 0. Fundação | Repositório, CI, esqueleto de back e front, banco, README, este documento | — |
+| 0. Fundação | Repositório, CI (com a segurança automatizada do RNF14), esqueleto de back e front, banco, README, este documento | — |
 | 1. MVP | Login, cadastro de Recurso, reservar, minhas reservas, agenda simples, teste ponta a ponta de reservar | RN01–RN03 |
 | 2. Política | Antecedência, duração, Cota, Capacidade, Cancelamento, Indisponibilidade | RN04–RN08, RN16 (sem Penalidade ainda) |
 | 3. Pedidos | Recursos restritos, fila do Gestor, Aprovação, Recusa, Expiração, Notificações, teste ponta a ponta de decidir Pedido | RN10–RN13 |
