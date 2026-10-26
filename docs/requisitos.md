@@ -296,11 +296,13 @@ Cada incremento termina com uma release (tag) no GitHub e algo funcionando de po
 | Incremento | Entrega | RNs |
 |---|---|---|
 | 0. Fundação | Repositório, CI (com a segurança automatizada do RNF14), esqueleto de back e front, banco, README, este documento | — |
-| 1. MVP | Login, cadastro de Recurso, reservar, minhas reservas, agenda simples, teste ponta a ponta de reservar | RN01–RN03 |
+| 1. MVP | Login, cadastro de Recurso, busca, reservar, minhas reservas, agenda sem nomes, teste ponta a ponta de reservar | RN01–RN03, RN22 |
 | 2. Política | Antecedência, duração, Cota, Capacidade, Cancelamento, Indisponibilidade | RN04–RN08, RN16 (sem Penalidade ainda) |
 | 3. Pedidos | Recursos restritos, fila do Gestor, Aprovação, Recusa, Expiração, Notificações, teste ponta a ponta de decidir Pedido | RN10–RN13 |
 | 4. Conduta | Check-in, Não comparecimento, Devolução, Penalidade, Suspensão, teste ponta a ponta de Check-in | RN09, RN14–RN20, RN23 |
-| 5. Séries e polimento | Séries, privacidade da agenda, ensaio da apresentação | RN21, RN22 |
+| 5. Séries e polimento | Séries, ensaio da apresentação | RN21 |
+
+A RN22 entrou no incremento 1 porque a agenda e o detalhe de "Minhas reservas" já nascem com ela (decidido na spec, ticket [Escrever a spec do Reservas do Campus](https://github.com/tapajosgustavo-collab/reservas-campus/issues/21)).
 
 Antes da tag de cada incremento, todas as RNs dele precisam ter testes passando (a matriz RN → testes aparece no resumo do CI).
 
