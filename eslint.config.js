@@ -103,7 +103,7 @@ const regrasPorModulo = MODULOS.flatMap((modulo) => {
 });
 
 export default defineConfig(
-  { ignores: ['**/dist/', '**/coverage/', '.claude/', '.obsidian/'] },
+  { ignores: ['**/dist/', '**/coverage/', '**/generated/', '.claude/', '.obsidian/'] },
   js.configs.recommended,
   tseslint.configs.recommended,
   {

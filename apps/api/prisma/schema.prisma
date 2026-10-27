@@ -1,0 +1,257 @@
+// Modelo de dados (#16, com a Finalidade do #17). Um schema só para os quatro módulos, mas
+// só o módulo dono grava nas tabelas dele (ADR 0001):
+//   M1 conduta: usuario (só o seed), penalidade, suspensao
+//   M2 recursos: recurso, horario_funcionamento, indisponibilidade
+//   M3 reservas: serie, reserva, transicao
+//   M4 ciclo: notificacao
+// O que o Prisma não modela (btree_gist, reserva_sem_conflito, CHECKs e índices únicos parciais)
+// está escrito à mão no fim da primeira migração. Migrações só aditivas.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── M1 conduta ─────────────────────────────────────────────
+
+enum Perfil {
+  Aluno
+  Docente
+  Gestor
+
+  @@map("perfil")
+}
+
+model Usuario {
+  id     Int    @id @default(autoincrement())
+  email  String @unique
+  nome   String
+  perfil Perfil
+
+  penalidades      Penalidade[]
+  suspensoes       Suspensao[]
+  recursosGeridos  Recurso[]     @relation("gestor")
+  series           Serie[]
+  reservas         Reserva[]
+  transicoesFeitas Transicao[]   @relation("por")
+  notificacoes     Notificacao[]
+
+  @@map("usuario")
+}
+
+enum MotivoPenalidade {
+  NaoComparecimento
+  CancelamentoTardio
+  DevolucaoAtrasada
+
+  @@map("motivo_penalidade")
+}
+
+model Penalidade {
+  id          Int              @id @default(autoincrement())
+  usuarioId   Int              @map("usuario_id")
+  /// Uma Penalidade por Reserva: também marca o "atraso já penalizado".
+  reservaId   Int              @unique @map("reserva_id")
+  motivo      MotivoPenalidade
+  /// Data do vencimento, não do processamento (#12).
+  em          DateTime         @db.Timestamptz
+  /// RN20: preenchido = já causou Suspensão.
+  suspensaoId Int?             @map("suspensao_id")
+
+  usuario   Usuario    @relation(fields: [usuarioId], references: [id])
+  reserva   Reserva    @relation(fields: [reservaId], references: [id])
+  suspensao Suspensao? @relation(fields: [suspensaoId], references: [id])
+
+  @@map("penalidade")
+}
+
+/// Uma linha por Suspensão, nunca editada. Em vigor = inicio <= agora < fim.
+model Suspensao {
+  id        Int      @id @default(autoincrement())
+  usuarioId Int      @map("usuario_id")
+  inicio    DateTime @db.Timestamptz
+  fim       DateTime @db.Timestamptz
+
+  usuario      Usuario       @relation(fields: [usuarioId], references: [id])
+  penalidades  Penalidade[]
+  notificacoes Notificacao[]
+
+  @@map("suspensao")
+}
+
+// ── M2 recursos ────────────────────────────────────────────
+
+enum TipoRecurso {
+  Espaco
+  Equipamento
+
+  @@map("tipo_recurso")
+}
+
+/// Nunca é excluído: para tirar de uso, Indisponibilidade sem fim.
+model Recurso {
+  id         Int         @id @default(autoincrement())
+  /// Não muda.
+  tipo       TipoRecurso
+  nome       String
+  local      String?
+  /// Só Espaço (CHECK recurso_campos_por_tipo).
+  capacidade Int?
+  /// Só Equipamento (CHECK recurso_campos_por_tipo). Não muda.
+  patrimonio String?     @unique
+  restrito   Boolean
+  /// RN13: o Gestor que cadastrou é o responsável.
+  gestorId   Int         @map("gestor_id")
+
+  gestor             Usuario                @relation("gestor", fields: [gestorId], references: [id])
+  horarios           HorarioFuncionamento[]
+  indisponibilidades Indisponibilidade[]
+  series             Serie[]
+  reservas           Reserva[]
+
+  @@map("recurso")
+}
+
+/// No máximo uma faixa por dia da semana; dia sem linha = fechado.
+model HorarioFuncionamento {
+  recursoId Int @map("recurso_id")
+  /// 0 = domingo.
+  diaSemana Int @map("dia_semana")
+  /// Minutos desde 0h em São Paulo, múltiplo de 30.
+  abre      Int
+  fecha     Int
+
+  recurso Recurso @relation(fields: [recursoId], references: [id])
+
+  @@id([recursoId, diaSemana])
+  @@map("horario_funcionamento")
+}
+
+/// Sem edição nem exclusão.
+model Indisponibilidade {
+  id        Int       @id @default(autoincrement())
+  recursoId Int       @map("recurso_id")
+  inicio    DateTime  @db.Timestamptz
+  /// Vazio = sem previsão de volta.
+  fim       DateTime? @db.Timestamptz
+  motivo    String
+  criadaEm  DateTime  @map("criada_em") @db.Timestamptz
+
+  recurso Recurso @relation(fields: [recursoId], references: [id])
+
+  @@map("indisponibilidade")
+}
+
+// ── M3 reservas ────────────────────────────────────────────
+
+enum Status {
+  Pendente
+  Confirmada
+  Recusada
+  Expirada
+  Cancelada
+  EmUso
+  Concluida
+  NaoComparecimento
+
+  @@map("status")
+}
+
+model Serie {
+  id        Int      @id @default(autoincrement())
+  usuarioId Int      @map("usuario_id")
+  recursoId Int      @map("recurso_id")
+  criadaEm  DateTime @map("criada_em") @db.Timestamptz
+
+  usuario  Usuario   @relation(fields: [usuarioId], references: [id])
+  recurso  Recurso   @relation(fields: [recursoId], references: [id])
+  reservas Reserva[]
+
+  @@map("serie")
+}
+
+/// Ativas (Pendente, Confirmada, Em uso) não se sobrepõem: constraint reserva_sem_conflito.
+model Reserva {
+  id            Int      @id @default(autoincrement())
+  usuarioId     Int      @map("usuario_id")
+  recursoId     Int      @map("recurso_id")
+  serieId       Int?     @map("serie_id")
+  inicio        DateTime @db.Timestamptz
+  fim           DateTime @db.Timestamptz
+  /// Só Espaço (RN08).
+  participantes Int?
+  finalidade    String?  @db.VarChar(200)
+  status        Status
+  criadaEm      DateTime @map("criada_em") @db.Timestamptz
+
+  usuario      Usuario       @relation(fields: [usuarioId], references: [id])
+  recurso      Recurso       @relation(fields: [recursoId], references: [id])
+  serie        Serie?        @relation(fields: [serieId], references: [id])
+  transicoes   Transicao[]
+  penalidade   Penalidade?
+  notificacoes Notificacao[]
+
+  @@index([recursoId, inicio])
+  /// Consultas do sincronizar.
+  @@index([status, inicio])
+  @@map("reserva")
+}
+
+/// Histórico da Reserva, só inserções. A primeira linha tem `de` vazio.
+model Transicao {
+  id         Int      @id @default(autoincrement())
+  reservaId  Int      @map("reserva_id")
+  de         Status?
+  para       Status
+  /// Data do vencimento ou da ação.
+  em         DateTime @db.Timestamptz
+  /// Vazio = o sistema.
+  porId      Int?     @map("por_id")
+  /// Justificativa da Recusa, observação da Devolução ou causa do Cancelamento pelo sistema.
+  observacao String?
+
+  reserva Reserva  @relation(fields: [reservaId], references: [id])
+  por     Usuario? @relation("por", fields: [porId], references: [id])
+
+  @@index([reservaId, em])
+  @@map("transicao")
+}
+
+// ── M4 ciclo ───────────────────────────────────────────────
+
+enum TipoNotificacao {
+  Aprovacao
+  Recusa
+  Expiracao
+  CancelamentoPeloSistema
+  Penalidade
+  DevolucaoAtrasada
+  InicioSuspensao
+  FimSuspensao
+  Lembrete
+
+  @@map("tipo_notificacao")
+}
+
+/// A `mensagem` vem pronta do núcleo. Lembrete e FimSuspensao têm índice único parcial.
+model Notificacao {
+  id             Int             @id @default(autoincrement())
+  destinatarioId Int             @map("destinatario_id")
+  tipo           TipoNotificacao
+  mensagem       String
+  em             DateTime        @db.Timestamptz
+  lidaEm         DateTime?       @map("lida_em") @db.Timestamptz
+  reservaId      Int?            @map("reserva_id")
+  suspensaoId    Int?            @map("suspensao_id")
+
+  destinatario Usuario    @relation(fields: [destinatarioId], references: [id])
+  reserva      Reserva?   @relation(fields: [reservaId], references: [id])
+  suspensao    Suspensao? @relation(fields: [suspensaoId], references: [id])
+
+  @@index([destinatarioId, lidaEm])
+  @@map("notificacao")
+}
