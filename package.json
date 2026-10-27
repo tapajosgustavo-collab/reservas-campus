@@ -4,7 +4,8 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "apps/*"
+    "apps/*",
+    "ferramentas/*"
   ],
   "engines": {
     "node": ">=24 <25"
@@ -14,7 +15,8 @@
     "lint": "eslint . && prettier --check . && npm run typecheck --workspaces",
     "format": "prettier --write .",
     "test": "npm test --workspaces --if-present",
-    "build": "npm run build -w @reservas/web"
+    "build": "npm run build -w @reservas/web",
+    "quadro": "npm run gerar -w @reservas/quadro"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

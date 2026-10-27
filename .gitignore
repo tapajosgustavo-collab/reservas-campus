@@ -8,8 +8,12 @@ coverage/
 .env.*
 !.env.example
 
-# Editores e sistema
+# Obsidian: a configuração do cofre de cada um, canvas soltos na raiz e o quadro do `npm run quadro`
 .obsidian/
+/*.canvas
+/quadro/
+
+# Editores e sistema
 .vscode/
 .idea/
 .DS_Store

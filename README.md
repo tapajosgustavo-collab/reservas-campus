@@ -25,12 +25,23 @@ O `npm run dev` sobe a API em <http://localhost:3000> e a tela em <http://localh
 
 | Comando | O que faz |
 |---|---|
-| `npm run lint` | ESLint (com as regras de arquitetura do [ADR 0001](docs/adr/0001-nucleo-funcional-casca-imperativa.md)), Prettier e `tsc` nos três pacotes |
+| `npm run lint` | ESLint (com as regras de arquitetura do [ADR 0001](docs/adr/0001-nucleo-funcional-casca-imperativa.md)), Prettier e `tsc` em todos os pacotes |
 | `npm run format` | Formata tudo com o Prettier |
 | `npm test` | Testes (Vitest) |
 | `npm run build` | Build da tela |
+| `npm run quadro` | Gera o [quadro da equipe no Obsidian](#quadro-da-equipe-no-obsidian) a partir das issues |
 
-**Pastas:** `apps/api` (Fastify), `apps/web` (React) e `packages/shared` (schemas Zod de cada rota, o contrato entre as duas). Na API e na tela, o código de cada módulo fica em `src/modulos/{conduta,recursos,reservas,ciclo}/`, e os outros módulos só importam o `index.ts` dele.
+**Pastas:** `apps/api` (Fastify), `apps/web` (React), `packages/shared` (schemas Zod de cada rota, o contrato entre as duas) e `ferramentas/quadro` (o gerador do quadro). Na API e na tela, o código de cada módulo fica em `src/modulos/{conduta,recursos,reservas,ciclo}/`, e os outros módulos só importam o `index.ts` dele.
+
+### Quadro da equipe no Obsidian
+
+Uma visão local de quem pegou o quê, por incremento e por módulo. A fonte oficial continua sendo o GitHub; nada do quadro é commitado.
+
+1. Baixe o [Obsidian](https://obsidian.md) e abra a pasta do repositório como cofre (*Open folder as vault*).
+2. Com o `gh` logado, rode `npm run quadro` sempre que quiser o quadro em dia.
+3. Abra `quadro/Quadro.md` (progresso e tabela de tickets), `quadro/Quadro da equipe.canvas` (uma coluna por integrante e uma de Infra) ou a nota de cada integrante.
+
+O `.obsidian/`, os `*.canvas` soltos na raiz e a pasta `quadro/` ficam no `.gitignore`. Os integrantes e o rodízio de revisão ficam em [`ferramentas/quadro/src/equipe.ts`](ferramentas/quadro/src/equipe.ts).
 
 ## Documentos
 
