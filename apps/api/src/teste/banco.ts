@@ -46,7 +46,6 @@ export async function umEspaco(banco: Banco) {
       tipo: 'Espaco',
       nome: 'Sala 101',
       capacidade: 40,
-      restrito: false,
       gestorId: gestor.id,
     },
   });

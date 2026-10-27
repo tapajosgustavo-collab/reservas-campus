@@ -56,7 +56,6 @@ CREATE TABLE "recurso" (
     "local" TEXT,
     "capacidade" INTEGER,
     "patrimonio" TEXT,
-    "restrito" BOOLEAN NOT NULL,
     "gestor_id" INTEGER NOT NULL,
 
     CONSTRAINT "recurso_pkey" PRIMARY KEY ("id")

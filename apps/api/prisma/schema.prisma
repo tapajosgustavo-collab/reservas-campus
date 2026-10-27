@@ -93,6 +93,7 @@ enum TipoRecurso {
 }
 
 /// Nunca é excluído: para tirar de uso, Indisponibilidade sem fim.
+/// O campo `restrito` chega no incremento 3 (#47), por migração aditiva.
 model Recurso {
   id         Int         @id @default(autoincrement())
   /// Não muda.
@@ -103,7 +104,6 @@ model Recurso {
   capacidade Int?
   /// Só Equipamento (CHECK recurso_campos_por_tipo). Não muda.
   patrimonio String?     @unique
-  restrito   Boolean
   /// RN13: o Gestor que cadastrou é o responsável.
   gestorId   Int         @map("gestor_id")
 

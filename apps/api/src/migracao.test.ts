@@ -123,7 +123,7 @@ comBanco('recurso_campos_por_tipo', () => {
     async ({ aceito, ...campos }) => {
       const gestor = await umUsuario(banco, 'Gestor');
       const criar = banco.recurso.create({
-        data: { ...campos, nome: 'Recurso', restrito: false, gestorId: gestor.id },
+        data: { ...campos, nome: 'Recurso', gestorId: gestor.id },
       });
 
       if (aceito) await expect(criar).resolves.toBeDefined();
