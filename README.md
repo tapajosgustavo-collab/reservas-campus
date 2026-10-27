@@ -4,7 +4,33 @@ Sistema web em que alunos e docentes da UNIFESP reservam espaços e equipamentos
 
 **Equipe:** Gustavo, Guilherme, Kaio e Rafael.
 
-> O projeto ainda está na fase de planejamento: não há código ainda. As instruções de como rodar o sistema entram aqui quando o esqueleto estiver pronto.
+## Rodar na sua máquina
+
+Precisa do **Node 24** (a versão está em [`.nvmrc`](.nvmrc); com o nvm, `nvm use`). O `npm install` recusa outra versão.
+
+```bash
+npm install
+cp .env.example .env   # opcional: os valores padrão já servem
+npm run dev
+```
+
+O `npm run dev` sobe a API em <http://localhost:3000> e a tela em <http://localhost:5173>, as duas com recarga automática. A tela chama `/api` na mesma origem e o Vite repassa para a API.
+
+| Endereço | O que é |
+|---|---|
+| <http://localhost:5173> | A tela |
+| <http://localhost:5173/api/health> | `{ status: 'ok', sha }`, o SHA do commit em execução |
+| <http://localhost:5173/api/docs> | Swagger UI, gerado dos schemas Zod |
+| <http://localhost:5173/api/openapi.json> | O documento OpenAPI |
+
+| Comando | O que faz |
+|---|---|
+| `npm run lint` | ESLint (com as regras de arquitetura do [ADR 0001](docs/adr/0001-nucleo-funcional-casca-imperativa.md)), Prettier e `tsc` nos três pacotes |
+| `npm run format` | Formata tudo com o Prettier |
+| `npm test` | Testes (Vitest) |
+| `npm run build` | Build da tela |
+
+**Pastas:** `apps/api` (Fastify), `apps/web` (React) e `packages/shared` (schemas Zod de cada rota, o contrato entre as duas). Na API e na tela, o código de cada módulo fica em `src/modulos/{conduta,recursos,reservas,ciclo}/`, e os outros módulos só importam o `index.ts` dele.
 
 ## Documentos
 

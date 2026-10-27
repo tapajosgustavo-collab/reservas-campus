@@ -1,0 +1,2 @@
+# LF em todo sistema, como o Prettier espera (sem isso o Windows faz checkout com CRLF).
+* text=auto eol=lf
