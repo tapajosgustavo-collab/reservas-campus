@@ -1,0 +1,1 @@
+export { rotasCiclo } from './rotas';

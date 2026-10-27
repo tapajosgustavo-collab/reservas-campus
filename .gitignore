@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Variáveis de ambiente locais (o modelo versionado é o .env.example)
+.env
+.env.*
+!.env.example
+
+# Editores e sistema
+.obsidian/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

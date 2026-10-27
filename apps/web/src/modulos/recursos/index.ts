@@ -1,0 +1,1 @@
+export { rotasRecursos } from './rotas';
