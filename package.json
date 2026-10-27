@@ -16,11 +16,13 @@
     "format": "prettier --write .",
     "test": "npm test --workspaces --if-present",
     "build": "npm run build -w @reservas/web",
-    "quadro": "npm run gerar -w @reservas/quadro"
+    "quadro": "npm run gerar -w @reservas/quadro",
+    "seguranca": "audit-ci --config ./audit-ci.jsonc"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.19.2",
+    "audit-ci": "^7.1.0",
     "concurrently": "^10.0.6",
     "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
