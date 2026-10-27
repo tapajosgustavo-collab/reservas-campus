@@ -73,12 +73,9 @@ export function situacao(ticket: Ticket): Situacao {
 }
 
 function link(ticket: Ticket): string {
-  const titulo = ticket.titulo.replace(/[[\]]/g, '\\$&');
+  // Escapa a barra invertida junto com os outros: escapar só `[`, `]` e `|` deixaria um `\` do título anular o escape.
+  const titulo = ticket.titulo.replace(/[\\[\]|]/g, '\\$&');
   return `[#${ticket.numero} ${titulo}](${ticket.url})`;
-}
-
-function celula(texto: string): string {
-  return texto.replace(/\|/g, '\\|');
 }
 
 function nomeDoIncremento(incremento: number | null): string {
@@ -141,7 +138,7 @@ export function quadroMd(tickets: Ticket[], equipe: Pessoa[]): string {
     );
     for (const t of tickets.filter((t) => t.incremento === incremento)) {
       linhas.push(
-        `| ${celula(link(t))} | ${modulosDe(t)} | ${t.quem.join(', ') || '—'} | ${ROTULO[situacao(t)]} |`,
+        `| ${link(t)} | ${modulosDe(t)} | ${t.quem.join(', ') || '—'} | ${ROTULO[situacao(t)]} |`,
       );
     }
   }

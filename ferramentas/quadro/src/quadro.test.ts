@@ -114,6 +114,21 @@ describe('quadroMd', () => {
     );
   });
 
+  it('escapa a barra invertida do título junto com colchetes e barras verticais', () => {
+    const md = quadroMd(
+      [
+        umTicket({
+          numero: 35,
+          titulo: 'Pasta C:\\temp [x] | y',
+          labels: ['ready-for-human', 'infra'],
+        }),
+      ],
+      EQUIPE,
+    );
+
+    expect(md).toContain(`| [#35 Pasta C:\\\\temp \\[x\\] \\| y](${URL}/35) | infra |`);
+  });
+
   it('liga o canvas e a nota de cada integrante', () => {
     expect(quadroMd(tickets, EQUIPE)).toContain(
       'Visual: [[Quadro da equipe.canvas]] · Pessoas: [[Kaio]] · [[Gustavo]] · [[Rafael]] · [[Guilherme]]',
