@@ -6,15 +6,21 @@ Sistema web em que alunos e docentes da UNIFESP reservam espaços e equipamentos
 
 ## Rodar na sua máquina
 
-Precisa do **Node 24** (a versão está em [`.nvmrc`](.nvmrc); com o nvm, `nvm use`). O `npm install` recusa outra versão.
+Precisa do **Node 24** (a versão está em [`.nvmrc`](.nvmrc); com o nvm, `nvm use`). O `npm install` recusa outra versão. E do **Docker** (Docker Desktop no Windows e no Mac) para o Postgres.
 
 ```bash
-npm install
-cp .env.example .env   # opcional: os valores padrão já servem
+npm install                   # também gera o client do Prisma
+cp .env.example .env          # os valores do exemplo já servem para o banco do compose
+docker compose up -d db       # Postgres 16 com os bancos reservas e reservas_teste
+npm run db:migrar -w @reservas/api
 npm run dev
 ```
 
 O `npm run dev` sobe a API em <http://localhost:3000> e a tela em <http://localhost:5173>, as duas com recarga automática. A tela chama `/api` na mesma origem e o Vite repassa para a API.
+
+**Banco:** o schema fica em [`apps/api/prisma/schema.prisma`](apps/api/prisma/schema.prisma). Mudou o schema? `npm run db:migrar -w @reservas/api` cria a migração (migrações só aditivas). O que o Prisma não modela (a exclusion constraint `reserva_sem_conflito`, os `CHECK`s e os índices únicos parciais) está escrito à mão no fim da [primeira migração](apps/api/prisma/migrations/20261027000000_inicial/migration.sql). `npm run db:semear -w @reservas/api` roda o seed, que só faz algo com o banco vazio. Para recomeçar do zero: `docker compose down -v && docker compose up -d db`.
+
+**Relógio da demo:** com `DEMO=1` no `.env`, a API sobe com o relógio parado em `RELOGIO_FIXO` (por exemplo `2026-11-10T08:00:00-03:00`), e `POST /api/demo/relogio` com `{"avancarMinutos": 60}` ou `{"ir": "2026-11-10T10:16:00-03:00"}` o move (precisa de sessão). Sem `DEMO=1` a rota não existe.
 
 | Endereço | O que é |
 |---|---|
@@ -27,7 +33,7 @@ O `npm run dev` sobe a API em <http://localhost:3000> e a tela em <http://localh
 |---|---|
 | `npm run lint` | ESLint (com as regras de arquitetura do [ADR 0001](docs/adr/0001-nucleo-funcional-casca-imperativa.md)), Prettier e `tsc` em todos os pacotes |
 | `npm run format` | Formata tudo com o Prettier |
-| `npm test` | Testes (Vitest) |
+| `npm test` | Testes (Vitest). Os que precisam de banco usam o `DATABASE_URL_TESTE` (esvaziado a cada teste) e são pulados sem ele |
 | `npm run build` | Build da tela |
 | `npm run quadro` | Gera o [quadro da equipe no Obsidian](#quadro-da-equipe-no-obsidian) a partir das issues |
 

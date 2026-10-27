@@ -1,0 +1,23 @@
+# Dia a dia: `docker compose up -d db` sobe só o Postgres; a API e a tela rodam com `npm run dev`.
+# A imagem da aplicação (API + tela) entra aqui no #27.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: reservas
+      POSTGRES_PASSWORD: reservas
+      POSTGRES_DB: reservas
+    ports:
+      - '5432:5432'
+    volumes:
+      - dados:/var/lib/postgresql/data
+      # Na primeira subida, cria também o banco dos testes (reservas_teste).
+      - ./docker/db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U reservas -d reservas']
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  dados:

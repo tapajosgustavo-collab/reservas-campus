@@ -1,6 +1,9 @@
 node_modules/
 dist/
 coverage/
+
+# Client do Prisma, gerado no npm install (prisma generate)
+apps/api/src/generated/
 *.tsbuildinfo
 
 # Variáveis de ambiente locais (o modelo versionado é o .env.example)

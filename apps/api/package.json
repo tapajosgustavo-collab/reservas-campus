@@ -5,15 +5,25 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/servidor.ts",
+    "postinstall": "prisma generate",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:migrar": "prisma migrate dev",
+    "db:aplicar": "prisma migrate deploy",
+    "db:semear": "prisma db seed"
   },
   "dependencies": {
+    "@date-fns/tz": "^1.5.0",
+    "@fastify/secure-session": "^8.4.1",
     "@fastify/swagger": "^9.9.2",
     "@fastify/swagger-ui": "^6.1.2",
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
     "@reservas/shared": "*",
+    "date-fns": "^4.4.0",
     "fastify": "^5.12.7",
     "fastify-type-provider-zod": "^7.0.0",
+    "prisma": "^7.10.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
