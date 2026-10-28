@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/IBM/audit-ci/main/docs/schema.json",
+  "high": true,
+  "critical": true,
+  // Formato obrigatório para qualquer exceção na allowlist (RNF14):
+  // Cada exceção DEVE ser aprovada pela equipe e documentada com:
+  // - Identificador GHSA (ex.: "GHSA-xxxx-xxxx-xxxx")
+  // - Motivo: justificativa técnica de por que o risco é mitigado ou não afeta o projeto
+  // - Responsável pela aprovação: membro da equipe que revisou e autorizou
+  // - Validade: data limite (AAAA-MM-DD) para expiração e reavaliação obrigatória
+  //
+  // Exemplo de registro:
+  // "allowlist": [
+  //   // GHSA-xxxx-xxxx-xxxx | Motivo: Não exposto na casca | Aprovador: Nome | Validade: 2026-12-31
+  //   "GHSA-xxxx-xxxx-xxxx"
+  // ]
+  //
+  // No momento, nenhuma exceção ativa:
+  "allowlist": [],
+}
