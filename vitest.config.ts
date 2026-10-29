@@ -10,8 +10,9 @@ try {
 // As suítes ficam separadas pelo caminho (spec, "Decisões de teste"). Rode uma só com
 // `npm run test:nucleo` ou `npm run test:api`, ou todas com `npm test`.
 const NUCLEO = 'src/modulos/*/nucleo/**/*.test.ts';
-// Testes de `comum/` que não tocam em banco nem em rede: rodam com o núcleo, sem Postgres,
-// mas não contam na cobertura dele.
+// Testes de `comum/` que não tocam em banco nem em rede: rodam com o núcleo, sem Postgres, mas
+// não contam na cobertura dele. O #26 pede o RelogioFixo como teste de exemplo da suíte nucleo.
+// Um teste puro novo em `comum/` entra nesta lista; sem ela, vai para a suíte api.
 const PUROS_DO_COMUM = [
   'src/comum/relogio.test.ts',
   'src/comum/instante.test.ts',
@@ -49,13 +50,6 @@ export default defineConfig({
         test: {
           name: 'quadro',
           root: './ferramentas/quadro',
-          include: ['src/**/*.test.ts'],
-        },
-      },
-      {
-        test: {
-          name: 'matriz',
-          root: './ferramentas/matriz',
           include: ['src/**/*.test.ts'],
         },
       },

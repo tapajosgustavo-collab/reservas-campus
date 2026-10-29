@@ -27,12 +27,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout do código
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
 
       - name: Configurar Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -50,12 +50,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout do código
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
 
       - name: Configurar Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -65,16 +65,11 @@ jobs:
 
       # Falha abaixo de 80% de linhas ou de branches em src/modulos/*/nucleo/ (RNF01).
       - name: Testes do núcleo com cobertura
-        run: npm run test:nucleo -- --reporter=default --reporter=json --outputFile.json=resultados-nucleo.json
+        run: npm run test:nucleo
 
       # Os outros testes sem banco: funções puras da tela e as ferramentas do repositório.
       - name: Testes da tela e das ferramentas
-        run: npx vitest run --project web --project quadro --project matriz --passWithNoTests
-
-      - name: Matriz RN → testes no resumo
-        if: ${{ !cancelled() }}
-        continue-on-error: true
-        run: npm run matriz -- --suite núcleo resultados-nucleo.json
+        run: npx vitest run --project web --project quadro --passWithNoTests
 
   api:
     name: api
@@ -102,12 +97,12 @@ jobs:
       TZ: UTC
     steps:
       - name: Checkout do código
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
 
       - name: Configurar Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -117,12 +112,7 @@ jobs:
 
       # Postgres real, um banco por worker, migrações aplicadas pelo prisma migrate deploy (RNF03, RNF11).
       - name: Testes da API com banco
-        run: npm run test:api -- --reporter=default --reporter=json --outputFile.json=resultados-api.json
-
-      - name: Matriz RN → testes no resumo
-        if: ${{ !cancelled() }}
-        continue-on-error: true
-        run: npm run matriz -- --suite api resultados-api.json
+        run: npm run test:api
 
   seguranca:
     name: seguranca
@@ -130,12 +120,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout do código
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
 
       - name: Configurar Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: npm

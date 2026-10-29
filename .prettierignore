@@ -2,5 +2,3 @@ package-lock.json
 *.md
 .claude/
 apps/api/src/generated/
-resultados-*.json
-coverage/
