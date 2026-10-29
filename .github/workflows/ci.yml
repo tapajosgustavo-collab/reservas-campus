@@ -135,3 +135,52 @@ jobs:
 
       - name: Auditoria de dependências (audit-ci)
         run: npm run seguranca
+
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    # Mais folga que os outros jobs: o build da imagem e o download do Chromium.
+    timeout-minutes: 20
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # A mesma imagem do deploy, com DEMO=1 (fixado no docker-compose.yml), migrações e seed (RNF05).
+      - name: Subir a imagem e o Postgres
+        run: docker compose up --build --detach --wait
+        env:
+          GIT_SHA: ${{ github.sha }}
+
+      - name: Instalar o Chromium do Playwright
+        run: npx playwright install --with-deps chromium
+        working-directory: e2e
+
+      - name: E2E (Playwright, computador e celular)
+        run: npm run test:e2e
+        env:
+          GIT_SHA: ${{ github.sha }}
+
+      - name: Logs da imagem
+        if: failure()
+        run: docker compose logs app
+
+      - name: Guardar relatório e traces do Playwright
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 14

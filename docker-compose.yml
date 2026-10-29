@@ -1,5 +1,6 @@
+# `docker compose up` sobe tudo (RNF05): o Postgres e a imagem com a API e a tela, que aplica as
+# migrações e o seed. É a demo e o que o job e2e do CI testa: abra http://localhost:3000.
 # Dia a dia: `docker compose up -d db` sobe só o Postgres; a API e a tela rodam com `npm run dev`.
-# A imagem da aplicação (API + tela) entra aqui no #27.
 services:
   db:
     image: postgres:16
@@ -18,6 +19,26 @@ services:
       interval: 2s
       timeout: 3s
       retries: 15
+
+  app:
+    build:
+      context: .
+      args:
+        # O CI passa o SHA do commit; sem ele, a tela mostra "versão local".
+        GIT_SHA: ${GIT_SHA:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '3000:3000'
+    environment:
+      DATABASE_URL: postgresql://reservas:reservas@db:5432/reservas
+      # Só serve para a demo local; o de produção fica só no Render.
+      SEGREDO_SESSAO: so-para-a-demo-local-nunca-em-producao
+      # A demo e o E2E precisam do relógio parado, que só anda por POST /api/demo/relogio.
+      DEMO: '1'
+      # Vazio, o relógio começa parado no instante em que o contêiner sobe.
+      RELOGIO_FIXO: ${RELOGIO_FIXO:-}
 
 volumes:
   dados:

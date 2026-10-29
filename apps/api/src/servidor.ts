@@ -15,6 +15,8 @@ const ambiente = z
       .string()
       .refine((s) => Buffer.byteLength(s) >= 32, 'SEGREDO_SESSAO precisa de pelo menos 32 bytes.'),
     DEMO: z.string().optional(),
+    // Só na imagem Docker; no dia a dia quem serve a tela é o Vite.
+    PASTA_DA_TELA: z.string().optional(),
     // Vazio no .env conta como ausente.
     RELOGIO_FIXO: z.preprocess(
       (valor) => valor || undefined,
@@ -37,6 +39,7 @@ const app = await construirApp({
   demo,
   producao: ambiente.NODE_ENV === 'production',
   tiqueMs: 60_000,
+  tela: ambiente.PASTA_DA_TELA,
   logger: true,
 });
 

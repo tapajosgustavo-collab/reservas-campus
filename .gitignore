@@ -21,3 +21,7 @@ apps/api/src/generated/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Resultados do Playwright (traces e relatório)
+test-results/
+playwright-report/

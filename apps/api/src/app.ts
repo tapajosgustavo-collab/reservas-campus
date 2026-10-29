@@ -1,3 +1,4 @@
+import fastifyStatic from '@fastify/static';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { esquemaHealth } from '@reservas/shared';
@@ -31,6 +32,8 @@ export interface OpcoesApp {
   producao?: boolean;
   /** Intervalo do tique que roda o `sincronizar` sem ninguém acessar. Sem valor, sem tique. */
   tiqueMs?: number;
+  /** Pasta do build da tela (`apps/web/dist`), servida na mesma origem pela imagem Docker. */
+  tela?: string;
   logger?: boolean;
 }
 
@@ -42,6 +45,7 @@ export async function construirApp({
   demo = false,
   producao = false,
   tiqueMs,
+  tela,
   logger = false,
 }: OpcoesApp) {
   if (demo && !(relogio instanceof RelogioFixo)) {
@@ -77,8 +81,16 @@ export async function construirApp({
     () => ({ status: 'ok' as const, sha }),
   );
 
+  if (tela) {
+    await app.register(fastifyStatic, { root: tela, wildcard: false });
+    // Endereço da tela aberto direto: o roteador do React resolve. O que é /api segue no 404.
+    app.get('/*', { schema: { hide: true } }, (request, reply) =>
+      /^\/api(\/|\?|$)/.test(request.url) ? reply.callNotFound() : reply.sendFile('index.html'),
+    );
+  }
+
   // Daqui para baixo, toda rota roda numa transação sob o advisory lock, depois do
-  // `sincronizar(agora)` (ADR 0001, #12). Só a documentação e o health, acima, ficam de fora.
+  // `sincronizar(agora)` (ADR 0001, #12). Só a documentação, o health e a tela, acima, ficam de fora.
   // O handler tem que devolver a resposta (async), não chamar `reply.send`.
   app.addHook('onRoute', (rota) => {
     const handler = rota.handler as RouteHandlerMethod;
