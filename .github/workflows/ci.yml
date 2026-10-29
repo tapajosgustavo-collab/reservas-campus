@@ -1,27 +1,144 @@
 name: CI
 
+# Todo PR e todo push na main rodam os jobs abaixo, em paralelo (RNF04). O deploy.yml chama
+# este arquivo por workflow_call antes de publicar. A proteção da main exige os checks pelo
+# nome do job: não renomeie lint, nucleo, api nem seguranca sem mudar o ruleset (#29).
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_call:
 
 permissions:
   contents: read
 
+# Um push novo no mesmo PR cancela a execução antiga. Na main cada push roda até o fim.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# As actions ficam fixadas por SHA (o comentário diz a versão); o Dependabot atualiza os dois.
 jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # ESLint (com as regras de arquitetura do ADR 0001, RNF02), Prettier e tsc em todos os pacotes.
+      - name: Lint, formatação e tipos
+        run: npm run lint
+
+  nucleo:
+    name: nucleo
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # Falha abaixo de 80% de linhas ou de branches em src/modulos/*/nucleo/ (RNF01).
+      - name: Testes do núcleo com cobertura
+        run: npm run test:nucleo -- --reporter=default --reporter=json --outputFile.json=resultados-nucleo.json
+
+      # Os outros testes sem banco: funções puras da tela e as ferramentas do repositório.
+      - name: Testes da tela e das ferramentas
+        run: npx vitest run --project web --project quadro --project matriz --passWithNoTests
+
+      - name: Matriz RN → testes no resumo
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: npm run matriz -- --suite núcleo resultados-nucleo.json
+
+  api:
+    name: api
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: reservas
+          POSTGRES_PASSWORD: reservas
+          POSTGRES_DB: reservas_teste
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U reservas -d reservas_teste"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      # Modelo migrado; cada worker ganha uma cópia (reservas_teste_1, _2…). Sem ele a suíte
+      # falha no CI em vez de pular os testes com banco.
+      DATABASE_URL_TESTE: postgresql://reservas:reservas@localhost:5432/reservas_teste
+      # Fuso do runner diferente do de São Paulo de propósito: nada pode depender dele (RNF08).
+      TZ: UTC
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # Postgres real, um banco por worker, migrações aplicadas pelo prisma migrate deploy (RNF03, RNF11).
+      - name: Testes da API com banco
+        run: npm run test:api -- --reporter=default --reporter=json --outputFile.json=resultados-api.json
+
+      - name: Matriz RN → testes no resumo
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: npm run matriz -- --suite api resultados-api.json
+
   seguranca:
     name: seguranca
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout do código
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Configurar Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 24
-          cache: 'npm'
+          node-version-file: .nvmrc
+          cache: npm
 
       - name: Instalar dependências
         run: npm ci

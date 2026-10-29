@@ -7,7 +7,6 @@
     "dev": "tsx watch --env-file-if-exists=../../.env src/servidor.ts",
     "postinstall": "prisma generate",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
     "db:migrar": "prisma migrate dev",
     "db:aplicar": "prisma migrate deploy",
     "db:semear": "prisma db seed"

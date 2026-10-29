@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "gerar": "tsx src/gerar.ts",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "tsx": "^4.23.15",
