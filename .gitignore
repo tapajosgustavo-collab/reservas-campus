@@ -21,3 +21,6 @@ apps/api/src/generated/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Relatórios do Vitest que o CI usa para a matriz RN → testes
+resultados-*.json
