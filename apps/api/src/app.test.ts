@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { relogioDoSistema, RelogioFixo } from './comum/relogio';
 import { umaApp } from './teste/app';
 
@@ -55,6 +58,74 @@ describe('Envelope de erro', () => {
         violacoes: [],
       },
     });
+  });
+});
+
+describe('RNF05 · Tela na mesma origem', () => {
+  // Um build da tela de mentira, como o `apps/web/dist` que a imagem Docker leva.
+  let tela: string;
+  beforeAll(async () => {
+    tela = await mkdtemp(join(tmpdir(), 'tela-'));
+    await mkdir(join(tela, 'assets'));
+    await writeFile(join(tela, 'index.html'), '<!doctype html><title>Reservas do Campus</title>');
+    await writeFile(join(tela, 'assets', 'principal.js'), 'console.log("tela");');
+  });
+
+  // O banco de `umaApp` não existe: uma rota da tela dentro da transação responderia 500.
+  it('GET / serve o index.html da tela, sem passar pela transação', async () => {
+    const app = await umaApp({ tela });
+
+    const resposta = await app.inject({ method: 'GET', url: '/' });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.headers['content-type']).toMatch(/text\/html/);
+    expect(resposta.body).toContain('<title>Reservas do Campus</title>');
+  });
+
+  it('serve os arquivos do build', async () => {
+    const app = await umaApp({ tela });
+
+    const resposta = await app.inject({ method: 'GET', url: '/assets/principal.js' });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.headers['content-type']).toMatch(/javascript/);
+  });
+
+  it('endereço da tela aberto direto (recarregar a página) também recebe o index.html', async () => {
+    const app = await umaApp({ tela });
+
+    const resposta = await app.inject({ method: 'GET', url: '/reservas?semana=2026-11-09' });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.body).toContain('<title>Reservas do Campus</title>');
+  });
+
+  it.each(['/api/nao-existe', '/api'])(
+    'GET %s continua 404 nao_encontrado no envelope',
+    async (url) => {
+      const app = await umaApp({ tela });
+
+      const resposta = await app.inject({ method: 'GET', url });
+
+      expect(resposta.statusCode).toBe(404);
+      expect(resposta.json().erro.codigo).toBe('nao_encontrado');
+    },
+  );
+
+  it('a tela não aparece no OpenAPI', async () => {
+    const app = await umaApp({ tela });
+
+    const documento = (await app.inject({ method: 'GET', url: '/api/openapi.json' })).json();
+
+    expect(Object.keys(documento.paths).every((caminho) => caminho.startsWith('/api/'))).toBe(true);
+  });
+
+  it('sem a pasta da tela (dia a dia, com o Vite), GET / é 404', async () => {
+    const app = await umaApp();
+
+    const resposta = await app.inject({ method: 'GET', url: '/' });
+
+    expect(resposta.statusCode).toBe(404);
   });
 });
 

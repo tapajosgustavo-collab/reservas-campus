@@ -5,7 +5,8 @@
   "workspaces": [
     "packages/*",
     "apps/*",
-    "ferramentas/*"
+    "ferramentas/*",
+    "e2e"
   ],
   "engines": {
     "node": ">=24 <25"
@@ -17,6 +18,7 @@
     "test": "vitest run",
     "test:nucleo": "vitest run --project nucleo --coverage",
     "test:api": "vitest run --project api",
+    "test:e2e": "npm run test:e2e -w @reservas/e2e",
     "matriz": "npm run gerar -w @reservas/matriz --",
     "build": "npm run build -w @reservas/web",
     "quadro": "npm run gerar -w @reservas/quadro",
