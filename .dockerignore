@@ -1,0 +1,15 @@
+# Só o que o Dockerfile copia importa; o resto não vai para o contexto do build.
+**/node_modules
+**/dist
+**/coverage
+**/generated
+**/*.tsbuildinfo
+.git
+.github
+.claude
+.obsidian
+quadro
+.env
+.env.*
+e2e/test-results
+e2e/playwright-report

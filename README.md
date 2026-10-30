@@ -18,6 +18,10 @@ npm run dev
 
 O `npm run dev` sobe a API em <http://localhost:3000> e a tela em <http://localhost:5173>, as duas com recarga automática. A tela chama `/api` na mesma origem e o Vite repassa para a API.
 
+**Tudo com um comando (a demo):** `docker compose up --build` sobe o Postgres e a imagem única da aplicação, a mesma do deploy, em que a API serve a tela na mesma origem: abra <http://localhost:3000>. Ao subir, a imagem aplica as migrações, roda o seed (só com o banco vazio) e liga o servidor com `DEMO=1`. Não precisa de Node nem de `.env`, só do Docker. Ela usa a porta 3000, como o `npm run dev`: rode um ou outro.
+
+**Testes de ponta a ponta:** com a imagem no ar (`docker compose up --build -d --wait`), `npm run test:e2e` roda o Playwright nos projetos `computador` (1280 × 720) e `celular` (360 × 640, com toque). Na primeira vez, baixe o navegador com `npx playwright install chromium` dentro de `e2e/`. Os testes ficam em [`e2e/testes/`](e2e/testes/); para conferir no celular que a página não rola na horizontal (RNF07), use o `conferirSemRolagemHorizontal(page)` de [`ajudantes.ts`](e2e/testes/ajudantes.ts). No CI, o job `e2e` faz o mesmo e guarda o relatório e os traces como artefato `playwright`.
+
 **Banco:** o schema fica em [`apps/api/prisma/schema.prisma`](apps/api/prisma/schema.prisma). Mudou o schema? `npm run db:migrar -w @reservas/api` cria a migração (migrações só aditivas). O que o Prisma não modela (a exclusion constraint `reserva_sem_conflito`, os `CHECK`s e os índices únicos parciais) está escrito à mão no fim da [primeira migração](apps/api/prisma/migrations/20261027000000_inicial/migration.sql). `npm run db:semear -w @reservas/api` roda o seed, que só faz algo com o banco vazio. Para recomeçar do zero: `docker compose down -v && docker compose up -d db`.
 
 **Relógio da demo:** com `DEMO=1` no `.env`, a API sobe com o relógio parado em `RELOGIO_FIXO` (por exemplo `2026-11-10T08:00:00-03:00`), e `POST /api/demo/relogio` com `{"avancarMinutos": 60}` ou `{"ir": "2026-11-10T10:16:00-03:00"}` o move (precisa de sessão). Sem `DEMO=1` a rota não existe.
@@ -36,10 +40,11 @@ O `npm run dev` sobe a API em <http://localhost:3000> e a tela em <http://localh
 | `npm test` | Todas as suítes do Vitest: `nucleo`, `api`, `web` e `quadro` |
 | `npm run test:nucleo` | Só o núcleo (sem banco), com cobertura: falha abaixo de 80% de linhas ou de branches em `src/modulos/*/nucleo/` |
 | `npm run test:api` | Só a API, no Postgres real. Migra o `DATABASE_URL_TESTE` e cria uma cópia dele por worker (`reservas_teste_1`, `_2`…), esvaziada a cada teste. Sem a variável, os testes com banco são pulados (no CI, falham) |
+| `npm run test:e2e` | Playwright contra a imagem no ar (`docker compose up`), no computador e no celular |
 | `npm run build` | Build da tela |
 | `npm run quadro` | Gera o [quadro da equipe no Obsidian](#quadro-da-equipe-no-obsidian) a partir das issues |
 
-**Pastas:** `apps/api` (Fastify), `apps/web` (React), `packages/shared` (schemas Zod de cada rota, o contrato entre as duas) e `ferramentas/quadro` (o gerador do quadro). Na API e na tela, o código de cada módulo fica em `src/modulos/{conduta,recursos,reservas,ciclo}/`, e os outros módulos só importam o `index.ts` dele.
+**Pastas:** `apps/api` (Fastify), `apps/web` (React), `packages/shared` (schemas Zod de cada rota, o contrato entre as duas), `e2e` (Playwright), `ferramentas/quadro` (o gerador do quadro) e `docker` (o entrypoint da imagem e o script que cria o banco de teste). A imagem é o [`Dockerfile`](Dockerfile) da raiz. Na API e na tela, o código de cada módulo fica em `src/modulos/{conduta,recursos,reservas,ciclo}/`, e os outros módulos só importam o `index.ts` dele.
 
 ### Quadro da equipe no Obsidian
 
