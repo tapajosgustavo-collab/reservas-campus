@@ -33,7 +33,9 @@ O `npm run dev` sobe a API em <http://localhost:3000> e a tela em <http://localh
 |---|---|
 | `npm run lint` | ESLint (com as regras de arquitetura do [ADR 0001](docs/adr/0001-nucleo-funcional-casca-imperativa.md)), Prettier e `tsc` em todos os pacotes |
 | `npm run format` | Formata tudo com o Prettier |
-| `npm test` | Testes (Vitest). Os que precisam de banco usam o `DATABASE_URL_TESTE` (esvaziado a cada teste) e são pulados sem ele |
+| `npm test` | Todas as suítes do Vitest: `nucleo`, `api`, `web` e `quadro` |
+| `npm run test:nucleo` | Só o núcleo (sem banco), com cobertura: falha abaixo de 80% de linhas ou de branches em `src/modulos/*/nucleo/` |
+| `npm run test:api` | Só a API, no Postgres real. Migra o `DATABASE_URL_TESTE` e cria uma cópia dele por worker (`reservas_teste_1`, `_2`…), esvaziada a cada teste. Sem a variável, os testes com banco são pulados (no CI, falham) |
 | `npm run build` | Build da tela |
 | `npm run quadro` | Gera o [quadro da equipe no Obsidian](#quadro-da-equipe-no-obsidian) a partir das issues |
 
