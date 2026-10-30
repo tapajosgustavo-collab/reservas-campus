@@ -37,14 +37,15 @@ O `npm run dev` sobe a API em <http://localhost:3000> e a tela em <http://localh
 |---|---|
 | `npm run lint` | ESLint (com as regras de arquitetura do [ADR 0001](docs/adr/0001-nucleo-funcional-casca-imperativa.md)), Prettier e `tsc` em todos os pacotes |
 | `npm run format` | Formata tudo com o Prettier |
-| `npm test` | Todas as suítes do Vitest: `nucleo`, `api`, `web` e `quadro` |
+| `npm test` | Todas as suítes do Vitest: `nucleo`, `api`, `web`, `quadro` e `matriz` |
 | `npm run test:nucleo` | Só o núcleo (sem banco), com cobertura: falha abaixo de 80% de linhas ou de branches em `src/modulos/*/nucleo/` |
 | `npm run test:api` | Só a API, no Postgres real. Migra o `DATABASE_URL_TESTE` e cria uma cópia dele por worker (`reservas_teste_1`, `_2`…), esvaziada a cada teste. Sem a variável, os testes com banco são pulados (no CI, falham) |
 | `npm run test:e2e` | Playwright contra a imagem no ar (`docker compose up`), no computador e no celular |
+| `npm run matriz -- --suite <nome> <resultados.json>` | Monta a matriz RN → testes a partir do relatório JSON do Vitest (o CI põe no resumo de todo PR) |
 | `npm run build` | Build da tela |
 | `npm run quadro` | Gera o [quadro da equipe no Obsidian](#quadro-da-equipe-no-obsidian) a partir das issues |
 
-**Pastas:** `apps/api` (Fastify), `apps/web` (React), `packages/shared` (schemas Zod de cada rota, o contrato entre as duas), `e2e` (Playwright), `ferramentas/quadro` (o gerador do quadro) e `docker` (o entrypoint da imagem e o script que cria o banco de teste). A imagem é o [`Dockerfile`](Dockerfile) da raiz. Na API e na tela, o código de cada módulo fica em `src/modulos/{conduta,recursos,reservas,ciclo}/`, e os outros módulos só importam o `index.ts` dele.
+**Pastas:** `apps/api` (Fastify), `apps/web` (React), `packages/shared` (schemas Zod de cada rota, o contrato entre as duas), `e2e` (Playwright), `ferramentas/quadro` (o gerador do quadro), `ferramentas/matriz` (a matriz RN → testes do CI) e `docker` (o entrypoint da imagem e o script que cria o banco de teste). A imagem é o [`Dockerfile`](Dockerfile) da raiz. Na API e na tela, o código de cada módulo fica em `src/modulos/{conduta,recursos,reservas,ciclo}/`, e os outros módulos só importam o `index.ts` dele.
 
 ### Quadro da equipe no Obsidian
 

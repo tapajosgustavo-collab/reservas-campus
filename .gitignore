@@ -22,6 +22,9 @@ apps/api/src/generated/
 .DS_Store
 Thumbs.db
 
+# Relatórios do Vitest que o CI usa para a matriz RN → testes
+resultados-*.json
+
 # Resultados do Playwright (traces e relatório)
 test-results/
 playwright-report/

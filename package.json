@@ -19,6 +19,7 @@
     "test:nucleo": "vitest run --project nucleo --coverage",
     "test:api": "vitest run --project api",
     "test:e2e": "npm run test:e2e -w @reservas/e2e",
+    "matriz": "npm run gerar -w @reservas/matriz --",
     "build": "npm run build -w @reservas/web",
     "quadro": "npm run gerar -w @reservas/quadro",
     "seguranca": "audit-ci --config ./audit-ci.jsonc"
