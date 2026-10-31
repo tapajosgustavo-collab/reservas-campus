@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "db:migrar": "prisma migrate dev",
     "db:aplicar": "prisma migrate deploy",
-    "db:semear": "prisma db seed"
+    "db:semear": "prisma db seed",
+    "db:resetar": "tsx src/seed/resetar-principal.ts"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

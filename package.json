@@ -21,7 +21,8 @@
     "test:e2e": "npm run test:e2e -w @reservas/e2e",
     "build": "npm run build -w @reservas/web",
     "quadro": "npm run gerar -w @reservas/quadro",
-    "seguranca": "audit-ci --config ./audit-ci.jsonc"
+    "seguranca": "audit-ci --config ./audit-ci.jsonc",
+    "db:resetar": "npm run db:resetar -w @reservas/api"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

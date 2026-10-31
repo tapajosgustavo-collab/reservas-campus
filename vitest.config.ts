@@ -17,6 +17,7 @@ const PUROS_DO_COMUM = [
   'src/comum/relogio.test.ts',
   'src/comum/instante.test.ts',
   'src/comum/tique.test.ts',
+  'src/comum/deploy.test.ts',
 ];
 
 export default defineConfig({
