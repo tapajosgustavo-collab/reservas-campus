@@ -2,7 +2,8 @@ name: CI
 
 # Todo PR e todo push na main rodam os jobs abaixo, em paralelo (RNF04). O deploy.yml chama
 # este arquivo por workflow_call antes de publicar. A proteção da main exige os checks pelo
-# nome do job: não renomeie lint, nucleo, api nem seguranca sem mudar o ruleset (#29).
+# nome do job: não renomeie lint, nucleo, api, e2e nem seguranca sem mudar o ruleset
+# (.github/rulesets/protecao-da-main.json).
 
 on:
   push:

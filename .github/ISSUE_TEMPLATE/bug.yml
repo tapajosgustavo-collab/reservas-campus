@@ -1,0 +1,36 @@
+name: Bug
+description: Algo não funciona como devia. Conte como reproduzir.
+title: '[bug] '
+labels: [bug]
+body:
+  - type: textarea
+    id: passos
+    attributes:
+      label: Passos para reproduzir
+      description: Do começo, com o Usuário, a tela ou a rota usada.
+      placeholder: |
+        1. Entrar como um Aluno
+        2. Abrir a agenda de um Espaço
+        3. Arrastar de 10h a 12h e clicar em Reservar
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: Esperado
+      description: 'O que devia acontecer. Se for uma regra, cite a RN (ex.: RN01).'
+    validations:
+      required: true
+  - type: textarea
+    id: obtido
+    attributes:
+      label: Obtido
+      description: O que aconteceu de fato. Mensagem de erro, print ou trecho de log ajudam.
+    validations:
+      required: true
+  - type: input
+    id: onde
+    attributes:
+      label: Onde
+      description: Produção ou local, navegador e computador ou celular, e o SHA do GET /api/health.
+      placeholder: produção, Chrome no celular, SHA 75484b3

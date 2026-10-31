@@ -134,6 +134,19 @@ Para cada ticket de implementação:
 
 **Ritmo:** um incremento por semana, terminando com a tag `v0.N` e uma release no GitHub. Uma call por semana junta a review do incremento, uma retrospectiva de 15 minutos (notas na descrição da release) e o planejamento do próximo. O fluxo completo, com a Definition of Done, está no ticket [Fluxo de Git e revisão do grupo](https://github.com/tapajosgustavo-collab/reservas-campus/issues/14).
 
+### Proteção da `main`, revisão e quadro
+
+Nada vai direto na `main`, nem do admin. O ruleset [`.github/rulesets/protecao-da-main.json`](.github/rulesets/protecao-da-main.json) exige:
+
+- PR com 1 aprovação, merge só por squash, sem push forçado e sem apagar a `main`;
+- os checks `lint`, `nucleo`, `api`, `e2e` e `seguranca` verdes (os nomes dos jobs do [`ci.yml`](.github/workflows/ci.yml));
+- o CodeQL sem alerta de segurança High ou acima (RNF14). O CodeQL roda no *default setup*, com JavaScript/TypeScript e Actions;
+- ninguém na lista de bypass. A aprovação de code owner **não** é exigida: sem resposta do revisor em 24h, qualquer integrante aprova.
+
+Só o dono do repositório muda o ruleset. Mude primeiro o JSON num PR e, depois do merge, aplique com `gh api --method PUT repos/tapajosgustavo-collab/reservas-campus/rulesets/<id> --input .github/rulesets/protecao-da-main.json` (o `<id>` sai de `gh api repos/tapajosgustavo-collab/reservas-campus/rulesets`). Na primeira vez, é `--method POST .../rulesets`.
+
+O revisor do rodízio é pedido sozinho pelo [`CODEOWNERS`](.github/CODEOWNERS): quem revisa cada pasta de módulo, na API e na tela, e os quatro no resto. O PR já abre com o [template](.github/pull_request_template.md) (`Closes #n`, o que mudou, como testar, checklist da Aula 4 e Definition of Done), e bug se relata pelo [template de bug](.github/ISSUE_TEMPLATE/bug.yml) (passos, esperado, obtido).
+
 ### Sem IA: o mesmo processo à mão
 
 As skills são só roteiros. Tudo o que elas fazem dá para fazer direto no GitHub:
