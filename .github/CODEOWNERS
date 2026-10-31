@@ -3,7 +3,7 @@
 # resposta em 24h, qualquer integrante aprova. O autor do PR nunca é pedido como revisor.
 #
 # Vale a ÚLTIMA linha que casa com o arquivo. Mudou a equipe ou o rodízio? Mude aqui e em
-# ferramentas/quadro/src/equipe.ts.
+# ferramentas/quadro/src/equipe.ts; o ferramentas/quadro/src/github.test.ts confere os dois.
 
 # Raiz e tudo o que não tem dono abaixo: os quatro.
 *                              @KaioAlexandreFernandes @tapajosgustavo-collab @rafael-figueredo @gpombotky

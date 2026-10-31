@@ -117,7 +117,7 @@ Quando o mapa não tiver mais tickets abertos:
 
 Para cada ticket de implementação:
 
-1. Atribua o ticket a você no GitHub e mova o card para "Em andamento" no quadro. **No máximo 1 ticket em andamento por pessoa.**
+1. Atribua o ticket a você no GitHub e mova o card para "Em andamento" no [quadro do Projects](https://github.com/users/KaioAlexandreFernandes/projects/1). **No máximo 1 ticket em andamento por pessoa.**
 2. Atualize a `main` e crie uma branch para ele no repositório principal (não use fork):
    ```bash
    git switch main
@@ -146,6 +146,10 @@ Nada vai direto na `main`, nem do admin. O ruleset [`.github/rulesets/protecao-d
 Só o dono do repositório muda o ruleset. Mude primeiro o JSON num PR e, depois do merge, aplique com `gh api --method PUT repos/tapajosgustavo-collab/reservas-campus/rulesets/<id> --input .github/rulesets/protecao-da-main.json` (o `<id>` sai de `gh api repos/tapajosgustavo-collab/reservas-campus/rulesets`). Na primeira vez, é `--method POST .../rulesets`.
 
 O revisor do rodízio é pedido sozinho pelo [`CODEOWNERS`](.github/CODEOWNERS): quem revisa cada pasta de módulo, na API e na tela, e os quatro no resto. O PR já abre com o [template](.github/pull_request_template.md) (`Closes #n`, o que mudou, como testar, checklist da Aula 4 e Definition of Done), e bug se relata pelo [template de bug](.github/ISSUE_TEMPLATE/bug.yml) (passos, esperado, obtido).
+
+O rodízio fica em dois lugares, o `CODEOWNERS` e o [`equipe.ts`](ferramentas/quadro/src/equipe.ts), e o teste [`github.test.ts`](ferramentas/quadro/src/github.test.ts) confere que os dois combinam. Ele também confere que o ruleset exige exatamente os jobs do `ci.yml`: renomear um job sem mudar o ruleset travaria todo merge.
+
+O [quadro do Projects](https://github.com/users/KaioAlexandreFernandes/projects/1) tem as colunas Backlog (bloqueado por outro ticket) → Pronto (pode puxar) → Em andamento → Em revisão (PR aberto) → Feito e o campo **Incremento**. Cada um tem **no máximo 1 card em "Em andamento"**. As automações do GitHub põem issue e PR novos no quadro, movem o card para "Em revisão" quando o PR abre e para "Feito" quando a issue fecha ou o PR entra. O quadro fica na conta do Kaio porque o GitHub só liga à aba Projects do repositório um quadro do mesmo dono; os quatro são admins dele.
 
 ### Sem IA: o mesmo processo à mão
 
