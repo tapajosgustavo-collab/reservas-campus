@@ -14,6 +14,15 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
 
+## Project board
+
+Every implementation ticket also goes on the group's GitHub Projects board (<https://github.com/users/KaioAlexandreFernandes/projects/1>), with its **Incremento** filled in. The board can't auto-add issues from this repository (it belongs to another owner), so right after `gh issue create`:
+
+1. `gh project item-add 1 --owner KaioAlexandreFernandes --url <issue url> --format json --jq .id` gives the item id.
+2. `gh project item-edit --project-id PVT_kwHOCwpixc4Bpo3P --id <item id> --field-id PVTSSF_lAHOCwpixc4Bpo3PzhoDj7M --single-select-option-id <option>`, where the Incremento options are `f96e2728` (0), `bdcc9c53` (1), `7b11fed1` (2), `3740b1a8` (3), `517e029f` (4) and `eed25940` (5). The board's own workflow sets Status to Backlog.
+
+Needs `gh auth refresh -s project` once. Decision tickets (wayfinder) and the spec stay off the board.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_

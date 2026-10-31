@@ -149,7 +149,16 @@ O revisor do rodízio é pedido sozinho pelo [`CODEOWNERS`](.github/CODEOWNERS):
 
 O rodízio fica em dois lugares, o `CODEOWNERS` e o [`equipe.ts`](ferramentas/quadro/src/equipe.ts), e o teste [`github.test.ts`](ferramentas/quadro/src/github.test.ts) confere que os dois combinam. Ele também confere que o ruleset exige exatamente os jobs do `ci.yml`: renomear um job sem mudar o ruleset travaria todo merge.
 
-O [quadro do Projects](https://github.com/users/KaioAlexandreFernandes/projects/1) tem as colunas Backlog (bloqueado por outro ticket) → Pronto (pode puxar) → Em andamento → Em revisão (PR aberto) → Feito e o campo **Incremento**. Cada um tem **no máximo 1 card em "Em andamento"**. As automações do GitHub põem issue e PR novos no quadro, movem o card para "Em revisão" quando o PR abre e para "Feito" quando a issue fecha ou o PR entra. O quadro fica na conta do Kaio porque o GitHub só liga à aba Projects do repositório um quadro do mesmo dono; os quatro são admins dele.
+O [quadro do Projects](https://github.com/users/KaioAlexandreFernandes/projects/1) tem as colunas Backlog (bloqueado por outro ticket) → Pronto (pode puxar) → Em andamento → Em revisão (PR aberto) → Feito e o campo **Incremento**. Cada um tem **no máximo 1 card em "Em andamento"** (a coluna avisa acima de 4, um por pessoa). As automações do quadro fazem o resto:
+
+| Quando | O card vai para |
+|---|---|
+| Entra no quadro | Backlog |
+| Um PR com `Closes #n` é ligado à issue | Em revisão |
+| A issue fecha ou o PR entra na `main` | Feito (e mover para Feito fecha a issue) |
+| A issue é reaberta | Pronto |
+
+O quadro fica na conta do Kaio, com os quatro como admins, porque o GitHub só liga à aba Projects do repositório um quadro do mesmo dono. Pelo mesmo motivo, a automação "Auto-add" não enxerga o repositório: bug aberto pelo template já entra sozinho no quadro, e o ticket novo do `/to-tickets` entra pelo passo descrito em [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md). Issue criada de outro jeito: na barra lateral da issue, em **Projects**, escolha "Reservas do Campus" e preencha o Incremento.
 
 ### Sem IA: o mesmo processo à mão
 

@@ -2,6 +2,8 @@ name: Bug
 description: Algo não funciona como devia. Conte como reproduzir.
 title: '[bug] '
 labels: [bug]
+# O quadro do grupo (README, "Proteção da main, revisão e quadro").
+projects: [KaioAlexandreFernandes/1]
 body:
   - type: textarea
     id: passos
