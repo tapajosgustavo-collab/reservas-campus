@@ -42,6 +42,7 @@ O `npm run dev` sobe a API em <http://localhost:3000> e a tela em <http://localh
 | `npm run test:api` | Só a API, no Postgres real. Migra o `DATABASE_URL_TESTE` e cria uma cópia dele por worker (`reservas_teste_1`, `_2`…), esvaziada a cada teste. Sem a variável, os testes com banco são pulados (no CI, falham) |
 | `npm run test:e2e` | Playwright contra a imagem no ar (`docker compose up`), no computador e no celular |
 | `npm run build` | Build da tela |
+| `npm run db:resetar` | Esvazia todas as tabelas e reaplica o seed de demonstração (local ou com `DATABASE_URL` remota) |
 | `npm run quadro` | Gera o [quadro da equipe no Obsidian](#quadro-da-equipe-no-obsidian) a partir das issues |
 
 **Pastas:** `apps/api` (Fastify), `apps/web` (React), `packages/shared` (schemas Zod de cada rota, o contrato entre as duas), `e2e` (Playwright), `ferramentas/quadro` (o gerador do quadro) e `docker` (o entrypoint da imagem e o script que cria o banco de teste). A imagem é o [`Dockerfile`](Dockerfile) da raiz. Na API e na tela, o código de cada módulo fica em `src/modulos/{conduta,recursos,reservas,ciclo}/`, e os outros módulos só importam o `index.ts` dele.
@@ -128,6 +129,13 @@ Para cada ticket de implementação:
 4. Abra o PR ligando o ticket (`Closes #<numero>` na descrição). PR pequeno: um ticket por PR, branch com até 2 dias e até umas 400 linhas mudadas. Se crescer além disso, quebre o ticket.
 5. **O revisor do rodízio revisa** em até 24h, usando o checklist do template de PR. Revise de verdade: comente, peça mudança quando for o caso. O rodízio está no [§4 dos requisitos](docs/requisitos.md#4-módulos-e-responsáveis); se o revisor não responder em 24h, qualquer outro integrante pode aprovar.
 6. Com CI verde e 1 aprovação, **quem abriu o PR** faz o merge por *squash* e apaga a branch. O deploy em produção sai sozinho.
+
+### Deploy contínuo e produção
+
+- **Hospedagem:** serviço Web no Render Free com a imagem Docker unificada e banco PostgreSQL no Neon Free (ambos em `us-east-1`).
+- **Pipeline (`.github/workflows/deploy.yml`):** a cada merge na `main`, executa o CI (`ci.yml`), dispara o webhook do Render via secret `RENDER_DEPLOY_HOOK_URL`, aguarda o `GET /api/health` responder com o SHA do commit (com tempo limite de 15 min) e registra o status do GitHub Deployment no ambiente `producao`.
+- **Reset do banco de demonstração (`.github/workflows/resetar-banco.yml`):** workflow manual no GitHub Actions (`workflow_dispatch`) que esvazia as tabelas e recarrega o seed no banco de produção (`DATABASE_URL`).
+- **Produção sem `DEMO=1`:** em produção, o relógio é o real do sistema e as rotas `/api/demo/relogio` retornam 404.
 
 **A `main` quebrou** (CI vermelho ou produção fora do ar)? Ninguém faz outro merge. Quem quebrou, ou quem viu primeiro, abre na hora um PR de revert com a label `incidente`, que tem prioridade sobre qualquer revisão. O conserto vem depois, num PR normal.
 
