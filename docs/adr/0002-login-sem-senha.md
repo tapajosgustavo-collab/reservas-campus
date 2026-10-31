@@ -4,7 +4,7 @@ O Usuário entra digitando um e-mail `@unifesp.br` que já está no banco de dem
 
 ## Consequências
 
-- **A sessão é um cookie emitido pelo backend.** `@fastify/secure-session`, cookie `httpOnly`, `SameSite=Lax`, `Secure` em produção, criptografado com o segredo de sessão que fica no Render. Guarda só o `usuarioId` e vale 8 horas. Rotas `POST /api/sessao` (entrar), `GET /api/sessao` (quem sou eu) e `DELETE /api/sessao` (sair).
+- **A sessão é um cookie emitido pelo backend.** `@fastify/secure-session`, cookie `httpOnly`, `SameSite=Lax`, `Secure` em produção, criptografado com o segredo de sessão que fica no Render. Guarda só o `usuarioId` e o `entrouEm` (o `agora` do login), e vale 8 horas contadas pelo `Relogio` da API, para o `RelogioFixo` testar a expiração; a biblioteca também vence o cookie em 8 horas no relógio do sistema ([#33](https://github.com/tapajosgustavo-collab/reservas-campus/issues/33)). Na demo, um salto de 8 horas ou mais no relógio faz todo mundo entrar de novo. Rotas `POST /api/sessao` (entrar), `GET /api/sessao` (quem sou eu) e `DELETE /api/sessao` (sair, mesmo com a sessão vencida, para apagar o cookie).
 - **O `usuarioId` vem sempre da sessão, nunca do corpo da requisição**, e toda rota checa a autorização no backend (Aula 12). O login fraco não pode virar desculpa para uma autorização fraca: a RN13 e as regras de dono continuam valendo.
 - **Antes de usar com dados reais**, é preciso trocar o login (SSO da UNIFESP ou link mágico por e-mail). A sessão por cookie continua servindo.
 

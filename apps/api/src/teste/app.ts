@@ -16,10 +16,13 @@ afterEach(async () => {
   await Promise.all(abertas.splice(0).map((app) => app.close()));
 });
 
+/** Onde o `RelogioFixo` da `umaApp` começa, se o teste não passar outro. */
+const AGORA_PADRAO = new Date('2026-11-10T08:00:00-03:00');
+
 /** `construirApp` com `RelogioFixo` (a seam da API), fechada depois de cada teste. */
 export async function umaApp(opcoes: Partial<OpcoesApp> = {}) {
   const app = await construirApp({
-    relogio: new RelogioFixo(new Date('2026-11-10T08:00:00-03:00')),
+    relogio: new RelogioFixo(AGORA_PADRAO),
     banco: bancoSemUso,
     segredoSessao: SEGREDO_DE_TESTE,
     sha: 'abc1234',
@@ -29,7 +32,8 @@ export async function umaApp(opcoes: Partial<OpcoesApp> = {}) {
   return app;
 }
 
-/** Cookie de sessão de um Usuário, sem passar pela rota de login (#33). */
-export function sessaoDe(app: App, usuarioId: number) {
-  return { sessao: app.encodeSecureSession(app.createSecureSession({ usuarioId })) };
+/** Cookie de sessão de um Usuário, sem passar pela rota de login, aberta em `entrouEm`. */
+export function sessaoDe(app: App, usuarioId: number, entrouEm = AGORA_PADRAO) {
+  const sessao = app.createSecureSession({ usuarioId, entrouEm: entrouEm.getTime() });
+  return { sessao: app.encodeSecureSession(sessao) };
 }
