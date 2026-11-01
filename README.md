@@ -65,10 +65,21 @@ O `.obsidian/`, os `*.canvas` soltos na raiz e a pasta `quadro/` ficam no `.giti
 |---|---|
 | [`CONTEXT.md`](CONTEXT.md) | Glossário do domínio. Use sempre esses termos no código, nas issues e nos PRs. |
 | [`docs/requisitos.md`](docs/requisitos.md) | Histórias de usuário, regras de negócio (`RN01`...), requisitos não funcionais e incrementos. |
+| [`docs/adr/`](docs/adr/) | O porquê das decisões de arquitetura (lista abaixo). |
+| [`docs/checklist-de-release.md`](docs/checklist-de-release.md) | O que conferir antes da tag de cada incremento. |
+| [`SECURITY.md`](SECURITY.md) | Como relatar uma vulnerabilidade. |
 | [Mapa do planejamento](https://github.com/tapajosgustavo-collab/reservas-campus/issues/1) | Issue com todas as decisões tomadas até agora e o que falta decidir. |
 | [`AGENTS.md`](AGENTS.md) e [`docs/agents/`](docs/agents/) | Configuração das skills do Claude Code (issue tracker e docs de domínio). |
 
-**Stack decidida:** TypeScript em monorepo npm (Node 24), Fastify + Zod no backend, React + Vite + Mantine no frontend, PostgreSQL 16 com Prisma, Vitest e Playwright nos testes. Detalhes no mapa.
+| ADR | Decisão |
+|---|---|
+| [0001](docs/adr/0001-nucleo-funcional-casca-imperativa.md) | Núcleo funcional e casca imperativa num monólito modular |
+| [0002](docs/adr/0002-login-sem-senha.md) | Login sem senha, risco aceito só para a demo |
+| [0003](docs/adr/0003-typescript-ponta-a-ponta.md) | TypeScript ponta a ponta num monorepo, com PostgreSQL |
+| [0004](docs/adr/0004-regras-de-tempo-com-sincronizar.md) | Regras de tempo aplicadas pelo `sincronizar` no começo de toda requisição |
+| [0005](docs/adr/0005-deploy-continuo-render-neon.md) | Deploy contínuo de uma imagem só no Render, com banco no Neon |
+
+**Stack decidida:** TypeScript em monorepo npm (Node 24), Fastify + Zod no backend, React + Vite + Mantine no frontend, PostgreSQL 16 com Prisma, Vitest e Playwright nos testes. O porquê está no [ADR 0003](docs/adr/0003-typescript-ponta-a-ponta.md).
 
 ## Preparar a máquina (uma vez)
 
@@ -142,7 +153,24 @@ Para cada ticket de implementação:
 
 **A `main` quebrou** (CI vermelho ou produção fora do ar)? Ninguém faz outro merge. Quem quebrou, ou quem viu primeiro, abre na hora um PR de revert com a label `incidente`, que tem prioridade sobre qualquer revisão. O conserto vem depois, num PR normal.
 
-**Ritmo:** um incremento por semana, terminando com a tag `v0.N` e uma release no GitHub. Uma call por semana junta a review do incremento, uma retrospectiva de 15 minutos (notas na descrição da release) e o planejamento do próximo. O fluxo completo, com a Definition of Done, está no ticket [Fluxo de Git e revisão do grupo](https://github.com/tapajosgustavo-collab/reservas-campus/issues/14).
+**Ritmo:** um incremento por semana, terminando com a tag `v0.N` e uma release no GitHub. Uma call por semana junta a review do incremento, uma retrospectiva de 15 minutos (notas na descrição da release) e o planejamento do próximo. Antes da tag, quem faz a release segue o [checklist de release](docs/checklist-de-release.md). O fluxo completo, com a Definition of Done, está no ticket [Fluxo de Git e revisão do grupo](https://github.com/tapajosgustavo-collab/reservas-campus/issues/14).
+
+### Workflows e segurança automatizada
+
+| Workflow | Quando roda | O que faz |
+|---|---|---|
+| [`ci.yml`](.github/workflows/ci.yml) | Todo PR e todo push na `main`; chamado pelo `deploy.yml` | Os jobs `lint`, `nucleo`, `api`, `e2e` e `seguranca`, em paralelo, com a matriz RN → testes no resumo |
+| [`deploy.yml`](.github/workflows/deploy.yml) | Push na `main` | CI, deploy hook do Render, espera o `/api/health` com o SHA e registra o Deployment em `producao` ([ADR 0005](docs/adr/0005-deploy-continuo-render-neon.md)) |
+| [`resetar-banco.yml`](.github/workflows/resetar-banco.yml) | Manual (*Run workflow*) | Esvazia o banco de produção e recarrega o seed |
+| [`dora.yml`](.github/workflows/dora.yml) | Toda segunda às 8h e manual | Relatório DORA no resumo da execução, sem commit |
+
+Fora dos workflows do repositório, a segurança (RNF14) tem três peças:
+
+- **CodeQL** no *default setup* do GitHub (*Settings → Code security → Code scanning*), com as linguagens JavaScript/TypeScript e Actions e o pacote de consultas `default`. Ele roda em todo PR e na `main`, fora do `ci.yml`, e o ruleset da `main` barra o merge com alerta de segurança High ou acima. Alerta médio vira ticket; falso positivo é dispensado com o motivo escrito, e o revisor confere.
+- **Dependabot** ([`.github/dependabot.yml`](.github/dependabot.yml)): alertas, correções de segurança e, toda segunda, um PR agrupado com as atualizações minor e patch do npm e outro das actions. Qualquer um dos quatro revisa.
+- **`audit-ci`** no job `seguranca` ([`audit-ci.jsonc`](audit-ci.jsonc)): falha com vulnerabilidade `high` ou `critical` conhecida, incluindo as dependências de desenvolvimento. Exceção só na `allowlist`, com motivo e validade.
+
+Segredo vazado num commit é trocado na hora: o secret scanning com push protection barra o push, mas o que já subiu deve ser tratado como público.
 
 ### Proteção da `main`, revisão e quadro
 
