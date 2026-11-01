@@ -19,7 +19,9 @@ comBanco('RNF10 · Reset do banco de demonstração', () => {
     const resultado = await resetar(banco);
 
     expect(resultado).toBe('resetado');
-    const usuarios = await banco.usuario.findMany({ where: { id: usuarioAntigo.id } });
-    expect(usuarios).toHaveLength(0);
+    // Pelo e-mail, não pelo id: o RESTART IDENTITY devolve o id 1 a um Usuário do seed.
+    const emails = (await banco.usuario.findMany({ select: { email: true } })).map((u) => u.email);
+    expect(emails).not.toContain(usuarioAntigo.email);
+    expect(emails).toContain('ana.demo@unifesp.br');
   });
 });

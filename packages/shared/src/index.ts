@@ -10,3 +10,14 @@ export {
 } from './erros';
 export { REGRAS, type IdRegra, type Regra } from './regras';
 export { esquemaMudarRelogio, esquemaRelogio, type MudarRelogio, type RelogioDemo } from './demo';
+export {
+  esquemaEntrar,
+  esquemaPerfil,
+  esquemaSessao,
+  esquemaUsuarioDemo,
+  esquemaUsuariosDemo,
+  type Entrar,
+  type Perfil,
+  type Sessao,
+  type UsuarioDemo,
+} from './sessao';
