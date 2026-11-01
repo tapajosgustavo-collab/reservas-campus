@@ -1,0 +1,45 @@
+name: Resetar banco de demonstração
+
+# Workflow manual para apagar todos os dados e recarregar o seed em produção (spec §7 e §10, #15, #30).
+# Roda sob demanda pelo GitHub Actions para preparar o ambiente antes da demonstração.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: resetar-banco
+  cancel-in-progress: false
+
+jobs:
+  resetar:
+    name: resetar
+    runs-on: ubuntu-latest
+    environment: producao
+    timeout-minutes: 10
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Aplicar migrações
+        run: npm run db:aplicar -w @reservas/api
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Resetar e semear dados de demonstração
+        run: npm run db:resetar -w @reservas/api
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

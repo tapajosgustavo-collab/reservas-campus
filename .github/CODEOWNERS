@@ -1,0 +1,32 @@
+# Quem o GitHub pede como revisor em cada PR (rodízio do §4 dos requisitos, decidido no #14).
+# O ruleset da main NÃO exige aprovação de code owner: este arquivo só pede o revisor. Sem
+# resposta em 24h, qualquer integrante aprova. O autor do PR nunca é pedido como revisor.
+#
+# Vale a ÚLTIMA linha que casa com o arquivo. Mudou a equipe ou o rodízio? Mude aqui e em
+# ferramentas/quadro/src/equipe.ts; o ferramentas/quadro/src/github.test.ts confere os dois.
+
+# Raiz e tudo o que não tem dono abaixo: os quatro.
+*                              @KaioAlexandreFernandes @tapajosgustavo-collab @rafael-figueredo @gpombotky
+
+# Pastas de módulo, na API e na tela: o revisor do responsável pelo módulo.
+# M1 Usuários e conduta (Kaio) → Gustavo
+/apps/api/src/modulos/conduta/ @tapajosgustavo-collab
+/apps/web/src/modulos/conduta/ @tapajosgustavo-collab
+# M2 Recursos e disponibilidade (Gustavo) → Rafael
+/apps/api/src/modulos/recursos/ @rafael-figueredo
+/apps/web/src/modulos/recursos/ @rafael-figueredo
+# M3 Motor de reservas (Rafael) → Guilherme
+/apps/api/src/modulos/reservas/ @gpombotky
+/apps/web/src/modulos/reservas/ @gpombotky
+# M4 Ciclo de vida (Guilherme) → Kaio
+/apps/api/src/modulos/ciclo/   @KaioAlexandreFernandes
+/apps/web/src/modulos/ciclo/   @KaioAlexandreFernandes
+
+# Dependências, configuração do GitHub e o contrato entre API e tela: os quatro.
+package.json                   @KaioAlexandreFernandes @tapajosgustavo-collab @rafael-figueredo @gpombotky
+/package-lock.json             @KaioAlexandreFernandes @tapajosgustavo-collab @rafael-figueredo @gpombotky
+/.nvmrc                        @KaioAlexandreFernandes @tapajosgustavo-collab @rafael-figueredo @gpombotky
+/.npmrc                        @KaioAlexandreFernandes @tapajosgustavo-collab @rafael-figueredo @gpombotky
+/audit-ci.jsonc                @KaioAlexandreFernandes @tapajosgustavo-collab @rafael-figueredo @gpombotky
+/.github/                      @KaioAlexandreFernandes @tapajosgustavo-collab @rafael-figueredo @gpombotky
+/packages/shared/              @KaioAlexandreFernandes @tapajosgustavo-collab @rafael-figueredo @gpombotky
