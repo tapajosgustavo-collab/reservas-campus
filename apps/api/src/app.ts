@@ -17,6 +17,7 @@ import { registrarSessao } from './comum/sessao';
 import { iniciarTique } from './comum/tique';
 import { emTransacao } from './comum/transacao';
 import { registrarSessaoDoUsuario } from './modulos/conduta';
+import { registrarRotasDeRecursos } from './modulos/recursos';
 
 export interface OpcoesApp {
   /** A única porta (ADR 0001): `relogioDoSistema` em produção, `RelogioFixo` nos testes e na demo. */
@@ -105,6 +106,7 @@ export async function construirApp({
   });
 
   registrarSessaoDoUsuario(app, demo);
+  registrarRotasDeRecursos(app);
   if (demo) registrarRelogioDaDemo(app, relogio as RelogioFixo);
 
   if (tiqueMs) {
