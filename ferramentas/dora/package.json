@@ -1,0 +1,14 @@
+{
+  "name": "@reservas/dora",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gerar": "tsx src/gerar.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15",
+    "vitest": "^5.0.5"
+  }
+}

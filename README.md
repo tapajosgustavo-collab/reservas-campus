@@ -37,7 +37,7 @@ O `npm run dev` sobe a API em <http://localhost:3000> e a tela em <http://localh
 |---|---|
 | `npm run lint` | ESLint (com as regras de arquitetura do [ADR 0001](docs/adr/0001-nucleo-funcional-casca-imperativa.md)), Prettier e `tsc` em todos os pacotes |
 | `npm run format` | Formata tudo com o Prettier |
-| `npm test` | Todas as suítes do Vitest: `nucleo`, `api`, `web`, `quadro` e `matriz` |
+| `npm test` | Todas as suítes do Vitest: `nucleo`, `api`, `web`, `quadro`, `matriz` e `dora` |
 | `npm run test:nucleo` | Só o núcleo (sem banco), com cobertura: falha abaixo de 80% de linhas ou de branches em `src/modulos/*/nucleo/` |
 | `npm run test:api` | Só a API, no Postgres real. Migra o `DATABASE_URL_TESTE` e cria uma cópia dele por worker (`reservas_teste_1`, `_2`…), esvaziada a cada teste. Sem a variável, os testes com banco são pulados (no CI, falham) |
 | `npm run test:e2e` | Playwright contra a imagem no ar (`docker compose up`), no computador e no celular |
@@ -45,8 +45,9 @@ O `npm run dev` sobe a API em <http://localhost:3000> e a tela em <http://localh
 | `npm run build` | Build da tela |
 | `npm run db:resetar` | Esvazia todas as tabelas e reaplica o seed de demonstração (local ou com `DATABASE_URL` remota) |
 | `npm run quadro` | Gera o [quadro da equipe no Obsidian](#quadro-da-equipe-no-obsidian) a partir das issues |
+| `npm run dora` | Calcula as [métricas DORA](#deploy-contínuo-e-produção) pela API do GitHub (com o `gh` logado) e mostra o relatório |
 
-**Pastas:** `apps/api` (Fastify), `apps/web` (React), `packages/shared` (schemas Zod de cada rota, o contrato entre as duas), `e2e` (Playwright), `ferramentas/quadro` (o gerador do quadro), `ferramentas/matriz` (a matriz RN → testes do CI) e `docker` (o entrypoint da imagem e o script que cria o banco de teste). A imagem é o [`Dockerfile`](Dockerfile) da raiz. Na API e na tela, o código de cada módulo fica em `src/modulos/{conduta,recursos,reservas,ciclo}/`, e os outros módulos só importam o `index.ts` dele.
+**Pastas:** `apps/api` (Fastify), `apps/web` (React), `packages/shared` (schemas Zod de cada rota, o contrato entre as duas), `e2e` (Playwright), `ferramentas/quadro` (o gerador do quadro), `ferramentas/matriz` (a matriz RN → testes do CI), `ferramentas/dora` (o relatório DORA) e `docker` (o entrypoint da imagem e o script que cria o banco de teste). A imagem é o [`Dockerfile`](Dockerfile) da raiz. Na API e na tela, o código de cada módulo fica em `src/modulos/{conduta,recursos,reservas,ciclo}/`, e os outros módulos só importam o `index.ts` dele.
 
 ### Quadro da equipe no Obsidian
 
@@ -137,6 +138,7 @@ Para cada ticket de implementação:
 - **Pipeline (`.github/workflows/deploy.yml`):** a cada merge na `main`, executa o CI (`ci.yml`), dispara o webhook do Render via secret `RENDER_DEPLOY_HOOK_URL`, aguarda o `GET /api/health` responder com o SHA do commit (com tempo limite de 15 min) e registra o status do GitHub Deployment no ambiente `producao`.
 - **Reset do banco de demonstração (`.github/workflows/resetar-banco.yml`):** workflow manual no GitHub Actions (`workflow_dispatch`) que esvazia as tabelas e recarrega o seed no banco de produção (`DATABASE_URL`).
 - **Produção sem `DEMO=1`:** em produção, o relógio é o real do sistema e as rotas `/api/demo/relogio` retornam 404.
+- **Métricas DORA (`.github/workflows/dora.yml`):** toda segunda às 8h e também manual (*Run workflow*), o `npm run dora` lê os Deployments de `producao` e os PRs mergeados e escreve no resumo da execução a frequência de deploy, o lead time de mudança, a taxa de falha de mudança e o tempo de restauração, com uma linha por semana. Não commita nada; a série fica no histórico de execuções. Um deploy conta como falha quando reprova no health check ou quando depois dele vem um PR de reversão ou com a label `incidente`; por isso o revert de produção sempre leva a label. O cálculo fica em [`ferramentas/dora/src/dora.ts`](ferramentas/dora/src/dora.ts).
 
 **A `main` quebrou** (CI vermelho ou produção fora do ar)? Ninguém faz outro merge. Quem quebrou, ou quem viu primeiro, abre na hora um PR de revert com a label `incidente`, que tem prioridade sobre qualquer revisão. O conserto vem depois, num PR normal.
 

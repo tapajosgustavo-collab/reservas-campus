@@ -70,7 +70,7 @@ jobs:
 
       # Os outros testes sem banco: funções puras da tela e as ferramentas do repositório.
       - name: Testes da tela e das ferramentas
-        run: npx vitest run --project web --project quadro --project matriz --passWithNoTests
+        run: npx vitest run --project web --project quadro --project matriz --project dora --passWithNoTests
 
       - name: Matriz RN → testes no resumo
         if: ${{ !cancelled() }}

@@ -22,6 +22,7 @@
     "matriz": "npm run gerar -w @reservas/matriz --",
     "build": "npm run build -w @reservas/web",
     "quadro": "npm run gerar -w @reservas/quadro",
+    "dora": "npm run gerar -w @reservas/dora",
     "seguranca": "audit-ci --config ./audit-ci.jsonc",
     "db:resetar": "npm run db:resetar -w @reservas/api"
   },

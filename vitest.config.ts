@@ -61,6 +61,13 @@ export default defineConfig({
           include: ['src/**/*.test.ts'],
         },
       },
+      {
+        test: {
+          name: 'dora',
+          root: './ferramentas/dora',
+          include: ['src/**/*.test.ts'],
+        },
+      },
     ],
     // A cobertura só mede (e só bloqueia) o núcleo (RNF01). Ela só é calculada com --coverage,
     // que o `npm run test:nucleo` passa.

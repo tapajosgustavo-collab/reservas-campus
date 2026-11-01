@@ -1,0 +1,41 @@
+name: DORA
+
+# Relatório semanal das métricas DORA (spec §7, tickets #15 e #31). Lê os Deployments de
+# producao e os PRs pela API do GitHub e escreve no resumo da execução. Não commita nada: a
+# série semanal fica no histórico de execuções deste workflow.
+
+on:
+  schedule:
+    # Toda segunda às 8h de Brasília (11h UTC).
+    - cron: '0 11 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: read
+  pull-requests: read
+
+jobs:
+  relatorio:
+    name: relatorio
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Métricas DORA no resumo
+        run: npm run dora
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
