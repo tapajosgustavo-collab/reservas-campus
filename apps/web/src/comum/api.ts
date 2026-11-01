@@ -27,9 +27,9 @@ export async function buscarJson<T>(caminho: string, esquema: z.ZodType<T>): Pro
   return esquema.parse(await resposta.json());
 }
 
-/** `POST` ou `DELETE` com corpo JSON. Sem `esquema`, a resposta é ignorada (204). */
+/** `POST`, `PATCH` ou `DELETE` com corpo JSON. Sem `esquema`, a resposta é ignorada (204). */
 export async function enviarJson<T = void>(
-  metodo: 'POST' | 'DELETE',
+  metodo: 'POST' | 'PATCH' | 'DELETE',
   caminho: string,
   corpo?: unknown,
   esquema?: z.ZodType<T>,

@@ -30,6 +30,12 @@ export function regraViolada(violacoes: Violacao[]) {
   );
 }
 
+/** 403 de uma regra de dono (RN13, RN14…), com a mensagem citando a RN (ADR 0001). */
+export function proibidoPelaRegra(violacoes: Violacao[]) {
+  const mensagem = violacoes.map(({ rn, nome, mensagem }) => `${rn} · ${nome}: ${mensagem}`);
+  return new ErroApi('proibido', mensagem.join(' '), violacoes);
+}
+
 function envelope(erro: ErroApi): RespostaErro {
   return { erro: { codigo: erro.codigo, mensagem: erro.message, violacoes: erro.violacoes } };
 }
