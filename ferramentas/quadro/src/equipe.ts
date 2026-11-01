@@ -1,5 +1,6 @@
 // Quem é responsável por cada módulo e quem revisa os PRs dele (rodízio do §4 dos requisitos).
-// Mudou a equipe ou o rodízio? Mude só aqui e rode `npm run quadro` de novo.
+// Mudou a equipe ou o rodízio? Mude aqui e no .github/CODEOWNERS (o github.test.ts confere
+// que os dois combinam) e rode `npm run quadro` de novo.
 
 export const REPO = 'tapajosgustavo-collab/reservas-campus';
 

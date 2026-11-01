@@ -117,7 +117,7 @@ Quando o mapa não tiver mais tickets abertos:
 
 Para cada ticket de implementação:
 
-1. Atribua o ticket a você no GitHub e mova o card para "Em andamento" no quadro. **No máximo 1 ticket em andamento por pessoa.**
+1. Atribua o ticket a você no GitHub e mova o card para "Em andamento" no [quadro do Projects](https://github.com/users/KaioAlexandreFernandes/projects/1). **No máximo 1 ticket em andamento por pessoa.**
 2. Atualize a `main` e crie uma branch para ele no repositório principal (não use fork):
    ```bash
    git switch main
@@ -133,6 +133,32 @@ Para cada ticket de implementação:
 **A `main` quebrou** (CI vermelho ou produção fora do ar)? Ninguém faz outro merge. Quem quebrou, ou quem viu primeiro, abre na hora um PR de revert com a label `incidente`, que tem prioridade sobre qualquer revisão. O conserto vem depois, num PR normal.
 
 **Ritmo:** um incremento por semana, terminando com a tag `v0.N` e uma release no GitHub. Uma call por semana junta a review do incremento, uma retrospectiva de 15 minutos (notas na descrição da release) e o planejamento do próximo. O fluxo completo, com a Definition of Done, está no ticket [Fluxo de Git e revisão do grupo](https://github.com/tapajosgustavo-collab/reservas-campus/issues/14).
+
+### Proteção da `main`, revisão e quadro
+
+Nada vai direto na `main`, nem do admin. O ruleset [`.github/rulesets/protecao-da-main.json`](.github/rulesets/protecao-da-main.json) exige:
+
+- PR com 1 aprovação, merge só por squash, sem push forçado e sem apagar a `main`;
+- os checks `lint`, `nucleo`, `api`, `e2e` e `seguranca` verdes (os nomes dos jobs do [`ci.yml`](.github/workflows/ci.yml));
+- o CodeQL sem alerta de segurança High ou acima (RNF14). O CodeQL roda no *default setup*, com JavaScript/TypeScript e Actions;
+- ninguém na lista de bypass. A aprovação de code owner **não** é exigida: sem resposta do revisor em 24h, qualquer integrante aprova.
+
+Só o dono do repositório muda o ruleset. Mude primeiro o JSON num PR e, depois do merge, aplique com `gh api --method PUT repos/tapajosgustavo-collab/reservas-campus/rulesets/<id> --input .github/rulesets/protecao-da-main.json` (o `<id>` sai de `gh api repos/tapajosgustavo-collab/reservas-campus/rulesets`). Na primeira vez, é `--method POST .../rulesets`.
+
+O revisor do rodízio é pedido sozinho pelo [`CODEOWNERS`](.github/CODEOWNERS): quem revisa cada pasta de módulo, na API e na tela, e os quatro no resto. O PR já abre com o [template](.github/pull_request_template.md) (`Closes #n`, o que mudou, como testar, checklist da Aula 4 e Definition of Done), e bug se relata pelo [template de bug](.github/ISSUE_TEMPLATE/bug.yml) (passos, esperado, obtido).
+
+O rodízio fica em dois lugares, o `CODEOWNERS` e o [`equipe.ts`](ferramentas/quadro/src/equipe.ts), e o teste [`github.test.ts`](ferramentas/quadro/src/github.test.ts) confere que os dois combinam. Ele também confere que o ruleset exige exatamente os jobs do `ci.yml`: renomear um job sem mudar o ruleset travaria todo merge.
+
+O [quadro do Projects](https://github.com/users/KaioAlexandreFernandes/projects/1) tem as colunas Backlog (bloqueado por outro ticket) → Pronto (pode puxar) → Em andamento → Em revisão (PR aberto) → Feito e o campo **Incremento**. Cada um tem **no máximo 1 card em "Em andamento"** (a coluna avisa acima de 4, um por pessoa). As automações do quadro fazem o resto:
+
+| Quando | O card vai para |
+|---|---|
+| Entra no quadro | Backlog |
+| Um PR com `Closes #n` é ligado à issue | Em revisão |
+| A issue fecha ou o PR entra na `main` | Feito (e mover para Feito fecha a issue) |
+| A issue é reaberta | Pronto |
+
+O quadro fica na conta do Kaio, com os quatro como admins, porque o GitHub só liga à aba Projects do repositório um quadro do mesmo dono. Pelo mesmo motivo, a automação "Auto-add" não enxerga o repositório: bug aberto pelo template já entra sozinho no quadro, e o ticket novo do `/to-tickets` entra pelo passo descrito em [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md). Issue criada de outro jeito: na barra lateral da issue, em **Projects**, escolha "Reservas do Campus" e preencha o Incremento.
 
 ### Sem IA: o mesmo processo à mão
 
