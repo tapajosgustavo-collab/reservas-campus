@@ -139,6 +139,19 @@ comBanco('US01 · Entrar no sistema', () => {
     expect(resposta.statusCode).toBe(status);
   });
 
+  it('o relógio voltou para antes do login (demo reiniciada) → a sessão antiga não vale', async () => {
+    const relogio = new RelogioFixo(new Date('2026-11-10T10:00:00-03:00'));
+    const app = await umaApp({ banco, relogio });
+    await umUsuario(banco, 'Aluno', { email: 'ana.demo@unifesp.br' });
+    const cookies = await entrar(app, 'ana.demo@unifesp.br');
+
+    relogio.ir(new Date('2026-11-10T08:00:00-03:00'));
+    const resposta = await app.inject({ method: 'GET', url: '/api/sessao', cookies });
+
+    expect(resposta.statusCode).toBe(401);
+    expect(resposta.json().erro.codigo).toBe('nao_autenticado');
+  });
+
   it('o cookie também expira em 8h no navegador', async () => {
     const app = await umaApp({ banco });
     await umUsuario(banco, 'Aluno', { email: 'ana.demo@unifesp.br' });

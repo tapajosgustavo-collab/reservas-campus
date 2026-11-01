@@ -4,7 +4,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ErroApi } from '../../../comum/erros';
 import { paraIsoSaoPaulo } from '../../../comum/instante';
-import { exigirSessao, iniciarSessao } from '../../../comum/sessao';
+import { exigirUsuarioDaSessao, iniciarSessao } from '../../../comum/sessao';
 import { decidirEntrada, normalizarEmail } from '../nucleo/entrar';
 
 const COLUNAS_DO_USUARIO = { id: true, nome: true, email: true, perfil: true } as const;
@@ -63,11 +63,7 @@ export function registrarSessaoDoUsuario(app: FastifyInstance, demo: boolean) {
       },
     },
     async (request) => {
-      const { id } = await exigirSessao(request);
-      const usuario = await request.tx.usuario.findUniqueOrThrow({
-        where: { id },
-        select: COLUNAS_DO_USUARIO,
-      });
+      const usuario = await exigirUsuarioDaSessao(request);
       return { usuario, agora: paraIsoSaoPaulo(request.agora), demo };
     },
   );

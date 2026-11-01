@@ -17,6 +17,12 @@ export interface Quem {
   perfil: Perfil;
 }
 
+/** O `quem` com nome e e-mail, para o `GET /api/sessao` não consultar o Usuário de novo. */
+export interface UsuarioDaSessao extends Quem {
+  nome: string;
+  email: string;
+}
+
 export const NOME_DO_COOKIE = 'sessao';
 
 // O sal não é segredo: só o segredo de sessão precisa ficar fora do repositório.
@@ -52,19 +58,31 @@ export function iniciarSessao(request: FastifyRequest, usuarioId: number) {
   request.session.set('entrouEm', request.agora.getTime());
 }
 
+/**
+ * Vence em 8h e também quando o login ficou no futuro: reiniciar a demo às 08:00 sem fechar o
+ * navegador (#18) volta o relógio para antes do `entrouEm`, e essa sessão não vale mais.
+ */
 function venceu(entrouEm: number | undefined, agora: Date) {
-  return entrouEm === undefined || agora.getTime() - entrouEm >= DURACAO_EM_SEGUNDOS * 1000;
+  if (entrouEm === undefined) return true;
+  const decorrido = agora.getTime() - entrouEm;
+  return decorrido < 0 || decorrido >= DURACAO_EM_SEGUNDOS * 1000;
 }
 
 /** 401 sem sessão válida. O `quem` vem sempre da sessão, nunca do corpo (ADR 0002). */
 export async function exigirSessao(request: FastifyRequest): Promise<Quem> {
+  const { id, perfil } = await exigirUsuarioDaSessao(request);
+  return { id, perfil };
+}
+
+/** Como o `exigirSessao`, com nome e e-mail na mesma consulta (para o `GET /api/sessao`). */
+export async function exigirUsuarioDaSessao(request: FastifyRequest): Promise<UsuarioDaSessao> {
   const usuarioId = request.session.get('usuarioId');
   const usuario =
     usuarioId === undefined || venceu(request.session.get('entrouEm'), request.agora)
       ? null
       : await request.tx.usuario.findUnique({
           where: { id: usuarioId },
-          select: { id: true, perfil: true },
+          select: { id: true, nome: true, email: true, perfil: true },
         });
   if (!usuario) throw new ErroApi('nao_autenticado', 'Entre no sistema para continuar.');
   return usuario;

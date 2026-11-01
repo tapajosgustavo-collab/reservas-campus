@@ -63,7 +63,12 @@ export function Layout() {
               <Text size="sm" visibleFrom="sm">
                 {usuario.nome} ({usuario.perfil})
               </Text>
-              <Button variant="default" size="xs" onClick={() => sair.mutate()}>
+              <Button
+                variant="default"
+                size="xs"
+                loading={sair.isPending}
+                onClick={() => sair.mutate()}
+              >
                 Sair
               </Button>
             </Group>
@@ -87,6 +92,11 @@ export function Layout() {
       )}
 
       <AppShell.Main>
+        {sair.isError && usuario && (
+          <Alert color="red" role="alert" title="Não foi possível sair" mb="md">
+            {sair.error.message} A sessão continua aberta: tente sair de novo.
+          </Alert>
+        )}
         {sessao.isPending ? (
           <Center>
             <Loader aria-label="Carregando" />
