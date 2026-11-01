@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 20
     environment:
       name: producao
-      url: ${{ vars.APP_URL || secrets.APP_URL }}
+      url: ${{ vars.APP_URL }}
     permissions:
       contents: read
       deployments: write
@@ -52,7 +52,7 @@ jobs:
             -f environment=producao \
             -f description="Deploy contínuo no Render" \
             -F auto_merge=false \
-            -F required_contexts='[]' \
+            -F 'required_contexts[]' \
             --jq .id)
           echo "id=$DEPLOYMENT_ID" >> "$GITHUB_OUTPUT"
 
@@ -63,7 +63,7 @@ jobs:
             -f description="Deploy disparado no Render"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APP_URL: ${{ vars.APP_URL || secrets.APP_URL }}
+          APP_URL: ${{ vars.APP_URL }}
 
       - name: Disparar deploy hook no Render
         run: |
@@ -78,7 +78,7 @@ jobs:
       - name: Aguardar versão nova responder no health
         run: node .github/scripts/esperar-deploy.js
         env:
-          APP_URL: ${{ vars.APP_URL || secrets.APP_URL }}
+          APP_URL: ${{ vars.APP_URL }}
           EXPECTED_SHA: ${{ github.sha }}
           TIMEOUT_MINUTOS: 15
 
@@ -92,7 +92,7 @@ jobs:
             -f description="Publicado com sucesso"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APP_URL: ${{ vars.APP_URL || secrets.APP_URL }}
+          APP_URL: ${{ vars.APP_URL }}
 
       - name: Registrar falha no GitHub Deployment
         if: failure() && steps.deployment.outputs.id != ''
@@ -104,4 +104,4 @@ jobs:
             -f description="Falha no deploy ou no health check"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APP_URL: ${{ vars.APP_URL || secrets.APP_URL }}
+          APP_URL: ${{ vars.APP_URL }}
