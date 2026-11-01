@@ -80,6 +80,29 @@ describe('paraDeploy', () => {
     expect(paraDeploy(automatico)).toBeNull();
   });
 
+  it('o par de Deployments de uma execução do deploy.yml conta como um deploy só', () => {
+    const doWorkflow = umDeployment([
+      ['SUCCESS', '2026-11-02T12:08:00Z'],
+      ['IN_PROGRESS', '2026-11-02T12:00:00Z'],
+    ]);
+    const automatico = {
+      ...umDeployment([
+        ['SUCCESS', '2026-11-02T12:08:01Z'],
+        ['IN_PROGRESS', '2026-11-02T12:00:00Z'],
+      ]),
+      databaseId: 2,
+      description: null,
+    };
+    const deploys = [automatico, doWorkflow].map(paraDeploy).filter((deploy) => deploy !== null);
+    const dora = calcularDora({
+      deploys,
+      prs: [],
+      commitsDaMain: ['abc'],
+      agora: '2026-11-02T13:00:00Z',
+    });
+    expect(dora.total).toMatchObject({ deploys: 1, sucessos: 1 });
+  });
+
   it('ainda em andamento (ou sem status) não entra nas métricas', () => {
     expect(paraDeploy(umDeployment([['IN_PROGRESS', '2026-11-02T12:00:00Z']]))).toBeNull();
     expect(paraDeploy(umDeployment([]))).toBeNull();
