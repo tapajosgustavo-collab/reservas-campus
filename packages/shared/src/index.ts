@@ -8,7 +8,7 @@ export {
   type RespostaErro,
   type Violacao,
 } from './erros';
-export { REGRAS, type IdRegra, type Regra } from './regras';
+export { REGRAS, violacao, type IdRegra, type Regra } from './regras';
 export { esquemaMudarRelogio, esquemaRelogio, type MudarRelogio, type RelogioDemo } from './demo';
 export {
   esquemaEntrar,
@@ -21,3 +21,21 @@ export {
   type Sessao,
   type UsuarioDemo,
 } from './sessao';
+export {
+  esquemaBuscarRecursos,
+  esquemaCadastrarRecurso,
+  esquemaEditarRecurso,
+  esquemaHorario,
+  esquemaHorarios,
+  esquemaIdDoRecurso,
+  esquemaRecurso,
+  esquemaRecursos,
+  esquemaResumoDoRecurso,
+  esquemaTipoRecurso,
+  type CadastrarRecurso,
+  type EditarRecurso,
+  type Horario,
+  type Recurso,
+  type ResumoDoRecurso,
+  type TipoRecurso,
+} from './recursos';

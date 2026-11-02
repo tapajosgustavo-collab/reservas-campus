@@ -11,14 +11,16 @@ import {
   Title,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
+import type { Perfil } from '@reservas/shared';
 import { Link, Outlet, useLocation } from 'react-router';
 import { Entrar, useSair, useSessao } from '../modulos/conduta';
 import { Versao } from './Versao';
 
-// Uma entrada por módulo (M1 a M4), na ordem do docs/requisitos.md §4.
-const MENU = [
+// Uma entrada por módulo (M1 a M4), na ordem do docs/requisitos.md §4. Com `perfis`, só eles veem.
+const MENU: { para: string; rotulo: string; perfis?: Perfil[] }[] = [
   { para: '/conduta', rotulo: 'Minha conduta' },
   { para: '/recursos', rotulo: 'Recursos' },
+  { para: '/gestao/recursos', rotulo: 'Meus recursos', perfis: ['Gestor'] },
   { para: '/reservas', rotulo: 'Minhas reservas' },
   { para: '/gestao/pedidos', rotulo: 'Pedidos' },
 ];
@@ -78,16 +80,18 @@ export function Layout() {
 
       {usuario && (
         <AppShell.Navbar p="xs" component="nav" aria-label="Menu principal">
-          {MENU.map(({ para, rotulo }) => (
-            <NavLink
-              key={para}
-              component={Link}
-              to={para}
-              label={rotulo}
-              active={pathname === para || pathname.startsWith(`${para}/`)}
-              onClick={close}
-            />
-          ))}
+          {MENU.filter(({ perfis }) => !perfis || perfis.includes(usuario.perfil)).map(
+            ({ para, rotulo }) => (
+              <NavLink
+                key={para}
+                component={Link}
+                to={para}
+                label={rotulo}
+                active={pathname === para || pathname.startsWith(`${para}/`)}
+                onClick={close}
+              />
+            ),
+          )}
         </AppShell.Navbar>
       )}
 
