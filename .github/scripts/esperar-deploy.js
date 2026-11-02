@@ -1,12 +1,45 @@
 #!/usr/bin/env node
 // Polling do GET /api/health para aguardar a publicação da versão no Render (spec §7, #30).
 
+/**
+ * O deploy hook do Render publica a ponta da `main` no momento do build, não o commit da
+ * execução. Com merges seguidos, o que entra no ar pode ser um commit mais novo que já contém o
+ * esperado (#89). Pergunta isso ao GitHub: `compare/{esperado}...{noAr}` com status `ahead` ou
+ * `identical`. Uma resposta por SHA no ar; erro da API conta como "não contém".
+ */
+export function contemCommitNoGitHub({ repositorio, token, fetchFn = fetch }) {
+  const respostas = new Map();
+  return async (esperado, noAr) => {
+    if (!respostas.has(noAr)) {
+      respostas.set(
+        noAr,
+        (async () => {
+          const resposta = await fetchFn(
+            `https://api.github.com/repos/${repositorio}/compare/${esperado}...${noAr}`,
+            {
+              headers: {
+                Accept: 'application/vnd.github+json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+            },
+          );
+          if (!resposta.ok) return false;
+          const { status } = await resposta.json();
+          return status === 'ahead' || status === 'identical';
+        })().catch(() => false),
+      );
+    }
+    return respostas.get(noAr);
+  };
+}
+
 export async function esperarDeploy({
   appUrl,
   expectedSha,
   timeoutMs = 15 * 60 * 1000,
   intervaloMs = 15 * 1000,
   fetchFn = fetch,
+  contemCommit,
   log = console.log,
 } = {}) {
   if (!appUrl) {
@@ -44,6 +77,11 @@ export async function esperarDeploy({
           log(`Deploy concluído com sucesso com o SHA ${dados.sha}!`);
           return dados;
         }
+
+        if (dados.status === 'ok' && dados.sha && (await contemCommit?.(expectedSha, dados.sha))) {
+          log(`No ar está o ${dados.sha}, mais novo e que já contém o ${expectedSha}: concluído.`);
+          return dados;
+        }
       } else {
         log(`Health respondeu com status HTTP ${resposta.status}`);
       }
@@ -64,6 +102,12 @@ if (process.argv[1]?.replace(/\\/g, '/').endsWith('.github/scripts/esperar-deplo
       appUrl: process.env.APP_URL,
       expectedSha: process.env.EXPECTED_SHA,
       timeoutMs: Number(process.env.TIMEOUT_MINUTOS ?? 15) * 60 * 1000,
+      contemCommit: process.env.GITHUB_REPOSITORY
+        ? contemCommitNoGitHub({
+            repositorio: process.env.GITHUB_REPOSITORY,
+            token: process.env.GITHUB_TOKEN,
+          })
+        : undefined,
     });
     process.exit(0);
   } catch (erro) {
