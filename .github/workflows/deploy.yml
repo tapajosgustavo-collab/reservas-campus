@@ -79,6 +79,8 @@ jobs:
         run: node .github/scripts/esperar-deploy.js
         env:
           APP_URL: ${{ vars.APP_URL }}
+          # Para o compare do GitHub: aceitar um SHA mais novo que já contém este (#89).
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EXPECTED_SHA: ${{ github.sha }}
           TIMEOUT_MINUTOS: 15
 
