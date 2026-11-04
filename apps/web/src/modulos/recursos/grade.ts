@@ -1,0 +1,89 @@
+import { TZDate } from '@date-fns/tz';
+import type { Horario, Ocupacao } from '@reservas/shared';
+import { addDays, addWeeks, format, parseISO } from 'date-fns';
+
+const FUSO = 'America/Sao_Paulo';
+const MEIA_HORA = 30;
+
+/** Um dia da semana em que o Recurso abre, com a faixa do Horário de funcionamento. */
+export interface DiaDaGrade extends Horario {
+  /** `YYYY-MM-DD`. */
+  data: string;
+}
+
+/** O Intervalo que a pessoa escolheu na grade, em minutos desde 0h do dia em São Paulo. */
+export interface IntervaloEscolhido {
+  data: string;
+  inicio: number;
+  fim: number;
+}
+
+export type EstadoDaCelula =
+  'livre' | 'ocupado' | 'minha-confirmada' | 'minha-pendente' | 'fechado' | 'passado';
+
+/** Segunda `YYYY-MM-DD` mais (ou menos) `semanas` semanas. Só calendário, sem fuso. */
+export function semanaVizinha(semana: string, semanas: number): string {
+  return format(addWeeks(parseISO(semana), semanas), 'yyyy-MM-dd');
+}
+
+/** Os dias da semana que começa na `semana` (segunda) em que o Recurso abre, de segunda a domingo. */
+export function diasDaGrade(semana: string, horarios: Horario[]): DiaDaGrade[] {
+  const segunda = parseISO(semana);
+  return [0, 1, 2, 3, 4, 5, 6].flatMap((deslocamento) => {
+    const dia = addDays(segunda, deslocamento);
+    const faixa = horarios.find(({ diaSemana }) => diaSemana === dia.getDay());
+    return faixa ? [{ ...faixa, data: format(dia, 'yyyy-MM-dd') }] : [];
+  });
+}
+
+/** Linhas da grade: de meia em meia hora, da primeira abertura ao último fechamento da semana. */
+export function linhasDaGrade(dias: DiaDaGrade[]): number[] {
+  if (dias.length === 0) return [];
+  const primeira = Math.min(...dias.map(({ abre }) => abre));
+  const ultima = Math.max(...dias.map(({ fecha }) => fecha));
+  const linhas = [];
+  for (let minuto = primeira; minuto < ultima; minuto += MEIA_HORA) linhas.push(minuto);
+  return linhas;
+}
+
+/** O instante de `minuto` do dia `data` em São Paulo (1440 = 0h do dia seguinte). */
+function instanteDe(data: string, minuto: number): number {
+  const [ano, mes, dia] = data.split('-').map(Number);
+  return new TZDate(ano!, mes! - 1, dia!, 0, minuto, FUSO).getTime();
+}
+
+/**
+ * O que a célula de meia hora mostra. A Reserva aparece mesmo no passado; o resto do que já
+ * começou é Passado, pelo `agora` da API. Sem pré-bloqueio por Política: quem explica é a RN.
+ */
+export function estadoDaCelula(
+  dia: DiaDaGrade,
+  minuto: number,
+  ocupacoes: Ocupacao[],
+  agora: Date,
+): EstadoDaCelula {
+  if (minuto < dia.abre || minuto + MEIA_HORA > dia.fecha) return 'fechado';
+  const inicio = instanteDe(dia.data, minuto);
+  const fim = instanteDe(dia.data, minuto + MEIA_HORA);
+  const ocupacao = ocupacoes.find((o) => Date.parse(o.inicio) < fim && Date.parse(o.fim) > inicio);
+  if (ocupacao?.minha)
+    return ocupacao.status === 'Pendente' ? 'minha-pendente' : 'minha-confirmada';
+  if (ocupacao) return 'ocupado';
+  return inicio < agora.getTime() ? 'passado' : 'livre';
+}
+
+/** Clique num horário livre: 1h, ou 30 min se a meia hora seguinte não estiver livre. */
+export function intervaloDoClique(
+  dia: DiaDaGrade,
+  minuto: number,
+  ocupacoes: Ocupacao[],
+  agora: Date,
+): IntervaloEscolhido {
+  const seguinteLivre = estadoDaCelula(dia, minuto + MEIA_HORA, ocupacoes, agora) === 'livre';
+  return { data: dia.data, inicio: minuto, fim: minuto + (seguinteLivre ? 2 : 1) * MEIA_HORA };
+}
+
+/** Arrastar de uma célula a outra do mesmo dia: o Intervalo cobre as duas, em qualquer direção. */
+export function intervaloDoArraste(dia: DiaDaGrade, de: number, ate: number): IntervaloEscolhido {
+  return { data: dia.data, inicio: Math.min(de, ate), fim: Math.max(de, ate) + MEIA_HORA };
+}

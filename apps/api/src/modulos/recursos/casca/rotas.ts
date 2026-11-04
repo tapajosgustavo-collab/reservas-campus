@@ -1,4 +1,6 @@
 import {
+  esquemaAgenda,
+  esquemaBuscarAgenda,
   esquemaBuscarRecursos,
   esquemaCadastrarRecurso,
   esquemaEditarRecurso,
@@ -9,7 +11,9 @@ import {
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { ErroApi, proibidoPelaRegra } from '../../../comum/erros';
+import { limitesDaSemana, paraIsoSaoPaulo, segundaDaSemana } from '../../../comum/instante';
 import { exigirPerfil, exigirSessao } from '../../../comum/sessao';
+import { agendaPara } from '../nucleo/agenda';
 import { decidirCadastro, decidirEdicao, type Efeito } from '../nucleo/recurso';
 import { executar } from './efeitos';
 
@@ -54,7 +58,7 @@ async function aplicar(request: FastifyRequest, efeitos: Efeito[]) {
   return recursoId;
 }
 
-/** Rotas do M2 do incremento 1: cadastrar, editar, ver e "Meus recursos" (US04). */
+/** Rotas do M2 do incremento 1: cadastrar, editar, ver e "Meus recursos" (US04), e a agenda (US07). */
 export function registrarRotasDeRecursos(app: FastifyInstance) {
   const rotas = app.withTypeProvider<ZodTypeProvider>();
 
@@ -154,6 +158,52 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
         select: COLUNAS_DO_RESUMO,
         orderBy: [{ nome: 'asc' }, { id: 'asc' }],
       });
+    },
+  );
+  rotas.get(
+    '/api/recursos/:id/agenda',
+    {
+      schema: {
+        summary: 'Agenda da semana do Recurso; de quem não é o dono, só o Intervalo (RN22)',
+        tags: ['recursos'],
+        params: esquemaIdDoRecurso,
+        querystring: esquemaBuscarAgenda,
+        response: { 200: esquemaAgenda },
+      },
+    },
+    async (request) => {
+      const quem = await exigirSessao(request);
+      const recurso = await buscarRecurso(request, request.params.id);
+      const semana = request.query.semana ?? segundaDaSemana(request.agora);
+      const { inicio, fim } = limitesDaSemana(semana);
+      // Todas as Reservas que tocam a semana: quem escolhe as ativas é o núcleo.
+      const reservas = await request.tx.reserva.findMany({
+        where: { recursoId: recurso.id, inicio: { lt: fim }, fim: { gt: inicio } },
+        select: { id: true, usuarioId: true, inicio: true, fim: true, status: true },
+        orderBy: [{ inicio: 'asc' }, { id: 'asc' }],
+      });
+      const agenda = agendaPara(quem, {
+        agora: request.agora,
+        recurso,
+        // A Indisponibilidade entra na agenda com o #45; até lá, nenhuma.
+        indisponibilidades: [],
+        reservas,
+      });
+      return {
+        ...agenda,
+        agora: paraIsoSaoPaulo(agenda.agora),
+        semana,
+        indisponibilidades: agenda.indisponibilidades.map((indisponibilidade) => ({
+          ...indisponibilidade,
+          inicio: paraIsoSaoPaulo(indisponibilidade.inicio),
+          fim: indisponibilidade.fim && paraIsoSaoPaulo(indisponibilidade.fim),
+        })),
+        ocupacoes: agenda.ocupacoes.map((ocupacao) => ({
+          ...ocupacao,
+          inicio: paraIsoSaoPaulo(ocupacao.inicio),
+          fim: paraIsoSaoPaulo(ocupacao.fim),
+        })),
+      };
     },
   );
 }

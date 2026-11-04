@@ -1,4 +1,5 @@
 import {
+  esquemaAgenda,
   esquemaRecurso,
   esquemaRecursos,
   type CadastrarRecurso,
@@ -21,6 +22,20 @@ export function useRecurso(id: number) {
   return useQuery({
     queryKey: [CHAVE, id],
     queryFn: () => buscarJson(`/api/recursos/${id}`, esquemaRecurso),
+  });
+}
+
+/** A agenda da semana que começa na `semana` (segunda); sem ela, a semana do agora da API. */
+export function useAgenda(id: number, semana: string | null) {
+  return useQuery({
+    queryKey: [CHAVE, id, 'agenda', semana],
+    queryFn: () =>
+      buscarJson(
+        `/api/recursos/${id}/agenda${semana ? `?semana=${encodeURIComponent(semana)}` : ''}`,
+        esquemaAgenda,
+      ),
+    // Ao trocar de semana, a grade anterior fica na tela até a nova chegar; de outro Recurso, não.
+    placeholderData: (anterior) => (anterior?.recurso.id === id ? anterior : undefined),
   });
 }
 

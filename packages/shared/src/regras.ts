@@ -13,6 +13,7 @@ export interface Regra {
  */
 export const REGRAS = {
   RN13: { nome: 'Gestor do Recurso' },
+  RN22: { nome: 'Agenda sem nomes' },
 } as const satisfies Record<`RN${number}`, Regra>;
 
 export type IdRegra = keyof typeof REGRAS;

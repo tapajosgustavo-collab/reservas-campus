@@ -62,9 +62,14 @@ export function MeusRecursos() {
                       : `Patrimônio ${recurso.patrimonio}`}
                   </Table.Td>
                   <Table.Td>
-                    <Anchor component={Link} to={`/gestao/recursos/${recurso.id}/editar`}>
-                      Editar<VisuallyHidden> {recurso.nome}</VisuallyHidden>
-                    </Anchor>
+                    <Group gap="sm" wrap="nowrap">
+                      <Anchor component={Link} to={`/recursos/${recurso.id}/agenda`}>
+                        Agenda<VisuallyHidden> de {recurso.nome}</VisuallyHidden>
+                      </Anchor>
+                      <Anchor component={Link} to={`/gestao/recursos/${recurso.id}/editar`}>
+                        Editar<VisuallyHidden> {recurso.nome}</VisuallyHidden>
+                      </Anchor>
+                    </Group>
                   </Table.Td>
                 </Table.Tr>
               ))}
