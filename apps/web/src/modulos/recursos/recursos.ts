@@ -18,6 +18,16 @@ export function useMeusRecursos() {
   });
 }
 
+/** US06: a busca com a query já montada por `consultaDaBusca`. */
+export function useBuscarRecursos(consulta: string) {
+  return useQuery({
+    queryKey: [CHAVE, 'busca', consulta],
+    queryFn: () => buscarJson(`/api/recursos${consulta && `?${consulta}`}`, esquemaRecursos),
+    // Ao refinar a busca, o resultado anterior fica na tela até o novo chegar.
+    placeholderData: (anterior) => anterior,
+  });
+}
+
 export function useRecurso(id: number) {
   return useQuery({
     queryKey: [CHAVE, id],

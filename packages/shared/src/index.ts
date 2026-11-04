@@ -32,6 +32,7 @@ export {
   esquemaRecursos,
   esquemaResumoDoRecurso,
   esquemaTipoRecurso,
+  type BuscarRecursos,
   type CadastrarRecurso,
   type EditarRecurso,
   type Horario,

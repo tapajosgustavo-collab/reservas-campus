@@ -13,7 +13,9 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { ErroApi, proibidoPelaRegra } from '../../../comum/erros';
 import { limitesDaSemana, paraIsoSaoPaulo, segundaDaSemana } from '../../../comum/instante';
 import { exigirPerfil, exigirSessao } from '../../../comum/sessao';
+import type { Prisma } from '../../../generated/prisma/client';
 import { agendaPara } from '../nucleo/agenda';
+import { livreNoIntervalo } from '../nucleo/busca';
 import { decidirCadastro, decidirEdicao, type Efeito } from '../nucleo/recurso';
 import { executar } from './efeitos';
 
@@ -145,7 +147,9 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
     '/api/recursos',
     {
       schema: {
-        summary: 'Lista os Recursos; com gestor=eu, só os do Gestor da sessão ("Meus recursos")',
+        summary:
+          'Busca Recursos por tipo, Capacidade e texto; com inicio e fim, só os livres (US06). ' +
+          'Com gestor=eu, só os do Gestor da sessão ("Meus recursos")',
         tags: ['recursos'],
         querystring: esquemaBuscarRecursos,
         response: { 200: esquemaRecursos },
@@ -153,11 +157,50 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
     },
     async (request) => {
       const quem = await exigirSessao(request);
-      return request.tx.recurso.findMany({
-        where: request.query.gestor === 'eu' ? { gestorId: quem.id } : {},
-        select: COLUNAS_DO_RESUMO,
-        orderBy: [{ nome: 'asc' }, { id: 'asc' }],
+      const { gestor, tipo, capacidadeMin, q, inicio, fim } = request.query;
+      const texto = q?.trim();
+      const where: Prisma.RecursoWhereInput = {
+        ...(gestor === 'eu' && { gestorId: quem.id }),
+        ...(tipo && { tipo }),
+        // Equipamento não tem Capacidade: com o filtro, só Espaços.
+        ...(capacidadeMin !== undefined && { capacidade: { gte: capacidadeMin } }),
+        ...(texto && {
+          OR: [
+            { nome: { contains: texto, mode: 'insensitive' } },
+            { local: { contains: texto, mode: 'insensitive' } },
+          ],
+        }),
+      };
+      const orderBy: Prisma.RecursoOrderByWithRelationInput[] = [{ nome: 'asc' }, { id: 'asc' }];
+      if (inicio === undefined || fim === undefined) {
+        return request.tx.recurso.findMany({ where, select: COLUNAS_DO_RESUMO, orderBy });
+      }
+
+      const intervalo = { inicio: new Date(inicio), fim: new Date(fim) };
+      const candidatos = await request.tx.recurso.findMany({
+        where,
+        orderBy,
+        select: {
+          ...COLUNAS_DO_RESUMO,
+          horarios: { select: { diaSemana: true, abre: true, fecha: true } },
+          // Todas as Reservas que tocam o Intervalo: quem escolhe as ativas é o núcleo.
+          reservas: {
+            where: { inicio: { lt: intervalo.fim }, fim: { gt: intervalo.inicio } },
+            select: { inicio: true, fim: true, status: true },
+          },
+        },
       });
+      // Só o resumo sai: nada das Reservas de outras pessoas (RN22).
+      return candidatos
+        .filter((candidato) => livreNoIntervalo(candidato, intervalo))
+        .map(({ id, tipo, nome, local, capacidade, patrimonio }) => ({
+          id,
+          tipo,
+          nome,
+          local,
+          capacidade,
+          patrimonio,
+        }));
     },
   );
   rotas.get(
