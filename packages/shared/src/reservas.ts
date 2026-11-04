@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { esquemaInstante } from './instante';
+import { esquemaTipoRecurso } from './recursos';
 
 /** Status da Reserva, sem acento (spec §5). */
 export const esquemaStatus = z.enum([
@@ -42,3 +43,55 @@ export const esquemaReserva = z.object({
 });
 
 export type Reserva = z.infer<typeof esquemaReserva>;
+
+export const RESERVAS_POR_PAGINA = 20;
+
+/** Minhas reservas: as abas se separam pelo Status, não pela data (US10). */
+export const esquemaSituacao = z.enum(['ativas', 'encerradas']);
+
+export type Situacao = z.infer<typeof esquemaSituacao>;
+
+export const esquemaBuscarReservas = z.object({
+  situacao: esquemaSituacao.default('ativas'),
+  pagina: z.coerce.number().int().positive().max(1_000_000).default(1),
+});
+
+// O id é INT4 no banco: maior que isso nem chega ao Prisma.
+export const esquemaIdDaReserva = z.object({
+  id: z.coerce.number().int().positive().max(2_147_483_647),
+});
+
+export const esquemaItemDeReserva = esquemaReserva.extend({
+  serieId: z.number().int().nullable(),
+  recurso: z.object({ id: z.number().int(), nome: z.string(), tipo: esquemaTipoRecurso }),
+});
+
+export type ItemDeReserva = z.infer<typeof esquemaItemDeReserva>;
+
+export const esquemaPaginaDeReservas = z.object({
+  itens: z.array(esquemaItemDeReserva),
+  total: z.number().int(),
+  pagina: z.number().int(),
+  porPagina: z.number().int(),
+});
+
+export type PaginaDeReservas = z.infer<typeof esquemaPaginaDeReservas>;
+
+const esquemaPessoa = z.object({ id: z.number().int(), nome: z.string() });
+
+export const esquemaTransicao = z.object({
+  de: esquemaStatus.nullable().describe('Vazio na primeira transição'),
+  para: esquemaStatus,
+  em: esquemaInstante,
+  por: esquemaPessoa.nullable().describe('Vazio = o sistema'),
+  observacao: z.string().nullable(),
+});
+
+export type Transicao = z.infer<typeof esquemaTransicao>;
+
+export const esquemaDetalheDaReserva = esquemaItemDeReserva.extend({
+  usuario: esquemaPessoa,
+  historico: z.array(esquemaTransicao).describe('Do mais antigo ao mais novo'),
+});
+
+export type DetalheDaReserva = z.infer<typeof esquemaDetalheDaReserva>;

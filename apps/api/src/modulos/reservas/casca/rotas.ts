@@ -1,13 +1,46 @@
-import { esquemaCriarReserva, esquemaReserva } from '@reservas/shared';
+import {
+  esquemaBuscarReservas,
+  esquemaCriarReserva,
+  esquemaDetalheDaReserva,
+  esquemaIdDaReserva,
+  esquemaPaginaDeReservas,
+  esquemaReserva,
+  RESERVAS_POR_PAGINA,
+  STATUS_ATIVOS,
+} from '@reservas/shared';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { ErroApi, regraViolada } from '../../../comum/erros';
+import { ErroApi, proibidoPelaRegra, regraViolada } from '../../../comum/erros';
 import { paraIsoSaoPaulo } from '../../../comum/instante';
-import { exigirPerfil } from '../../../comum/sessao';
+import { exigirPerfil, exigirSessao } from '../../../comum/sessao';
+import { violacoesDoDetalhe } from '../nucleo/detalhe';
 import { decidirReserva } from '../nucleo/reservar';
 import { executar } from './efeitos';
 
-/** Rotas do M3 do incremento 1: reservar (US08). */
+const COLUNAS_DO_ITEM = {
+  id: true,
+  recursoId: true,
+  serieId: true,
+  inicio: true,
+  fim: true,
+  participantes: true,
+  finalidade: true,
+  status: true,
+  criadaEm: true,
+  recurso: { select: { id: true, nome: true, tipo: true } },
+} as const;
+
+/** Os instantes da Reserva em ISO com o deslocamento de São Paulo. */
+function comInstantes<T extends { inicio: Date; fim: Date; criadaEm: Date }>(reserva: T) {
+  return {
+    ...reserva,
+    inicio: paraIsoSaoPaulo(reserva.inicio),
+    fim: paraIsoSaoPaulo(reserva.fim),
+    criadaEm: paraIsoSaoPaulo(reserva.criadaEm),
+  };
+}
+
+/** Rotas do M3 do incremento 1: reservar (US08) e Minhas reservas (US10). */
 export function registrarRotasDeReservas(app: FastifyInstance) {
   const rotas = app.withTypeProvider<ZodTypeProvider>();
 
@@ -58,11 +91,93 @@ export function registrarRotasDeReservas(app: FastifyInstance) {
       const reserva = await executar(tx, efeito);
       request.log.info({ evento: efeito.evento, reservaId: reserva.id }, efeito.evento);
       reply.status(201);
+      return comInstantes(reserva);
+    },
+  );
+
+  rotas.get(
+    '/api/reservas',
+    {
+      schema: {
+        summary: 'Minhas reservas: Ativas por início crescente, Encerradas decrescente',
+        tags: ['reservas'],
+        querystring: esquemaBuscarReservas,
+        response: { 200: esquemaPaginaDeReservas },
+      },
+    },
+    async (request) => {
+      const quem = await exigirPerfil(request, 'Aluno', 'Docente');
+      const { situacao, pagina } = request.query;
+      const ativas = situacao === 'ativas';
+      const where = {
+        usuarioId: quem.id,
+        status: ativas ? { in: [...STATUS_ATIVOS] } : { notIn: [...STATUS_ATIVOS] },
+      };
+      const ordem = ativas ? 'asc' : 'desc';
+      const [total, reservas] = await Promise.all([
+        request.tx.reserva.count({ where }),
+        request.tx.reserva.findMany({
+          where,
+          select: COLUNAS_DO_ITEM,
+          orderBy: [{ inicio: ordem }, { id: ordem }],
+          skip: (pagina - 1) * RESERVAS_POR_PAGINA,
+          take: RESERVAS_POR_PAGINA,
+        }),
+      ]);
       return {
-        ...reserva,
-        inicio: paraIsoSaoPaulo(reserva.inicio),
-        fim: paraIsoSaoPaulo(reserva.fim),
-        criadaEm: paraIsoSaoPaulo(reserva.criadaEm),
+        itens: reservas.map(comInstantes),
+        total,
+        pagina,
+        porPagina: RESERVAS_POR_PAGINA,
+      };
+    },
+  );
+
+  rotas.get(
+    '/api/reservas/:id',
+    {
+      schema: {
+        summary: 'Detalhe da Reserva com o histórico; só o dono e o Gestor responsável (RN22)',
+        tags: ['reservas'],
+        params: esquemaIdDaReserva,
+        response: { 200: esquemaDetalheDaReserva },
+      },
+    },
+    async (request) => {
+      const quem = await exigirSessao(request);
+      const { id } = request.params;
+      const reserva = await request.tx.reserva.findUnique({
+        where: { id },
+        select: {
+          ...COLUNAS_DO_ITEM,
+          usuarioId: true,
+          usuario: { select: { id: true, nome: true } },
+          recurso: { select: { id: true, nome: true, tipo: true, gestorId: true } },
+          transicoes: {
+            select: {
+              de: true,
+              para: true,
+              em: true,
+              observacao: true,
+              por: { select: { id: true, nome: true } },
+            },
+            orderBy: [{ em: 'asc' }, { id: 'asc' }],
+          },
+        },
+      });
+      if (!reserva) throw new ErroApi('nao_encontrado', `Reserva ${id} não encontrada.`);
+      const violacoes = violacoesDoDetalhe(
+        { usuarioId: reserva.usuarioId, gestorId: reserva.recurso.gestorId },
+        quem,
+      );
+      if (violacoes.length > 0) throw proibidoPelaRegra(violacoes);
+
+      return {
+        ...comInstantes(reserva),
+        historico: reserva.transicoes.map(({ em, ...transicao }) => ({
+          ...transicao,
+          em: paraIsoSaoPaulo(em),
+        })),
       };
     },
   );
