@@ -35,6 +35,11 @@ export default async function bancosPorWorker(projeto: TestProject) {
       const nome = nomeDoBanco(urlDoWorker(base, worker));
       await servidor.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${nome}" WITH (FORCE)`);
       await servidor.$executeRawUnsafe(`CREATE DATABASE "${nome}" TEMPLATE "${modelo}"`);
+      // Fora de UTC, como o Postgres local do grupo: no CI e no Neon, em UTC, um erro de fuso
+      // da sessão passaria despercebido (#92). A conexão do `criarBanco` fixa UTC por cima disto.
+      await servidor.$executeRawUnsafe(
+        `ALTER DATABASE "${nome}" SET timezone TO 'America/Sao_Paulo'`,
+      );
     }
   } finally {
     await servidor.$disconnect();
