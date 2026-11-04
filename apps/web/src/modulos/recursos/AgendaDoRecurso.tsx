@@ -12,11 +12,12 @@ import {
   UnstyledButton,
   VisuallyHidden,
 } from '@mantine/core';
-import type { Agenda } from '@reservas/shared';
+import type { Agenda, Reserva } from '@reservas/shared';
 import { addDays, format, parseISO } from 'date-fns';
 import { useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { useSessao } from '../conduta';
+import { JanelaDeReserva, reservaCobre, resumoDaCriada, semanaDe } from '../reservas';
 import { ROTULO_DO_TIPO } from './FormularioDoRecurso';
 import {
   diasDaGrade,
@@ -30,7 +31,7 @@ import {
   type IntervaloEscolhido,
 } from './grade';
 import { DIAS_DA_SEMANA, rotuloDoMinuto } from './horario';
-import { useAgenda } from './recursos';
+import { useAgenda, useRecarregarAgenda } from './recursos';
 
 const ROTULO_DO_ESTADO: Record<EstadoDaCelula, string> = {
   livre: 'Livre',
@@ -57,6 +58,11 @@ const ESTILO_DO_ESTADO: Record<EstadoDaCelula, CSSProperties> = {
 
 const ESTILO_ESCOLHIDO: CSSProperties = { background: 'var(--mantine-color-green-2)' };
 
+/** A Reserva recém-criada, em cima do estilo de "Sua reserva". */
+const ESTILO_DESTACADO: CSSProperties = {
+  boxShadow: 'inset 0 0 0 3px var(--mantine-color-green-5)',
+};
+
 /** `2026-11-10` → `10/11`. */
 function diaEMes(data: string) {
   const [, mes, dia] = data.split('-');
@@ -65,10 +71,6 @@ function diaEMes(data: string) {
 
 function rotuloDoDia({ data, diaSemana }: DiaDaGrade) {
   return `${DIAS_DA_SEMANA[diaSemana]} ${diaEMes(data)}`;
-}
-
-function rotuloDoIntervalo({ inicio, fim }: IntervaloEscolhido) {
-  return `${rotuloDoMinuto(inicio)} às ${rotuloDoMinuto(fim)}`;
 }
 
 function Legenda() {
@@ -103,46 +105,18 @@ function Cabecalho({ recurso }: { recurso: Agenda['recurso'] }) {
   );
 }
 
-/** A criação de Reserva chega no #37; até lá a janela só mostra o Intervalo escolhido. */
-function JanelaDoIntervalo({
-  intervalo,
-  recurso,
-  ehGestor,
-  aoFechar,
-}: {
-  intervalo: IntervaloEscolhido | null;
-  recurso: Agenda['recurso'];
-  ehGestor: boolean;
-  aoFechar: () => void;
-}) {
+function JanelaDoGestor({ aberta, aoFechar }: { aberta: boolean; aoFechar: () => void }) {
   return (
-    <Modal
-      opened={intervalo !== null}
-      onClose={aoFechar}
-      title={ehGestor ? 'Gestor não cria Reservas' : 'Nova Reserva'}
-    >
-      {intervalo && (
-        <Stack gap="sm">
-          {ehGestor ? (
-            <Text>
-              Gestor não faz Reservas. Para impedir o uso de um Recurso num período, cadastre uma
-              Indisponibilidade.
-            </Text>
-          ) : (
-            <>
-              <Text>
-                <strong>{recurso.nome}</strong>
-                <br />
-                {diaEMes(intervalo.data)}, das {rotuloDoIntervalo(intervalo)}
-              </Text>
-              <Alert color="yellow">A criação de Reserva ainda não está disponível.</Alert>
-            </>
-          )}
-          <Group justify="flex-end">
-            <Button onClick={aoFechar}>Fechar</Button>
-          </Group>
-        </Stack>
-      )}
+    <Modal opened={aberta} onClose={aoFechar} title="Gestor não cria Reservas">
+      <Stack gap="sm">
+        <Text>
+          Gestor não faz Reservas. Para impedir o uso de um Recurso num período, cadastre uma
+          Indisponibilidade.
+        </Text>
+        <Group justify="flex-end">
+          <Button onClick={aoFechar}>Fechar</Button>
+        </Group>
+      </Stack>
     </Modal>
   );
 }
@@ -155,9 +129,11 @@ interface Arraste {
 
 function Grade({
   agenda,
+  destacada,
   aoEscolher,
 }: {
   agenda: Agenda;
+  destacada: Reserva | null;
   aoEscolher: (intervalo: IntervaloEscolhido) => void;
 }) {
   // O ref é o que vale no soltar: um arraste rápido termina antes de a tela renderizar de novo.
@@ -245,7 +221,12 @@ function Grade({
                     // Contém o VisuallyHidden (absoluto) no quadro que rola: sem isso, a página rola no celular.
                     pos="relative"
                     h={28}
-                    style={escolhida(dia, minuto) ? ESTILO_ESCOLHIDO : ESTILO_DO_ESTADO[estado]}
+                    style={{
+                      ...(escolhida(dia, minuto) ? ESTILO_ESCOLHIDO : ESTILO_DO_ESTADO[estado]),
+                      ...(destacada &&
+                        reservaCobre(destacada, dia.data, minuto) &&
+                        ESTILO_DESTACADO),
+                    }}
                   >
                     {estado === 'livre' ? (
                       <UnstyledButton
@@ -280,9 +261,18 @@ export function AgendaDoRecurso() {
   const agenda = useAgenda(id, parametros.get('semana'));
   const ehGestor = useSessao().data?.usuario.perfil === 'Gestor';
   const [intervalo, setIntervalo] = useState<IntervaloEscolhido | null>(null);
+  const [criada, setCriada] = useState<Reserva | null>(null);
+  const recarregarAgenda = useRecarregarAgenda(id);
 
   function irPara(semana: string | null) {
     setParametros(semana ? { semana } : {});
+  }
+
+  function aoCriar(reserva: Reserva, data: string) {
+    setIntervalo(null);
+    setCriada(reserva);
+    void recarregarAgenda();
+    irPara(semanaDe(data));
   }
 
   if (agenda.isPending) return <Loader aria-label="Carregando agenda" />;
@@ -316,14 +306,24 @@ export function AgendaDoRecurso() {
         </Group>
       </Group>
 
+      {criada && (
+        <Alert color="green" role="status" withCloseButton onClose={() => setCriada(null)}>
+          {resumoDaCriada(criada)}
+        </Alert>
+      )}
+
       <Legenda />
-      <Grade agenda={agenda.data} aoEscolher={setIntervalo} />
-      <JanelaDoIntervalo
-        intervalo={intervalo}
-        recurso={recurso}
-        ehGestor={ehGestor}
-        aoFechar={() => setIntervalo(null)}
-      />
+      <Grade agenda={agenda.data} destacada={criada} aoEscolher={setIntervalo} />
+      {ehGestor ? (
+        <JanelaDoGestor aberta={intervalo !== null} aoFechar={() => setIntervalo(null)} />
+      ) : (
+        <JanelaDeReserva
+          intervalo={intervalo}
+          recurso={recurso}
+          aoFechar={() => setIntervalo(null)}
+          aoCriar={aoCriar}
+        />
+      )}
     </Stack>
   );
 }
