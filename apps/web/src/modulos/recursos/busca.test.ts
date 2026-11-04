@@ -57,4 +57,20 @@ describe('US06 · Filtros da busca', () => {
     const url = new URLSearchParams({ tipo: 'Nave', capacidadeMin: 'muita', inicio: 'x' });
     expect(filtrosDaUrl(url)).toEqual(FILTROS_VAZIOS);
   });
+
+  it('números fora da faixa na URL da tela viram filtro vazio', () => {
+    const url = new URLSearchParams({ capacidadeMin: '0', inicio: '-30', fim: '1470' });
+    expect(filtrosDaUrl(url)).toEqual(FILTROS_VAZIOS);
+    expect(filtrosDaUrl(new URLSearchParams({ inicio: '615' })).inicio).toBeNull();
+  });
+
+  it('fim antes do início na URL da tela: o fim cai', () => {
+    const url = urlDosFiltros({ ...tudo, inicio: 12 * 60, fim: 10 * 60 });
+    expect(filtrosDaUrl(url)).toEqual({ ...tudo, inicio: 12 * 60, fim: null });
+  });
+
+  it('Equipamento não tem Capacidade: a Capacidade da URL cai', () => {
+    const url = urlDosFiltros({ ...tudo, tipo: 'Equipamento' });
+    expect(filtrosDaUrl(url).capacidadeMin).toBeNull();
+  });
 });

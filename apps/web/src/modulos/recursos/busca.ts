@@ -55,21 +55,28 @@ export function urlDosFiltros({ tipo, capacidadeMin, q, data, inicio, fim }: Fil
   return url;
 }
 
-function inteiro(valor: string | null) {
+/** Inteiro entre `min` e `max`, múltiplo de `passo`; o resto vira `null`. */
+function inteiro(valor: string | null, min: number, max: number, passo = 1) {
   if (!valor) return null;
   const numero = Number(valor);
-  return Number.isInteger(numero) ? numero : null;
+  const valido = Number.isInteger(numero) && numero >= min && numero <= max;
+  return valido && numero % passo === 0 ? numero : null;
 }
 
+/** A URL da tela pode vir editada à mão: o que não for um filtro possível cai. */
 export function filtrosDaUrl(url: URLSearchParams): FiltrosDaBusca {
   const tipo = esquemaTipoRecurso.safeParse(url.get('tipo'));
   const data = url.get('data');
+  const inicio = inteiro(url.get('inicio'), 0, 24 * 60 - 30, 30);
+  const fim = inteiro(url.get('fim'), 30, 24 * 60, 30);
   return {
     tipo: tipo.success ? tipo.data : null,
-    capacidadeMin: inteiro(url.get('capacidadeMin')),
+    // Equipamento não tem Capacidade.
+    capacidadeMin:
+      tipo.data === 'Equipamento' ? null : inteiro(url.get('capacidadeMin'), 1, 10_000),
     q: url.get('q') ?? '',
     data: data && /^\d{4}-\d{2}-\d{2}$/.test(data) ? data : null,
-    inicio: inteiro(url.get('inicio')),
-    fim: inteiro(url.get('fim')),
+    inicio,
+    fim: fim !== null && (inicio === null || fim > inicio) ? fim : null,
   };
 }

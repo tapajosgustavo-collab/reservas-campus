@@ -104,6 +104,15 @@ comBanco('US06 · Buscar Recurso livre', () => {
     expect(await nomesDa('q=BLOCO%20B')).toEqual(['Auditório']);
   });
 
+  it('% e _ em q são texto, não curinga', async () => {
+    await umEspaco(banco, { nome: 'Sala_1' });
+    await umEspaco(banco, { nome: 'Sala 2' });
+    await umEspaco(banco, { nome: 'Sala 100%' });
+
+    expect(await nomesDa('q=_')).toEqual(['Sala_1']);
+    expect(await nomesDa('q=%25')).toEqual(['Sala 100%']);
+  });
+
   it('RN01 · Reserva ativa 10h–12h, buscar 11h–13h → o Recurso some', async () => {
     const ocupado = await umEspaco(banco, { nome: 'Ocupado', horarios: DIAS_UTEIS });
     await umEspaco(banco, { nome: 'Livre', horarios: DIAS_UTEIS });

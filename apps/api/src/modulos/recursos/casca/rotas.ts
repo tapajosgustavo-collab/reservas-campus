@@ -158,7 +158,8 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
     async (request) => {
       const quem = await exigirSessao(request);
       const { gestor, tipo, capacidadeMin, q, inicio, fim } = request.query;
-      const texto = q?.trim();
+      // O `contains` vira ILIKE sem escapar: `%`, `_` e `\` digitados são texto, não curinga.
+      const texto = q?.trim().replace(/[\\%_]/g, '\\$&');
       const where: Prisma.RecursoWhereInput = {
         ...(gestor === 'eu' && { gestorId: quem.id }),
         ...(tipo && { tipo }),

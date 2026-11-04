@@ -1,5 +1,6 @@
-import { STATUS_ATIVOS, type Horario, type Status } from '@reservas/shared';
+import type { Horario, Status } from '@reservas/shared';
 import { emSaoPaulo } from '../../../comum/instante';
+import { ehAtiva } from './agenda';
 
 export interface ReservaNaBusca {
   inicio: Date;
@@ -21,10 +22,6 @@ const MINUTO = 60_000;
 
 function seSobrepoem(a: Intervalo, b: Intervalo) {
   return a.inicio < b.fim && b.inicio < a.fim;
-}
-
-function ehAtiva({ status }: ReservaNaBusca) {
-  return (STATUS_ATIVOS as readonly Status[]).includes(status);
 }
 
 /** O Intervalo no calendário de São Paulo: dia da semana e minutos desde 0h. */

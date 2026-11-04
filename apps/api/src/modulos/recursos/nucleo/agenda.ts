@@ -36,7 +36,10 @@ export interface AgendaDoRecurso extends Omit<FatosDaAgenda, 'reservas'> {
   ocupacoes: OcupacaoNaAgenda[];
 }
 
-function ehAtiva(reserva: ReservaNaAgenda): reserva is ReservaNaAgenda & { status: StatusAtivo } {
+/** Só as Reservas ativas ocupam o Recurso (agenda e busca). */
+export function ehAtiva<R extends { status: Status }>(
+  reserva: R,
+): reserva is R & { status: StatusAtivo } {
   return (STATUS_ATIVOS as readonly Status[]).includes(reserva.status);
 }
 
