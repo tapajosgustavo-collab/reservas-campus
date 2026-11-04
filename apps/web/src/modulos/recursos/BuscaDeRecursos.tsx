@@ -18,11 +18,11 @@ import {
 import type { ResumoDoRecurso, TipoRecurso } from '@reservas/shared';
 import { useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { semanaDe } from '../reservas';
 import {
   consultaDaBusca,
   FILTROS_VAZIOS,
   filtrosDaUrl,
-  semanaDaData,
   urlDosFiltros,
   type FiltrosDaBusca,
 } from './busca';
@@ -241,7 +241,7 @@ export function BuscaDeRecursos() {
                 <CartaoDoRecurso
                   key={recurso.id}
                   recurso={recurso}
-                  semana={filtros.data && semanaDaData(filtros.data)}
+                  semana={filtros.data && semanaDe(filtros.data)}
                 />
               ))}
             </SimpleGrid>

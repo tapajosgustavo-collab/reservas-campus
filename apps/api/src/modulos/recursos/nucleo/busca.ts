@@ -1,7 +1,5 @@
-import { TZDate } from '@date-fns/tz';
 import { STATUS_ATIVOS, type Horario, type Status } from '@reservas/shared';
-import { getDay } from 'date-fns';
-import { FUSO } from '../../../comum/instante';
+import { emSaoPaulo } from '../../../comum/instante';
 
 export interface ReservaNaBusca {
   inicio: Date;
@@ -31,9 +29,8 @@ function ehAtiva({ status }: ReservaNaBusca) {
 
 /** O Intervalo no calendário de São Paulo: dia da semana e minutos desde 0h. */
 function noDia({ inicio, fim }: Intervalo) {
-  const local = new TZDate(inicio, FUSO);
-  const de = local.getHours() * 60 + local.getMinutes() + local.getSeconds() / 60;
-  return { diaSemana: getDay(local), de, ate: de + (fim.getTime() - inicio.getTime()) / MINUTO };
+  const { diaSemana, minutos } = emSaoPaulo(inicio);
+  return { diaSemana, de: minutos, ate: minutos + (fim.getTime() - inicio.getTime()) / MINUTO };
 }
 
 function dentroDoHorario(horarios: Horario[], intervalo: Intervalo) {

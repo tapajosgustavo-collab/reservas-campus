@@ -1,6 +1,6 @@
 import { TZDate } from '@date-fns/tz';
 import { esquemaTipoRecurso, type TipoRecurso } from '@reservas/shared';
-import { format, formatISO, parseISO, startOfWeek } from 'date-fns';
+import { formatISO } from 'date-fns';
 
 const FUSO = 'America/Sao_Paulo';
 
@@ -72,9 +72,4 @@ export function filtrosDaUrl(url: URLSearchParams): FiltrosDaBusca {
     inicio: inteiro(url.get('inicio')),
     fim: inteiro(url.get('fim')),
   };
-}
-
-/** A segunda-feira (`YYYY-MM-DD`) da semana de `data`. Só calendário, sem fuso. */
-export function semanaDaData(data: string) {
-  return format(startOfWeek(parseISO(data), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 }

@@ -3,7 +3,6 @@ import {
   consultaDaBusca,
   FILTROS_VAZIOS,
   filtrosDaUrl,
-  semanaDaData,
   urlDosFiltros,
   type FiltrosDaBusca,
 } from './busca';
@@ -57,11 +56,5 @@ describe('US06 · Filtros da busca', () => {
   it('valores estranhos na URL da tela viram filtro vazio', () => {
     const url = new URLSearchParams({ tipo: 'Nave', capacidadeMin: 'muita', inicio: 'x' });
     expect(filtrosDaUrl(url)).toEqual(FILTROS_VAZIOS);
-  });
-
-  it('a agenda abre na semana da data buscada (segunda)', () => {
-    expect(semanaDaData('2026-11-10')).toBe('2026-11-09');
-    expect(semanaDaData('2026-11-15')).toBe('2026-11-09');
-    expect(semanaDaData('2026-11-16')).toBe('2026-11-16');
   });
 });

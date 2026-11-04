@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { esquemaInstante as instante } from './instante';
 
 const MINUTOS_DO_DIA = 24 * 60;
 
@@ -91,8 +92,6 @@ export const esquemaRecurso = esquemaResumoDoRecurso.extend({
 export type Recurso = z.infer<typeof esquemaRecurso>;
 
 export const esquemaRecursos = z.array(esquemaResumoDoRecurso);
-
-const instante = z.iso.datetime({ offset: true });
 
 /** US06. Só a forma: se o Intervalo cabe no Horário e não tem Conflito, quem diz é o núcleo. */
 export const esquemaBuscarRecursos = z
