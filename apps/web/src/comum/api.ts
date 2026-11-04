@@ -1,4 +1,4 @@
-import { esquemaErro, type CodigoErro } from '@reservas/shared';
+import { esquemaErro, type CodigoErro, type Violacao } from '@reservas/shared';
 import type { z } from 'zod';
 
 /** Erro da API com a mensagem em português do envelope, pronta para mostrar na tela. */
@@ -7,6 +7,7 @@ export class ErroDaApi extends Error {
     readonly status: number,
     readonly codigo: CodigoErro | undefined,
     mensagem: string,
+    readonly violacoes: Violacao[] = [],
   ) {
     super(mensagem);
     this.name = 'ErroDaApi';
@@ -16,7 +17,12 @@ export class ErroDaApi extends Error {
 async function paraErro(caminho: string, resposta: Response): Promise<ErroDaApi> {
   const envelope = esquemaErro.safeParse(await resposta.json().catch(() => null));
   return envelope.success
-    ? new ErroDaApi(resposta.status, envelope.data.erro.codigo, envelope.data.erro.mensagem)
+    ? new ErroDaApi(
+        resposta.status,
+        envelope.data.erro.codigo,
+        envelope.data.erro.mensagem,
+        envelope.data.erro.violacoes,
+      )
     : new ErroDaApi(resposta.status, undefined, `${caminho} respondeu ${resposta.status}`);
 }
 

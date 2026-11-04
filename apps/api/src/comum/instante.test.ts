@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { limitesDaSemana, paraIsoSaoPaulo, segundaDaSemana } from './instante';
+import { emSaoPaulo, limitesDaSemana, paraIsoSaoPaulo, segundaDaSemana } from './instante';
 
 describe('RNF08 · Instantes no horário de São Paulo', () => {
   it('sai em ISO 8601 com o deslocamento de São Paulo', () => {
@@ -8,6 +8,20 @@ describe('RNF08 · Instantes no horário de São Paulo', () => {
 
   it('a virada do dia é a de São Paulo, não a do UTC', () => {
     expect(paraIsoSaoPaulo(new Date('2026-11-11T01:30:00Z'))).toBe('2026-11-10T22:30:00-03:00');
+  });
+});
+
+describe('RNF08 · Calendário de São Paulo', () => {
+  it('terça às 22h30 em São Paulo já é quarta no UTC', () => {
+    expect(emSaoPaulo(new Date('2026-11-11T01:30:00Z'))).toEqual({
+      data: '2026-11-10',
+      diaSemana: 2,
+      minutos: 22 * 60 + 30,
+    });
+  });
+
+  it('instante fora do minuto exato mantém a fração', () => {
+    expect(emSaoPaulo(new Date('2026-11-10T13:00:30Z')).minutos).toBe(10 * 60 + 0.5);
   });
 });
 

@@ -39,6 +39,12 @@ export function useAgenda(id: number, semana: string | null) {
   });
 }
 
+/** Busca de novo as agendas do Recurso, depois de criar uma Reserva nele. */
+export function useRecarregarAgenda(id: number) {
+  const cliente = useQueryClient();
+  return () => cliente.invalidateQueries({ queryKey: [CHAVE, id, 'agenda'] });
+}
+
 export function useCadastrarRecurso() {
   const cliente = useQueryClient();
   return useMutation({

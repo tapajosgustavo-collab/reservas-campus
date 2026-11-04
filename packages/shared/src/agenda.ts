@@ -1,8 +1,7 @@
 import { z } from 'zod';
+import { esquemaInstante as instante } from './instante';
 import { esquemaRecurso } from './recursos';
 import { STATUS_ATIVOS } from './reservas';
-
-const instante = z.iso.datetime({ offset: true });
 
 /** `YYYY-MM-DD` é segunda-feira? Só olha o calendário, sem fuso. */
 function ehSegunda(data: string) {

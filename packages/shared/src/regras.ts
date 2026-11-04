@@ -12,6 +12,9 @@ export interface Regra {
  * volta `regra_violada` com `violacoes: []` e a mensagem `US01 · …` (ADR 0001).
  */
 export const REGRAS = {
+  RN01: { nome: 'Sem Conflito' },
+  RN02: { nome: 'Intervalo válido' },
+  RN03: { nome: 'Dentro do Horário de funcionamento' },
   RN13: { nome: 'Gestor do Recurso' },
   RN22: { nome: 'Agenda sem nomes' },
 } as const satisfies Record<`RN${number}`, Regra>;

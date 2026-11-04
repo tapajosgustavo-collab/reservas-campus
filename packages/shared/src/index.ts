@@ -39,7 +39,18 @@ export {
   type ResumoDoRecurso,
   type TipoRecurso,
 } from './recursos';
-export { esquemaStatus, STATUS_ATIVOS, type Status, type StatusAtivo } from './reservas';
+export { esquemaInstante } from './instante';
+export { POLITICA } from './politica';
+export {
+  esquemaCriarReserva,
+  esquemaReserva,
+  esquemaStatus,
+  STATUS_ATIVOS,
+  type CriarReserva,
+  type Reserva,
+  type Status,
+  type StatusAtivo,
+} from './reservas';
 export {
   esquemaAgenda,
   esquemaBuscarAgenda,
