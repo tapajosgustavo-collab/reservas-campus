@@ -64,6 +64,13 @@ describe('US06 · Filtros da busca', () => {
     expect(filtrosDaUrl(new URLSearchParams({ inicio: '615' })).inicio).toBeNull();
   });
 
+  it('data que não existe no calendário na URL da tela vira filtro vazio', () => {
+    for (const data of ['2026-02-31', '2026-13-01', '2026-00-10', '2026-11-00']) {
+      expect(filtrosDaUrl(new URLSearchParams({ data })).data).toBeNull();
+    }
+    expect(filtrosDaUrl(new URLSearchParams({ data: '2028-02-29' })).data).toBe('2028-02-29');
+  });
+
   it('fim antes do início na URL da tela: o fim cai', () => {
     const url = urlDosFiltros({ ...tudo, inicio: 12 * 60, fim: 10 * 60 });
     expect(filtrosDaUrl(url)).toEqual({ ...tudo, inicio: 12 * 60, fim: null });

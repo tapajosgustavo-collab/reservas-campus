@@ -149,6 +149,24 @@ comBanco('US06 · Buscar Recurso livre', () => {
     expect(await nomesDa(noIntervalo(terca('12:00', '14:00')))).toEqual(['Laboratório']);
   });
 
+  it('RN02 · buscar 10h15–10h45 (fora da meia hora) → nada aparece, como no reservar', async () => {
+    await umEspaco(banco, { nome: 'Laboratório', horarios: DIAS_UTEIS });
+
+    expect(await nomesDa(noIntervalo(terca('10:15', '10:45')))).toEqual([]);
+  });
+
+  it('RN02 · buscar de terça 22h até quarta 8h (dois dias) → nada aparece', async () => {
+    await umEspaco(banco, {
+      nome: 'Biblioteca',
+      horarios: {
+        create: [2, 3].map((diaSemana) => ({ diaSemana, abre: 0, fecha: 24 * 60 })),
+      },
+    });
+
+    const virada = { inicio: '2026-11-10T22:00:00-03:00', fim: '2026-11-11T08:00:00-03:00' };
+    expect(await nomesDa(noIntervalo(virada))).toEqual([]);
+  });
+
   it('RN03 · abre 7h–23h, buscar 22h–23h30 → some', async () => {
     await umEspaco(banco, { nome: 'Laboratório', horarios: DIAS_UTEIS });
     await umEspaco(banco, {
