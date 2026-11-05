@@ -15,8 +15,8 @@ import { limitesDaSemana, paraIsoSaoPaulo, segundaDaSemana } from '../../../comu
 import { exigirPerfil, exigirSessao } from '../../../comum/sessao';
 import type { Prisma } from '../../../generated/prisma/client';
 import { agendaPara } from '../nucleo/agenda';
-import { livreNoIntervalo } from '../nucleo/busca';
 import { decidirCadastro, decidirEdicao, type Efeito } from '../nucleo/recurso';
+import { violacoesDoIntervalo } from '../../reservas';
 import { executar } from './efeitos';
 
 const COLUNAS_DO_RESUMO = {
@@ -191,9 +191,13 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
           },
         },
       });
+      // Livre é o que o reservar aceitaria pelas RN01–RN03: a regra é a do M3, não uma cópia.
       // Só o resumo sai: nada das Reservas de outras pessoas (RN22).
       return candidatos
-        .filter((candidato) => livreNoIntervalo(candidato, intervalo))
+        .filter(
+          ({ horarios, reservas }) =>
+            violacoesDoIntervalo(intervalo, { horarios, reservasDoRecurso: reservas }).length === 0,
+        )
         .map(({ id, tipo, nome, local, capacidade, patrimonio }) => ({
           id,
           tipo,
