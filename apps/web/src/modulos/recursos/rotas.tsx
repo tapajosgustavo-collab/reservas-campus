@@ -1,20 +1,12 @@
 import type { RouteObject } from 'react-router';
-import { EmConstrucao } from '../../comum/EmConstrucao';
 import { AgendaDoRecurso } from './AgendaDoRecurso';
+import { BuscaDeRecursos } from './BuscaDeRecursos';
 import { CadastrarRecurso, EditarRecurso } from './CadastroDoRecurso';
 import { MeusRecursos } from './MeusRecursos';
 
 export const rotasRecursos: RouteObject[] = [
-  {
-    path: 'recursos',
-    element: (
-      <EmConstrucao
-        titulo="Recursos"
-        descricao="Busca e agenda de Recursos. Chega no Incremento 1."
-      />
-    ),
-  },
-  // A busca (#35) leva para cá; por enquanto, "Meus recursos" também.
+  // A busca (US06) e "Meus recursos" levam para a agenda.
+  { path: 'recursos', Component: BuscaDeRecursos },
   { path: 'recursos/:id/agenda', Component: AgendaDoRecurso },
   // Telas do Gestor (US04). A API recusa os outros Perfis; o menu só mostra para o Gestor.
   { path: 'gestao/recursos', Component: MeusRecursos },
