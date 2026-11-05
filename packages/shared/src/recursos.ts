@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { esquemaInstante as instante } from './instante';
 
 const MINUTOS_DO_DIA = 24 * 60;
 
@@ -92,9 +93,28 @@ export type Recurso = z.infer<typeof esquemaRecurso>;
 
 export const esquemaRecursos = z.array(esquemaResumoDoRecurso);
 
-export const esquemaBuscarRecursos = z.object({
-  gestor: z.literal('eu').optional().describe('"Meus recursos": só os do Gestor da sessão'),
-});
+/** US06. Só a forma: se o Intervalo cabe no Horário e não tem Conflito, quem diz é o núcleo. */
+export const esquemaBuscarRecursos = z
+  .object({
+    gestor: z.literal('eu').optional().describe('"Meus recursos": só os do Gestor da sessão'),
+    tipo: esquemaTipoRecurso.optional(),
+    capacidadeMin: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(10_000)
+      .optional()
+      .describe('Só Espaços com pelo menos essa Capacidade'),
+    q: z.string().max(120).optional().describe('Texto no nome ou no local, sem maiúsculas'),
+    inicio: instante.optional().describe('Com `fim`: só os Recursos livres no Intervalo'),
+    fim: instante.optional().describe('Com `inicio`'),
+  })
+  .refine(({ inicio, fim }) => (inicio === undefined) === (fim === undefined), {
+    error: 'inicio e fim vêm juntos',
+    path: ['fim'],
+  });
+
+export type BuscarRecursos = z.infer<typeof esquemaBuscarRecursos>;
 
 // O id é INT4 no banco: maior que isso nem chega ao Prisma.
 export const esquemaIdDoRecurso = z.object({

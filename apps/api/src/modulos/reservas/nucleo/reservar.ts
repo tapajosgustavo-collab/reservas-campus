@@ -20,6 +20,12 @@ const CAMPO_DO_INTERVALO = 'intervalo';
 const MINUTO = 60_000;
 const MEIA_HORA = 30;
 
+/** Um Intervalo pedido ou buscado. */
+export interface Intervalo {
+  inicio: Date;
+  fim: Date;
+}
+
 export interface PedidoDeReserva {
   recursoId: number;
   inicio: Date;
@@ -71,7 +77,7 @@ function seSobrepoem(a: { inicio: Date; fim: Date }, b: { inicio: Date; fim: Dat
 }
 
 /** O Intervalo em minutos do dia; `null` se o fim não vem depois do início no mesmo dia. */
-function noDia({ inicio, fim }: PedidoDeReserva) {
+function noDia({ inicio, fim }: Intervalo) {
   if (fim <= inicio) return null;
   const { data, diaSemana, minutos } = emSaoPaulo(inicio);
   // Terminar à meia-noite é ainda o mesmo dia: quem olha o dia é o último instante do Intervalo.
@@ -80,7 +86,7 @@ function noDia({ inicio, fim }: PedidoDeReserva) {
 }
 
 /** RN02. */
-function intervaloValido(pedido: PedidoDeReserva): Violacao[] {
+function intervaloValido(pedido: Intervalo): Violacao[] {
   const dia = noDia(pedido);
   if (dia && dia.de % MEIA_HORA === 0 && dia.ate % MEIA_HORA === 0) return [];
   return [
@@ -93,7 +99,7 @@ function intervaloValido(pedido: PedidoDeReserva): Violacao[] {
 }
 
 /** RN03. Um Intervalo sem dia (RN02) não tem Horário de funcionamento para conferir. */
-function dentroDoHorario(pedido: PedidoDeReserva, horarios: Horario[]): Violacao[] {
+function dentroDoHorario(pedido: Intervalo, horarios: Horario[]): Violacao[] {
   const dia = noDia(pedido);
   if (!dia) return [];
   const faixa = horarios.find(({ diaSemana }) => diaSemana === dia.diaSemana);
@@ -110,12 +116,24 @@ function dentroDoHorario(pedido: PedidoDeReserva, horarios: Horario[]): Violacao
 }
 
 /** RN01: uma violação só, com todos os horários ocupados e sem dizer quem (RN22). */
-function semConflito(pedido: PedidoDeReserva, reservas: ReservaDoRecurso[]): Violacao[] {
+function semConflito(pedido: Intervalo, reservas: ReservaDoRecurso[]): Violacao[] {
   if (pedido.fim <= pedido.inicio) return [];
   const conflitos = reservas.filter((reserva) => ehAtiva(reserva) && seSobrepoem(pedido, reserva));
   if (conflitos.length === 0) return [];
   const horarios = conflitos.map(dasAte).join(', ');
   return [violacao('RN01', `Este Recurso já está ocupado ${horarios}.`, CAMPO_DO_INTERVALO)];
+}
+
+/**
+ * RN01, RN02 e RN03: o que impede usar o Recurso no Intervalo. O reservar (US08) e a busca de
+ * Recurso livre (US06, no M2) usam a mesma regra.
+ */
+export function violacoesDoIntervalo(intervalo: Intervalo, fatos: FatosDaReserva): Violacao[] {
+  return [
+    ...semConflito(intervalo, fatos.reservasDoRecurso),
+    ...intervaloValido(intervalo),
+    ...dentroDoHorario(intervalo, fatos.horarios),
+  ];
 }
 
 /** US08: criar uma Reserva. Devolve todas as RNs violadas, não só a primeira. */
@@ -125,11 +143,7 @@ export function decidirReserva(
   quem: Quem,
   agora: Date,
 ): Decisao {
-  const violacoes = [
-    ...semConflito(pedido, fatos.reservasDoRecurso),
-    ...intervaloValido(pedido),
-    ...dentroDoHorario(pedido, fatos.horarios),
-  ];
+  const violacoes = violacoesDoIntervalo(pedido, fatos);
   if (violacoes.length > 0) return { tipo: 'recusada', violacoes };
 
   const status = 'Confirmada';

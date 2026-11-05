@@ -18,6 +18,16 @@ export function useMeusRecursos() {
   });
 }
 
+/** US06: a busca com a query já montada por `consultaDaBusca`. */
+export function useBuscarRecursos(consulta: string) {
+  return useQuery({
+    queryKey: [CHAVE, 'busca', consulta],
+    queryFn: () => buscarJson(`/api/recursos${consulta && `?${consulta}`}`, esquemaRecursos),
+    // Sem `placeholderData`: o resultado de outra busca não pode aparecer como se fosse desta
+    // (Recursos ocupados no Intervalo novo pareceriam livres). Enquanto carrega, só o Loader.
+  });
+}
+
 export function useRecurso(id: number) {
   return useQuery({
     queryKey: [CHAVE, id],
@@ -39,10 +49,15 @@ export function useAgenda(id: number, semana: string | null) {
   });
 }
 
-/** Busca de novo as agendas do Recurso, depois de criar uma Reserva nele. */
+/** Busca de novo as agendas do Recurso e as buscas, depois de criar uma Reserva nele. */
 export function useRecarregarAgenda(id: number) {
   const cliente = useQueryClient();
-  return () => cliente.invalidateQueries({ queryKey: [CHAVE, id, 'agenda'] });
+  return () =>
+    Promise.all([
+      cliente.invalidateQueries({ queryKey: [CHAVE, id, 'agenda'] }),
+      // O Recurso recém-reservado não pode continuar "livre" ao voltar para a busca.
+      cliente.invalidateQueries({ queryKey: [CHAVE, 'busca'] }),
+    ]);
 }
 
 export function useCadastrarRecurso() {
