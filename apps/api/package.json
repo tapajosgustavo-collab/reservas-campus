@@ -15,7 +15,7 @@
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
     "@fastify/secure-session": "^8.4.1",
-    "@fastify/static": "^10.1.8",
+    "@fastify/static": "^10.1.10",
     "@fastify/swagger": "^9.9.2",
     "@fastify/swagger-ui": "^6.1.2",
     "@prisma/adapter-pg": "^7.10.1",
