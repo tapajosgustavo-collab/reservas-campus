@@ -1,6 +1,6 @@
 import { TZDate } from '@date-fns/tz';
 import { esquemaTipoRecurso, type TipoRecurso } from '@reservas/shared';
-import { formatISO } from 'date-fns';
+import { format, formatISO, isValid, parseISO } from 'date-fns';
 
 const FUSO = 'America/Sao_Paulo';
 
@@ -63,10 +63,16 @@ function inteiro(valor: string | null, min: number, max: number, passo = 1) {
   return valido && numero % passo === 0 ? numero : null;
 }
 
+/** `YYYY-MM-DD` que existe no calendário: 2026-02-31 não passa (o `parseISO` o leva a março). */
+function dataDoCalendario(data: string | null) {
+  if (!data || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return null;
+  const dia = parseISO(data);
+  return isValid(dia) && format(dia, 'yyyy-MM-dd') === data ? data : null;
+}
+
 /** A URL da tela pode vir editada à mão: o que não for um filtro possível cai. */
 export function filtrosDaUrl(url: URLSearchParams): FiltrosDaBusca {
   const tipo = esquemaTipoRecurso.safeParse(url.get('tipo'));
-  const data = url.get('data');
   const inicio = inteiro(url.get('inicio'), 0, 24 * 60 - 30, 30);
   const fim = inteiro(url.get('fim'), 30, 24 * 60, 30);
   return {
@@ -75,7 +81,7 @@ export function filtrosDaUrl(url: URLSearchParams): FiltrosDaBusca {
     capacidadeMin:
       tipo.data === 'Equipamento' ? null : inteiro(url.get('capacidadeMin'), 1, 10_000),
     q: url.get('q') ?? '',
-    data: data && /^\d{4}-\d{2}-\d{2}$/.test(data) ? data : null,
+    data: dataDoCalendario(url.get('data')),
     inicio,
     fim: fim !== null && (inicio === null || fim > inicio) ? fim : null,
   };
