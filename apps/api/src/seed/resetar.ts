@@ -15,8 +15,8 @@ export async function esvaziarBanco(banco: Banco): Promise<void> {
   }
 }
 
-export async function resetar(banco: Banco): Promise<'resetado'> {
+export async function resetar(banco: Banco, agora: Date): Promise<'resetado'> {
   await esvaziarBanco(banco);
-  await semear(banco);
+  await semear(banco, agora);
   return 'resetado';
 }

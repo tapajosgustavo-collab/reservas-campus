@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { construirApp } from './app';
 import { criarBanco } from './comum/banco';
-import { relogioDoSistema, RelogioFixo } from './comum/relogio';
+import { esquemaRelogioFixo, relogioDoAmbiente } from './comum/relogio';
 
 const ambiente = z
   .object({
@@ -17,11 +17,7 @@ const ambiente = z
     DEMO: z.string().optional(),
     // Só na imagem Docker; no dia a dia quem serve a tela é o Vite.
     PASTA_DA_TELA: z.string().optional(),
-    // Vazio no .env conta como ausente.
-    RELOGIO_FIXO: z.preprocess(
-      (valor) => valor || undefined,
-      z.iso.datetime({ offset: true }).optional(),
-    ),
+    RELOGIO_FIXO: esquemaRelogioFixo,
   })
   .parse(process.env);
 
@@ -29,10 +25,7 @@ const demo = ambiente.DEMO === '1';
 const banco = criarBanco(ambiente.DATABASE_URL);
 
 const app = await construirApp({
-  // Na demo o relógio começa parado no RELOGIO_FIXO (ou agora, se faltar) e só anda pela rota.
-  relogio: demo
-    ? new RelogioFixo(ambiente.RELOGIO_FIXO ? new Date(ambiente.RELOGIO_FIXO) : new Date())
-    : relogioDoSistema,
+  relogio: relogioDoAmbiente(ambiente),
   banco,
   segredoSessao: ambiente.SEGREDO_SESSAO,
   sha: ambiente.GIT_SHA || ambiente.RENDER_GIT_COMMIT || 'local',
