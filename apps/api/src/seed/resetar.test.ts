@@ -16,7 +16,7 @@ comBanco('RNF10 · Reset do banco de demonstração', () => {
     const usuarioAntigo = await umUsuario(banco);
     expect(await banco.usuario.count()).toBe(1);
 
-    const resultado = await resetar(banco);
+    const resultado = await resetar(banco, new Date('2026-11-10T08:00:00-03:00'));
 
     expect(resultado).toBe('resetado');
     // Pelo e-mail, não pelo id: o RESTART IDENTITY devolve o id 1 a um Usuário do seed.
