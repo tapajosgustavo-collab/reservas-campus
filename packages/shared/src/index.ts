@@ -43,14 +43,27 @@ export {
 export { esquemaInstante } from './instante';
 export { POLITICA } from './politica';
 export {
+  esquemaBuscarReservas,
   esquemaCriarReserva,
+  esquemaDetalheDaReserva,
+  esquemaIdDaReserva,
+  esquemaItemDeReserva,
+  esquemaPaginaDeReservas,
   esquemaReserva,
+  esquemaSituacao,
   esquemaStatus,
+  esquemaTransicao,
+  RESERVAS_POR_PAGINA,
   STATUS_ATIVOS,
   type CriarReserva,
+  type DetalheDaReserva,
+  type ItemDeReserva,
+  type PaginaDeReservas,
   type Reserva,
+  type Situacao,
   type Status,
   type StatusAtivo,
+  type Transicao,
 } from './reservas';
 export {
   esquemaAgenda,
