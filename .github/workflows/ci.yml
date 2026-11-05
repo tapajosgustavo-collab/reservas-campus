@@ -70,7 +70,7 @@ jobs:
 
       # Os outros testes sem banco: funções puras da tela e as ferramentas do repositório.
       - name: Testes da tela e das ferramentas
-        run: npx vitest run --project web --project quadro --project matriz --project dora --passWithNoTests
+        run: npx vitest run --project web --project quadro --project matriz --project dora --project carga --passWithNoTests
 
       - name: Matriz RN → testes no resumo
         if: ${{ !cancelled() }}
@@ -181,6 +181,12 @@ jobs:
         run: npm run test:e2e
         env:
           GIT_SHA: ${{ github.sha }}
+
+      # Medida de latência do cliente (RNF12): publica a tabela no resumo sem bloquear o CI.
+      - name: Medidas de latência sob carga (RNF12)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: npm run carga
 
       - name: Logs da imagem
         if: failure()
