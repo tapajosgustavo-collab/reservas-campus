@@ -8,6 +8,11 @@ export function paraIsoSaoPaulo(instante: Date): string {
   return formatISO(new TZDate(instante, FUSO));
 }
 
+/** A hora do instante em São Paulo, como as mensagens das RNs mostram: `09:45`. */
+export function horaEmSaoPaulo(instante: Date): string {
+  return format(new TZDate(instante, FUSO), 'HH:mm');
+}
+
 /** Onde um instante cai no calendário de São Paulo. */
 export interface NoCalendario {
   /** `YYYY-MM-DD`. */

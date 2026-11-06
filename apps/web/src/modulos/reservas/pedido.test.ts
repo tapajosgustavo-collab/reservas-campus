@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   corpoDaReserva,
-  linhaDaViolacao,
   reservaCobre,
   resumoDaCriada,
   semanaDe,
@@ -40,12 +39,6 @@ describe('US08 · Corpo do pedido de Reserva', () => {
 });
 
 describe('RNF09 · Violações na janela', () => {
-  it('uma linha no formato RNxx · Nome: mensagem', () => {
-    const violacao = { rn: 'RN01', nome: 'Sem Conflito', mensagem: 'Ocupado das 10:00 às 12:00.' };
-
-    expect(linhaDaViolacao(violacao)).toBe('RN01 · Sem Conflito: Ocupado das 10:00 às 12:00.');
-  });
-
   it.each([
     [1, 'Não foi possível reservar. 1 regra impede esta Reserva:'],
     [3, 'Não foi possível reservar. 3 regras impedem esta Reserva:'],
