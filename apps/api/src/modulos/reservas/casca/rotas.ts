@@ -5,6 +5,7 @@ import {
   esquemaIdDaReserva,
   esquemaPaginaDeReservas,
   esquemaReserva,
+  POLITICA,
   RESERVAS_POR_PAGINA,
   STATUS_ATIVOS,
 } from '@reservas/shared';
@@ -59,7 +60,11 @@ export function registrarRotasDeReservas(app: FastifyInstance) {
       const { body, tx, agora } = request;
       const recurso = await tx.recurso.findUnique({
         where: { id: body.recursoId },
-        select: { tipo: true, horarios: { select: { diaSemana: true, abre: true, fecha: true } } },
+        select: {
+          tipo: true,
+          capacidade: true,
+          horarios: { select: { diaSemana: true, abre: true, fecha: true } },
+        },
       });
       if (!recurso) {
         throw new ErroApi('nao_encontrado', `Recurso ${body.recursoId} não encontrado.`);
@@ -80,7 +85,12 @@ export function registrarRotasDeReservas(app: FastifyInstance) {
         orderBy: { inicio: 'asc' },
       });
       const decisao = decidirReserva(
-        { horarios: recurso.horarios, reservasDoRecurso },
+        {
+          horarios: recurso.horarios,
+          reservasDoRecurso,
+          recurso: { tipo: recurso.tipo, capacidade: recurso.capacidade },
+          politica: POLITICA,
+        },
         pedido,
         quem,
         agora,

@@ -89,10 +89,14 @@ export async function exigirUsuarioDaSessao(request: FastifyRequest): Promise<Us
 }
 
 /** 401 sem sessão; 403 se o Perfil do Usuário não é um dos da rota. */
-export async function exigirPerfil(request: FastifyRequest, ...perfis: Perfil[]): Promise<Quem> {
-  const quem = await exigirSessao(request);
-  if (!perfis.includes(quem.perfil)) {
+export async function exigirPerfil<P extends Perfil>(
+  request: FastifyRequest,
+  ...perfis: P[]
+): Promise<Quem & { perfil: P }> {
+  const { id, perfil } = await exigirSessao(request);
+  const permitido = perfis.find((candidato) => candidato === perfil);
+  if (!permitido) {
     throw new ErroApi('proibido', `Só ${perfis.join(' ou ')} pode fazer isto.`);
   }
-  return quem;
+  return { id, perfil: permitido };
 }
