@@ -52,7 +52,14 @@ export interface ReservaCriada {
   transicao: { de: null; para: Status; em: Date; porId: number };
 }
 
-export type Efeito = ReservaCriada;
+/** A Reserva muda de Status, com a linha do histórico. Quem decide é outro módulo (o Check-in é do M4). */
+export interface StatusMudou {
+  evento: 'StatusMudou';
+  reservaId: number;
+  transicao: { de: Status; para: Status; em: Date; porId: number };
+}
+
+export type Efeito = ReservaCriada | StatusMudou;
 
 export type Decisao =
   { tipo: 'aceita'; efeitos: [Efeito] } | { tipo: 'recusada'; violacoes: Violacao[] };
