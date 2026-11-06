@@ -3,7 +3,10 @@ import {
   violacao,
   type Horario,
   type Perfil,
+  type PerfilQueReserva,
+  type Politica,
   type Status,
+  type TipoRecurso,
   type Violacao,
 } from '@reservas/shared';
 import { emSaoPaulo } from '../../../comum/instante';
@@ -14,10 +17,17 @@ export interface Quem {
   perfil: Perfil;
 }
 
+/** O Gestor não cria Reservas: a rota só deixa passar Aluno e Docente. */
+type QuemReserva = Quem & { perfil: PerfilQueReserva };
+
 /** As RNs do Intervalo marcam Início e Fim juntos na tela. */
 const CAMPO_DO_INTERVALO = 'intervalo';
+const CAMPO_DE_PARTICIPANTES = 'participantes';
+
+const NOME_DO_TIPO: Record<TipoRecurso, string> = { Espaco: 'Espaço', Equipamento: 'Equipamento' };
 
 const MINUTO = 60_000;
+const DIA = 24 * 60 * MINUTO;
 const MEIA_HORA = 30;
 
 /** Um Intervalo pedido ou buscado. */
@@ -41,9 +51,16 @@ export interface ReservaDoRecurso {
   status: Status;
 }
 
-export interface FatosDaReserva {
+/** O que decide se o Recurso pode ser usado no Intervalo. */
+export interface FatosDoIntervalo {
   horarios: Horario[];
   reservasDoRecurso: ReservaDoRecurso[];
+}
+
+export interface FatosDaReserva extends FatosDoIntervalo {
+  /** `capacidade` é `null` só em Equipamento. */
+  recurso: { tipo: TipoRecurso; capacidade: number | null };
+  politica: Politica;
 }
 
 export interface ReservaCriada {
@@ -128,7 +145,7 @@ function semConflito(pedido: Intervalo, reservas: ReservaDoRecurso[]): Violacao[
  * RN01, RN02 e RN03: o que impede usar o Recurso no Intervalo. O reservar (US08) e a busca de
  * Recurso livre (US06, no M2) usam a mesma regra.
  */
-export function violacoesDoIntervalo(intervalo: Intervalo, fatos: FatosDaReserva): Violacao[] {
+export function violacoesDoIntervalo(intervalo: Intervalo, fatos: FatosDoIntervalo): Violacao[] {
   return [
     ...semConflito(intervalo, fatos.reservasDoRecurso),
     ...intervaloValido(intervalo),
@@ -136,14 +153,83 @@ export function violacoesDoIntervalo(intervalo: Intervalo, fatos: FatosDaReserva
   ];
 }
 
+/** RN05. A Antecedência mínima também recusa início já passado. */
+function dentroDaAntecedencia(
+  { inicio }: Intervalo,
+  { perfil }: QuemReserva,
+  { antecedenciaMinimaMin, antecedenciaMaximaDias }: Politica,
+  agora: Date,
+): Violacao[] {
+  const antecedencia = inicio.getTime() - agora.getTime();
+  if (antecedencia < antecedenciaMinimaMin * MINUTO) {
+    const horas = antecedenciaMinimaMin / 60;
+    return [
+      violacao(
+        'RN05',
+        `O início precisa ser pelo menos ${horas}h depois de agora.`,
+        CAMPO_DO_INTERVALO,
+      ),
+    ];
+  }
+  const dias = antecedenciaMaximaDias[perfil];
+  if (antecedencia <= dias * DIA) return [];
+  return [
+    violacao(
+      'RN05',
+      `O início pode ser no máximo ${dias} dias depois de agora.`,
+      CAMPO_DO_INTERVALO,
+    ),
+  ];
+}
+
+/** RN06. Um Intervalo sem dia (RN02) não tem duração para conferir. */
+function dentroDaDuracao(
+  pedido: Intervalo,
+  { perfil }: QuemReserva,
+  { tipo }: FatosDaReserva['recurso'],
+  { duracaoMaximaMin }: Politica,
+): Violacao[] {
+  const dia = noDia(pedido);
+  if (!dia) return [];
+  const maxima = duracaoMaximaMin[tipo][perfil];
+  if (dia.ate - dia.de <= maxima) return [];
+  return [
+    violacao(
+      'RN06',
+      `A Duração máxima de ${perfil} em ${NOME_DO_TIPO[tipo]} é ${maxima / 60}h.`,
+      CAMPO_DO_INTERVALO,
+    ),
+  ];
+}
+
+/** RN08. Só Espaço tem Capacidade, e quem reserva informa os participantes. */
+function dentroDaCapacidade(
+  { participantes }: PedidoDeReserva,
+  { capacidade }: FatosDaReserva['recurso'],
+): Violacao[] {
+  if (capacidade === null) return [];
+  if (participantes === undefined) {
+    return [violacao('RN08', 'Informe o número de participantes.', CAMPO_DE_PARTICIPANTES)];
+  }
+  if (participantes <= capacidade) return [];
+  return [
+    violacao('RN08', `Este Espaço comporta até ${capacidade} pessoas.`, CAMPO_DE_PARTICIPANTES),
+  ];
+}
+
 /** US08: criar uma Reserva. Devolve todas as RNs violadas, não só a primeira. */
 export function decidirReserva(
   fatos: FatosDaReserva,
   pedido: PedidoDeReserva,
-  quem: Quem,
+  quem: QuemReserva,
   agora: Date,
 ): Decisao {
-  const violacoes = violacoesDoIntervalo(pedido, fatos);
+  const violacoes = [
+    ...violacoesDoIntervalo(pedido, fatos),
+    ...dentroDaAntecedencia(pedido, quem, fatos.politica, agora),
+    ...dentroDaDuracao(pedido, quem, fatos.recurso, fatos.politica),
+    ...dentroDaCapacidade(pedido, fatos.recurso),
+  ];
   if (violacoes.length > 0) return { tipo: 'recusada', violacoes };
 
   const status = 'Confirmada';

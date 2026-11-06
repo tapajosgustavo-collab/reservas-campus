@@ -1,8 +1,10 @@
+import { POLITICA } from '@reservas/shared';
 import { describe, expect, it } from 'vitest';
 import { decidirReserva, type FatosDaReserva, type PedidoDeReserva } from './reservar';
 
 const AGORA = new Date('2026-11-09T08:00:00-03:00');
 const ANA = { id: 7, perfil: 'Aluno' } as const;
+const BRUNO = { id: 8, perfil: 'Docente' } as const;
 
 /** Terça, 10/11/2026, em São Paulo. */
 const em = (hora: string) => new Date(`2026-11-10T${hora}:00-03:00`);
@@ -11,11 +13,21 @@ const pedido = (inicio: string, fim: string): PedidoDeReserva => ({
   recursoId: 3,
   inicio: em(inicio),
   fim: em(fim),
+  participantes: 20,
+});
+
+/** Equipamento não tem Participantes. */
+const pedidoSemParticipantes = (inicio: string, fim: string): PedidoDeReserva => ({
+  recursoId: 3,
+  inicio: em(inicio),
+  fim: em(fim),
 });
 
 const fatos = (dados: Partial<FatosDaReserva> = {}): FatosDaReserva => ({
   horarios: [{ diaSemana: 2, abre: 7 * 60, fecha: 23 * 60 }],
   reservasDoRecurso: [],
+  recurso: { tipo: 'Espaco', capacidade: 30 },
+  politica: POLITICA,
   ...dados,
 });
 
@@ -111,7 +123,7 @@ describe('RN01 · Sem Conflito', () => {
         ],
       }),
       pedido('11:00', '14:30'),
-      ANA,
+      BRUNO,
       AGORA,
     );
 
@@ -131,7 +143,9 @@ describe('RN02 · Intervalo válido', () => {
     ['10h–10h45', em('10:00'), em('10:45')],
     ['22h–01h', em('22:00'), new Date('2026-11-11T01:00:00-03:00')],
   ])('%s → recusado', (_nome, inicio, fim) => {
-    const decisao = decidirReserva(fatos(), { recursoId: 3, inicio, fim }, ANA, AGORA);
+    const comando = { ...pedido('10:00', '12:00'), inicio, fim };
+
+    const decisao = decidirReserva(fatos(), comando, ANA, AGORA);
 
     expect(decisao).toEqual({
       tipo: 'recusada',
@@ -167,8 +181,11 @@ describe('RN03 · Dentro do Horário de funcionamento', () => {
     expect(decidirReserva(fatos(), pedido('06:30', '08:00'), ANA, AGORA).tipo).toBe('recusada');
   });
 
-  it('funcionamento 7h–23h, pedir de 7h às 23h → aceito', () => {
-    expect(decidirReserva(fatos(), pedido('07:00', '23:00'), ANA, AGORA).tipo).toBe('aceita');
+  it.each([
+    ['7h–8h', '07:00', '08:00'],
+    ['22h–23h', '22:00', '23:00'],
+  ])('funcionamento 7h–23h, pedir %s (encostando na ponta) → aceito', (_nome, inicio, fim) => {
+    expect(decidirReserva(fatos(), pedido(inicio, fim), ANA, AGORA).tipo).toBe('aceita');
   });
 
   it('dia sem Horário de funcionamento → recusado', () => {
@@ -182,7 +199,7 @@ describe('RN03 · Dentro do Horário de funcionamento', () => {
   it('funcionamento até 24h, pedir 23h–0h do dia seguinte → aceito (ainda é o mesmo dia)', () => {
     const decisao = decidirReserva(
       fatos({ horarios: [{ diaSemana: 2, abre: 7 * 60, fecha: 24 * 60 }] }),
-      { recursoId: 3, inicio: em('23:00'), fim: new Date('2026-11-11T00:00:00-03:00') },
+      { ...pedido('23:00', '23:30'), fim: new Date('2026-11-11T00:00:00-03:00') },
       ANA,
       AGORA,
     );
@@ -194,6 +211,170 @@ describe('RN03 · Dentro do Horário de funcionamento', () => {
     const decisao = decidirReserva(fatos(), pedido('22:00', '22:30'), ANA, AGORA);
 
     expect(decisao.tipo).toBe('aceita');
+  });
+});
+
+describe('RN05 · Antecedência', () => {
+  const AGORA_DA_SPEC = new Date('2026-10-25T09:00:00-03:00');
+  const TODO_DIA = [0, 1, 2, 3, 4, 5, 6].map((diaSemana) => ({
+    diaSemana,
+    abre: 7 * 60,
+    fecha: 23 * 60,
+  }));
+  const naData = (dia: string, hora: string) => {
+    const inicio = new Date(`${dia}T${hora}:00-03:00`);
+    const fim = new Date(inicio.getTime() + 30 * 60_000);
+    return { ...pedido('10:00', '10:30'), inicio, fim };
+  };
+  const decidir = (comando: PedidoDeReserva, quem: typeof ANA | typeof BRUNO = ANA) =>
+    decidirReserva(fatos({ horarios: TODO_DIA }), comando, quem, AGORA_DA_SPEC);
+
+  it('Aluno, agora 25/10 às 9h, pedir 25/10 às 9h30 → recusado (menos de 1h)', () => {
+    expect(decidir(naData('2026-10-25', '09:30'))).toEqual({
+      tipo: 'recusada',
+      violacoes: [
+        {
+          rn: 'RN05',
+          nome: 'Antecedência',
+          mensagem: 'O início precisa ser pelo menos 1h depois de agora.',
+          campo: 'intervalo',
+        },
+      ],
+    });
+  });
+
+  it('Aluno, agora 25/10 às 9h, pedir 25/10 às 10h → aceito (exatamente 1h)', () => {
+    expect(decidir(naData('2026-10-25', '10:00')).tipo).toBe('aceita');
+  });
+
+  it('início já passado → recusado', () => {
+    expect(decidir(naData('2026-10-25', '08:00'))).toMatchObject({ violacoes: [{ rn: 'RN05' }] });
+  });
+
+  it('Aluno, agora 25/10 às 9h, pedir 10/11 → recusado (mais de 14 dias)', () => {
+    expect(decidir(naData('2026-11-10', '10:00'))).toMatchObject({
+      violacoes: [{ rn: 'RN05', mensagem: 'O início pode ser no máximo 14 dias depois de agora.' }],
+    });
+  });
+
+  it('Aluno, agora 25/10 às 9h, pedir 08/11 às 9h → aceito (exatamente 14 dias)', () => {
+    expect(decidir(naData('2026-11-08', '09:00')).tipo).toBe('aceita');
+  });
+
+  it('Docente, agora 25/10 às 9h, pedir 10/11 → aceito (limite de 60 dias)', () => {
+    expect(decidir(naData('2026-11-10', '10:00'), BRUNO).tipo).toBe('aceita');
+  });
+
+  it('Docente, agora 25/10 às 9h, pedir 24/12 às 9h30 → recusado (mais de 60 dias)', () => {
+    expect(decidir(naData('2026-12-24', '09:30'), BRUNO)).toMatchObject({
+      violacoes: [{ rn: 'RN05', mensagem: 'O início pode ser no máximo 60 dias depois de agora.' }],
+    });
+  });
+});
+
+describe('RN06 · Duração máxima', () => {
+  const EQUIPAMENTO = { tipo: 'Equipamento', capacidade: null } as const;
+
+  it('Aluno pede sala por 2h30 → recusado, com o limite', () => {
+    expect(decidirReserva(fatos(), pedido('10:00', '12:30'), ANA, AGORA)).toEqual({
+      tipo: 'recusada',
+      violacoes: [
+        {
+          rn: 'RN06',
+          nome: 'Duração máxima',
+          mensagem: 'A Duração máxima de Aluno em Espaço é 2h.',
+          campo: 'intervalo',
+        },
+      ],
+    });
+  });
+
+  it('Docente pede a mesma sala por 2h30 → aceito', () => {
+    expect(decidirReserva(fatos(), pedido('10:00', '12:30'), BRUNO, AGORA).tipo).toBe('aceita');
+  });
+
+  it('Docente pede sala por 4h30 → recusado', () => {
+    expect(decidirReserva(fatos(), pedido('10:00', '14:30'), BRUNO, AGORA)).toMatchObject({
+      violacoes: [{ rn: 'RN06', mensagem: 'A Duração máxima de Docente em Espaço é 4h.' }],
+    });
+  });
+
+  it('Aluno pede sala por exatamente 2h → aceito', () => {
+    expect(decidirReserva(fatos(), pedido('10:00', '12:00'), ANA, AGORA).tipo).toBe('aceita');
+  });
+
+  it('Aluno pede Equipamento por 4h → aceito', () => {
+    const comando = pedidoSemParticipantes('10:00', '14:00');
+
+    expect(decidirReserva(fatos({ recurso: EQUIPAMENTO }), comando, ANA, AGORA).tipo).toBe(
+      'aceita',
+    );
+  });
+
+  it('Aluno pede Equipamento por 4h30 → recusado', () => {
+    const comando = pedidoSemParticipantes('10:00', '14:30');
+
+    expect(decidirReserva(fatos({ recurso: EQUIPAMENTO }), comando, ANA, AGORA)).toMatchObject({
+      violacoes: [{ rn: 'RN06', mensagem: 'A Duração máxima de Aluno em Equipamento é 4h.' }],
+    });
+  });
+
+  it('Docente pede Equipamento por 8h30 → recusado', () => {
+    const comando = pedidoSemParticipantes('10:00', '18:30');
+
+    expect(decidirReserva(fatos({ recurso: EQUIPAMENTO }), comando, BRUNO, AGORA)).toMatchObject({
+      violacoes: [{ rn: 'RN06', mensagem: 'A Duração máxima de Docente em Equipamento é 8h.' }],
+    });
+  });
+
+  it('Aluno reserva a sala 10h–12h e depois 12h–14h → aceito (Reservas seguidas)', () => {
+    const seguida = fatos({
+      reservasDoRecurso: [{ inicio: em('10:00'), fim: em('12:00'), status: 'Confirmada' }],
+    });
+
+    expect(decidirReserva(seguida, pedido('12:00', '14:00'), ANA, AGORA).tipo).toBe('aceita');
+  });
+});
+
+describe('RN08 · Capacidade', () => {
+  const comParticipantes = (participantes: number) => ({
+    ...pedido('10:00', '12:00'),
+    participantes,
+  });
+
+  it('31 participantes num Espaço de Capacidade 30 → recusado, com a Capacidade', () => {
+    expect(decidirReserva(fatos(), comParticipantes(31), ANA, AGORA)).toEqual({
+      tipo: 'recusada',
+      violacoes: [
+        {
+          rn: 'RN08',
+          nome: 'Capacidade',
+          mensagem: 'Este Espaço comporta até 30 pessoas.',
+          campo: 'participantes',
+        },
+      ],
+    });
+  });
+
+  it('30 participantes num Espaço de Capacidade 30 → aceito', () => {
+    expect(decidirReserva(fatos(), comParticipantes(30), ANA, AGORA).tipo).toBe('aceita');
+  });
+
+  it('Espaço sem participantes informados → recusado', () => {
+    const comando = pedidoSemParticipantes('10:00', '12:00');
+
+    expect(decidirReserva(fatos(), comando, ANA, AGORA)).toMatchObject({
+      violacoes: [
+        { rn: 'RN08', mensagem: 'Informe o número de participantes.', campo: 'participantes' },
+      ],
+    });
+  });
+
+  it('Equipamento não tem Capacidade → aceito sem participantes', () => {
+    const comando = pedidoSemParticipantes('10:00', '12:00');
+    const projetor = fatos({ recurso: { tipo: 'Equipamento', capacidade: null } });
+
+    expect(decidirReserva(projetor, comando, ANA, AGORA).tipo).toBe('aceita');
   });
 });
 
@@ -210,6 +391,35 @@ describe('US08 · Todas as violações numa resposta', () => {
 
     expect(decisao).toMatchObject({
       violacoes: [{ rn: 'RN01' }, { rn: 'RN02' }, { rn: 'RN03' }],
+    });
+  });
+
+  it('RN06 e RN08 juntas', () => {
+    const comando = { ...pedido('10:00', '12:30'), participantes: 31 };
+
+    expect(decidirReserva(fatos(), comando, ANA, AGORA)).toMatchObject({
+      violacoes: [{ rn: 'RN06' }, { rn: 'RN08' }],
+    });
+  });
+
+  it('RN05, RN06 e RN08 junto das RNs do Intervalo', () => {
+    const decisao = decidirReserva(
+      fatos({ horarios: [{ diaSemana: 2, abre: 12 * 60, fecha: 14 * 60 }] }),
+      { ...pedido('08:30', '11:00'), participantes: 31 },
+      ANA,
+      new Date('2026-11-10T08:00:00-03:00'),
+    );
+
+    expect(decisao).toMatchObject({
+      violacoes: [{ rn: 'RN03' }, { rn: 'RN05' }, { rn: 'RN06' }, { rn: 'RN08' }],
+    });
+  });
+
+  it('RN02 · Intervalo que atravessa o dia não vira RN06', () => {
+    const comando = { ...pedido('22:00', '23:00'), fim: new Date('2026-11-11T01:00:00-03:00') };
+
+    expect(decidirReserva(fatos(), comando, ANA, AGORA)).toMatchObject({
+      violacoes: [{ rn: 'RN02' }],
     });
   });
 
