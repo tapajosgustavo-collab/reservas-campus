@@ -15,7 +15,8 @@ import type { Reserva, TipoRecurso } from '@reservas/shared';
 import { useState, type FormEvent } from 'react';
 import { ErroDaApi } from '../../comum/api';
 import { opcoesDeMeiaHora } from '../../comum/minutos';
-import { corpoDaReserva, linhaDaViolacao, tituloDasViolacoes } from './pedido';
+import { linhaDaViolacao } from '../../comum/violacoes';
+import { corpoDaReserva, tituloDasViolacoes } from './pedido';
 import { useCriarReserva } from './reservas';
 
 const OPCOES_DE_INICIO = opcoesDeMeiaHora(0, 24 * 60 - 30);

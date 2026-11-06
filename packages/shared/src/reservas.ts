@@ -95,3 +95,11 @@ export const esquemaDetalheDaReserva = esquemaItemDeReserva.extend({
 });
 
 export type DetalheDaReserva = z.infer<typeof esquemaDetalheDaReserva>;
+
+/** US13: o Cancelamento tardio com Penalidade entra no incremento 4 (#61); até lá, `penalidade: null`. */
+export const esquemaCancelamento = z.object({
+  reserva: esquemaReserva,
+  penalidade: z.null(),
+});
+
+export type Cancelamento = z.infer<typeof esquemaCancelamento>;
