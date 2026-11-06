@@ -78,7 +78,12 @@ comBanco('US08 · Reservar', () => {
   it('a Reserva criada aparece na agenda como do dono', async () => {
     const app = await umaApp({ banco });
     const { lab, ana } = await cenario();
-    const criada = await reservar(app, ana.id, { recursoId: lab.id, inicio: INICIO, fim: FIM });
+    const criada = await reservar(app, ana.id, {
+      recursoId: lab.id,
+      inicio: INICIO,
+      fim: FIM,
+      participantes: 20,
+    });
 
     const agenda = await app.inject({
       method: 'GET',
@@ -98,6 +103,7 @@ comBanco('US08 · Reservar', () => {
 
     const resposta = await reservar(app, docente.id, {
       recursoId: lab.id,
+      participantes: 20,
       inicio: INICIO,
       fim: FIM,
     });
@@ -108,10 +114,11 @@ comBanco('US08 · Reservar', () => {
   it('RN01 · Intervalo ocupado → 422 com o horário e sem dizer quem', async () => {
     const app = await umaApp({ banco });
     const { lab, ana } = await cenario();
-    await umaReserva(banco, { recursoId: lab.id, inicio: INICIO, fim: FIM });
+    await umaReserva(banco, { recursoId: lab.id, inicio: INICIO, fim: FIM, participantes: 20 });
 
     const resposta = await reservar(app, ana.id, {
       recursoId: lab.id,
+      participantes: 20,
       inicio: '2026-11-10T11:00:00-03:00',
       fim: '2026-11-10T13:00:00-03:00',
     });
@@ -132,10 +139,11 @@ comBanco('US08 · Reservar', () => {
   it('RN01 · só se encostar não é Conflito', async () => {
     const app = await umaApp({ banco });
     const { lab, ana } = await cenario();
-    await umaReserva(banco, { recursoId: lab.id, inicio: INICIO, fim: FIM });
+    await umaReserva(banco, { recursoId: lab.id, inicio: INICIO, fim: FIM, participantes: 20 });
 
     const resposta = await reservar(app, ana.id, {
       recursoId: lab.id,
+      participantes: 20,
       inicio: FIM,
       fim: '2026-11-10T14:00:00-03:00',
     });
@@ -148,12 +156,14 @@ comBanco('US08 · Reservar', () => {
     const { lab, ana } = await cenario();
     await umaReserva(banco, {
       recursoId: lab.id,
+      participantes: 20,
       inicio: '2026-11-10T22:00:00-03:00',
       fim: '2026-11-10T23:00:00-03:00',
     });
 
     const resposta = await reservar(app, ana.id, {
       recursoId: lab.id,
+      participantes: 20,
       inicio: '2026-11-10T22:15:00-03:00',
       fim: '2026-11-10T23:30:00-03:00',
     });
@@ -170,12 +180,119 @@ comBanco('US08 · Reservar', () => {
     expect(await banco.reserva.count()).toBe(1);
   });
 
+  it('RN05 · início a menos de 1h → 422 com o limite', async () => {
+    const app = await umaApp({ banco });
+    const { lab, ana } = await cenario();
+
+    const resposta = await reservar(app, ana.id, {
+      recursoId: lab.id,
+      participantes: 20,
+      inicio: '2026-11-10T08:30:00-03:00',
+      fim: '2026-11-10T09:00:00-03:00',
+    });
+
+    expect(resposta.statusCode).toBe(422);
+    expect(resposta.json().erro.violacoes).toEqual([
+      {
+        rn: 'RN05',
+        nome: 'Antecedência',
+        mensagem: 'O início precisa ser pelo menos 1h depois de agora.',
+        campo: 'intervalo',
+      },
+    ]);
+  });
+
+  it('RN06 · Aluno por 2h30 → 422; Docente no mesmo Intervalo → 201', async () => {
+    const app = await umaApp({ banco });
+    const { lab, ana } = await cenario();
+    const docente = await umUsuario(banco, 'Docente');
+    const corpo = {
+      recursoId: lab.id,
+      participantes: 20,
+      inicio: INICIO,
+      fim: '2026-11-10T12:30:00-03:00',
+    };
+
+    const doAluno = await reservar(app, ana.id, corpo);
+    const doDocente = await reservar(app, docente.id, corpo);
+
+    expect(doAluno.statusCode).toBe(422);
+    expect(doAluno.json().erro.violacoes).toMatchObject([{ rn: 'RN06' }]);
+    expect(doDocente.statusCode).toBe(201);
+  });
+
+  it('RN06 · Equipamento tem o limite do tipo: Aluno por 4h, sem Participantes → 201', async () => {
+    const app = await umaApp({ banco });
+    const { ana } = await cenario();
+    const projetor = await umEquipamento(banco, { horarios: SEG_A_SEX_7H_23H });
+
+    const resposta = await reservar(app, ana.id, {
+      recursoId: projetor.id,
+      inicio: INICIO,
+      fim: '2026-11-10T14:00:00-03:00',
+    });
+
+    expect(resposta.statusCode).toBe(201);
+  });
+
+  it('RN08 · acima da Capacidade do Espaço → 422 com a Capacidade', async () => {
+    const app = await umaApp({ banco });
+    const { lab, ana } = await cenario();
+
+    const resposta = await reservar(app, ana.id, {
+      recursoId: lab.id,
+      inicio: INICIO,
+      fim: FIM,
+      participantes: 41,
+    });
+
+    expect(resposta.statusCode).toBe(422);
+    expect(resposta.json().erro.violacoes).toEqual([
+      {
+        rn: 'RN08',
+        nome: 'Capacidade',
+        mensagem: 'Este Espaço comporta até 40 pessoas.',
+        campo: 'participantes',
+      },
+    ]);
+  });
+
+  it('RN08 · Espaço sem Participantes → 422', async () => {
+    const app = await umaApp({ banco });
+    const { lab, ana } = await cenario();
+
+    const resposta = await reservar(app, ana.id, { recursoId: lab.id, inicio: INICIO, fim: FIM });
+
+    expect(resposta.statusCode).toBe(422);
+    expect(resposta.json().erro.violacoes).toMatchObject([{ rn: 'RN08' }]);
+  });
+
+  it('RN06 e RN08 · as duas na mesma resposta, nada gravado', async () => {
+    const app = await umaApp({ banco });
+    const { lab, ana } = await cenario();
+
+    const resposta = await reservar(app, ana.id, {
+      recursoId: lab.id,
+      inicio: INICIO,
+      fim: '2026-11-10T12:30:00-03:00',
+      participantes: 41,
+    });
+
+    expect(resposta.statusCode).toBe(422);
+    expect(resposta.json().erro.violacoes.map(({ rn }: { rn: string }) => rn)).toEqual([
+      'RN06',
+      'RN08',
+    ]);
+    expect(await banco.reserva.count()).toBe(0);
+  });
+
   it('o deslocamento da entrada não muda o dia: 01h UTC é 22h de São Paulo', async () => {
     const app = await umaApp({ banco });
     const { lab, ana } = await cenario();
 
     const resposta = await reservar(app, ana.id, {
       recursoId: lab.id,
+      participantes: 20,
       inicio: '2026-11-11T01:00:00Z',
       fim: '2026-11-11T02:00:00Z',
     });
@@ -191,6 +308,7 @@ comBanco('US08 · Reservar', () => {
 
     const resposta = await reservar(app, gestor.id, {
       recursoId: lab.id,
+      participantes: 20,
       inicio: INICIO,
       fim: FIM,
     });
@@ -227,6 +345,7 @@ comBanco('US08 · Reservar', () => {
 
     const resposta = await reservar(app, ana.id, {
       recursoId: lab.id,
+      participantes: 20,
       inicio: INICIO,
       fim: FIM,
       finalidade: 'x'.repeat(201),
@@ -242,6 +361,7 @@ comBanco('US08 · Reservar', () => {
 
     const resposta = await reservar(app, ana.id, {
       recursoId: lab.id,
+      participantes: 20,
       inicio: '2026-11-10T10:00:00',
       fim: FIM,
     });
@@ -271,7 +391,9 @@ comBanco('US08 · Reservar', () => {
     const alunos = await Promise.all(Array.from({ length: 10 }, () => umUsuario(banco, 'Aluno')));
 
     const respostas = await Promise.all(
-      alunos.map(({ id }) => reservar(app, id, { recursoId: lab.id, inicio: INICIO, fim: FIM })),
+      alunos.map(({ id }) =>
+        reservar(app, id, { recursoId: lab.id, inicio: INICIO, fim: FIM, participantes: 20 }),
+      ),
     );
 
     const status = respostas.map(({ statusCode }) => statusCode).sort();
