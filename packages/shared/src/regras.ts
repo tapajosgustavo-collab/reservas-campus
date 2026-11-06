@@ -16,6 +16,7 @@ export const REGRAS = {
   RN02: { nome: 'Intervalo válido' },
   RN03: { nome: 'Dentro do Horário de funcionamento' },
   RN13: { nome: 'Gestor do Recurso' },
+  RN16: { nome: 'Cancelamento' },
   RN22: { nome: 'Agenda sem nomes' },
 } as const satisfies Record<`RN${number}`, Regra>;
 

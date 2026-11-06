@@ -1,5 +1,5 @@
 import { TZDate } from '@date-fns/tz';
-import { POLITICA, type CriarReserva, type Reserva, type Violacao } from '@reservas/shared';
+import { POLITICA, type CriarReserva, type Reserva } from '@reservas/shared';
 import { addMinutes, format, formatISO, parseISO, startOfWeek } from 'date-fns';
 
 const FUSO = 'America/Sao_Paulo';
@@ -34,10 +34,6 @@ export function corpoDaReserva(
     ...(participantes !== undefined && { participantes }),
     ...(texto && { finalidade: texto }),
   };
-}
-
-export function linhaDaViolacao({ rn, nome, mensagem }: Violacao) {
-  return `${rn} · ${nome}: ${mensagem}`;
 }
 
 export function tituloDasViolacoes(quantas: number) {
