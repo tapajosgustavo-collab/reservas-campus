@@ -48,8 +48,9 @@ O `npm run dev` sobe a API em <http://localhost:3000> e a tela em <http://localh
 | `npm run db:resetar` | Esvazia todas as tabelas e reaplica o seed de demonstração (local ou com `DATABASE_URL` remota) |
 | `npm run quadro` | Gera o [quadro da equipe no Obsidian](#quadro-da-equipe-no-obsidian) a partir das issues |
 | `npm run dora` | Calcula as [métricas DORA](#deploy-contínuo-e-produção) pela API do GitHub (com o `gh` logado) e mostra o relatório |
+| `npm run carga` | Mede a latência sob carga leve (10 conexões por 30 s) das rotas da API e gera o relatório do RNF12 |
 
-**Pastas:** `apps/api` (Fastify), `apps/web` (React), `packages/shared` (schemas Zod de cada rota, o contrato entre as duas), `e2e` (Playwright), `ferramentas/quadro` (o gerador do quadro), `ferramentas/matriz` (a matriz RN → testes do CI), `ferramentas/dora` (o relatório DORA) e `docker` (o entrypoint da imagem e o script que cria o banco de teste). A imagem é o [`Dockerfile`](Dockerfile) da raiz. Na API e na tela, o código de cada módulo fica em `src/modulos/{conduta,recursos,reservas,ciclo}/`, e os outros módulos só importam o `index.ts` dele.
+**Pastas:** `apps/api` (Fastify), `apps/web` (React), `packages/shared` (schemas Zod de cada rota, o contrato entre as duas), `e2e` (Playwright), `ferramentas/quadro` (o gerador do quadro), `ferramentas/matriz` (a matriz RN → testes do CI), `ferramentas/dora` (o relatório DORA), `ferramentas/carga` (medida de latência sob carga) e `docker` (o entrypoint da imagem e o script que cria o banco de teste). A imagem é o [`Dockerfile`](Dockerfile) da raiz. Na API e na tela, o código de cada módulo fica em `src/modulos/{conduta,recursos,reservas,ciclo}/`, e os outros módulos só importam o `index.ts` dele.
 
 ### Quadro da equipe no Obsidian
 

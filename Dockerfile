@@ -17,6 +17,9 @@ COPY apps/api/prisma apps/api/prisma
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
 COPY ferramentas/quadro/package.json ferramentas/quadro/
+COPY ferramentas/matriz/package.json ferramentas/matriz/
+COPY ferramentas/dora/package.json ferramentas/dora/
+COPY ferramentas/carga/package.json ferramentas/carga/
 COPY e2e/package.json e2e/
 
 FROM manifestos AS tela
