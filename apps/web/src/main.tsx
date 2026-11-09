@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router/dom';
 import { voltarAoEntrarNo401 } from './modulos/conduta';
 import { roteador } from './roteador';
+import { tema } from './tema';
 
 const clienteDeConsultas: QueryClient = new QueryClient({
   queryCache: new QueryCache({ onError: (erro) => voltarAoEntrarNo401(clienteDeConsultas, erro) }),
@@ -16,7 +17,7 @@ const clienteDeConsultas: QueryClient = new QueryClient({
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <MantineProvider>
+    <MantineProvider theme={tema}>
       <QueryClientProvider client={clienteDeConsultas}>
         <RouterProvider router={roteador} />
       </QueryClientProvider>

@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page } from '@playwright/test';
 
 /**
@@ -13,4 +14,20 @@ export async function conferirSemRolagemHorizontal(page: Page) {
     conteudo,
     `a página rola na horizontal: o conteúdo tem ${conteudo}px numa janela de ${janela}px`,
   ).toBeLessThanOrEqual(janela);
+}
+
+/**
+ * RNF13: o axe (regras WCAG 2.1 A e AA) não acha nenhuma violação "serious" ou "critical".
+ */
+export async function conferirAcessibilidade(page: Page) {
+  const resultados = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+
+  const graves = resultados.violations.filter(
+    (v) => v.impact === 'serious' || v.impact === 'critical',
+  );
+
+  expect(
+    graves,
+    `Violações de acessibilidade encontradas:\n${JSON.stringify(graves, null, 2)}`,
+  ).toEqual([]);
 }

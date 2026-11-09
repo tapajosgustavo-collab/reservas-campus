@@ -1,6 +1,7 @@
 import { TZDate } from '@date-fns/tz';
-import { POLITICA, type CriarReserva, type Reserva, type Violacao } from '@reservas/shared';
-import { addMinutes, format, formatISO, parseISO, startOfWeek } from 'date-fns';
+import type { CriarReserva, Reserva } from '@reservas/shared';
+import { format, formatISO, parseISO, startOfWeek } from 'date-fns';
+import { janelaDoCheckIn } from '../ciclo';
 
 const FUSO = 'America/Sao_Paulo';
 const MEIA_HORA = 30;
@@ -36,10 +37,6 @@ export function corpoDaReserva(
   };
 }
 
-export function linhaDaViolacao({ rn, nome, mensagem }: Violacao) {
-  return `${rn} · ${nome}: ${mensagem}`;
-}
-
 export function tituloDasViolacoes(quantas: number) {
   const regras = quantas === 1 ? '1 regra impede' : `${quantas} regras impedem`;
   return `Não foi possível reservar. ${regras} esta Reserva:`;
@@ -50,12 +47,12 @@ const emSaoPaulo = (instante: string) => new TZDate(instante, FUSO);
 /** O que a agenda diz depois de criar: o Intervalo e a janela de Check-in (RN14). */
 export function resumoDaCriada({ inicio, fim }: Pick<Reserva, 'inicio' | 'fim'>) {
   const comeca = emSaoPaulo(inicio);
-  const abreCheckIn = addMinutes(comeca, -POLITICA.checkInAntesDoInicioMin);
-  const fechaCheckIn = addMinutes(comeca, POLITICA.toleranciaMin);
-  const hora = (instante: Date) => format(instante, 'HH:mm');
+  const { abre, fecha } = janelaDoCheckIn(inicio);
+  const hora = (ms: number) => format(new TZDate(ms, FUSO), 'HH:mm');
   return (
-    `Reserva criada para ${format(comeca, 'dd/MM')}, das ${hora(comeca)} às ${hora(emSaoPaulo(fim))}. ` +
-    `Faça o Check-in das ${hora(abreCheckIn)} às ${hora(fechaCheckIn)}.`
+    `Reserva criada para ${format(comeca, 'dd/MM')}, ` +
+    `das ${hora(Date.parse(inicio))} às ${hora(Date.parse(fim))}. ` +
+    `Faça o Check-in das ${hora(abre)} às ${hora(fecha)}.`
   );
 }
 

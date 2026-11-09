@@ -51,6 +51,12 @@ export interface ReservaDoRecurso {
   status: Status;
 }
 
+/** Uma Reserva ativa de quem está reservando, para a Cota. */
+export interface ReservaNaCota {
+  id: number;
+  serieId: number | null;
+}
+
 /** O que decide se o Recurso pode ser usado no Intervalo. */
 export interface FatosDoIntervalo {
   horarios: Horario[];
@@ -60,6 +66,8 @@ export interface FatosDoIntervalo {
 export interface FatosDaReserva extends FatosDoIntervalo {
   /** `capacidade` é `null` só em Equipamento. */
   recurso: { tipo: TipoRecurso; capacidade: number | null };
+  /** Só as Reservas ativas (Pendente, Confirmada e Em uso) de quem está reservando. */
+  ativasDoUsuario: ReservaNaCota[];
   politica: Politica;
 }
 
@@ -69,7 +77,14 @@ export interface ReservaCriada {
   transicao: { de: null; para: Status; em: Date; porId: number };
 }
 
-export type Efeito = ReservaCriada;
+/** A Reserva muda de Status, com a linha do histórico. Quem decide é outro módulo (o Check-in é do M4). */
+export interface StatusMudou {
+  evento: 'StatusMudou';
+  reservaId: number;
+  transicao: { de: Status; para: Status; em: Date; porId: number };
+}
+
+export type Efeito = ReservaCriada | StatusMudou;
 
 export type Decisao =
   { tipo: 'aceita'; efeitos: [Efeito] } | { tipo: 'recusada'; violacoes: Violacao[] };
@@ -182,6 +197,28 @@ function dentroDaAntecedencia(
   ];
 }
 
+/**
+ * RN07: a Cota conta as Reservas ativas, e as Ocorrências de uma mesma Série contam como uma só
+ * (RN21). A chave separa Série e Reserva, porque os ids delas vêm de sequências diferentes.
+ */
+function dentroDaCota(
+  ativas: ReservaNaCota[],
+  { perfil }: QuemReserva,
+  { cota }: Politica,
+): Violacao[] {
+  const usadas = new Set(
+    ativas.map(({ id, serieId }) => (serieId !== null ? `s${serieId}` : `r${id}`)),
+  ).size;
+  const limite = cota[perfil];
+  if (usadas < limite) return [];
+  return [
+    violacao(
+      'RN07',
+      `Você já tem ${usadas} ${usadas === 1 ? 'Reserva ativa' : 'Reservas ativas'}, e a Cota de ${perfil} é ${limite}.`,
+    ),
+  ];
+}
+
 /** RN06. Um Intervalo sem dia (RN02) não tem duração para conferir. */
 function dentroDaDuracao(
   pedido: Intervalo,
@@ -228,6 +265,7 @@ export function decidirReserva(
     ...violacoesDoIntervalo(pedido, fatos),
     ...dentroDaAntecedencia(pedido, quem, fatos.politica, agora),
     ...dentroDaDuracao(pedido, quem, fatos.recurso, fatos.politica),
+    ...dentroDaCota(fatos.ativasDoUsuario, quem, fatos.politica),
     ...dentroDaCapacidade(pedido, fatos.recurso),
   ];
   if (violacoes.length > 0) return { tipo: 'recusada', violacoes };

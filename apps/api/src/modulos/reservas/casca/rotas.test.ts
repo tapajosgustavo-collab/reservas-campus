@@ -404,4 +404,106 @@ comBanco('US08 · Reservar', () => {
     }
     expect(await banco.reserva.count()).toBe(1);
   });
+
+  it('RN07 · Aluno com 3 Reservas ativas → 422 citando a Cota, nada gravado', async () => {
+    const app = await umaApp({ banco });
+    const { lab, ana } = await cenario();
+    for (const status of ['Pendente', 'Confirmada', 'EmUso'] as const) {
+      await umaReserva(banco, { usuarioId: ana.id, status });
+    }
+
+    const resposta = await reservar(app, ana.id, {
+      recursoId: lab.id,
+      inicio: INICIO,
+      fim: FIM,
+      participantes: 20,
+    });
+
+    expect(resposta.statusCode).toBe(422);
+    expect(resposta.json().erro.violacoes).toEqual([
+      {
+        rn: 'RN07',
+        nome: 'Cota',
+        mensagem: 'Você já tem 3 Reservas ativas, e a Cota de Aluno é 3.',
+      },
+    ]);
+    expect(await banco.reserva.count({ where: { recursoId: lab.id } })).toBe(0);
+  });
+
+  it('RN07 · Reserva que deixou de estar ativa não conta: 2 ativas, 1 Cancelada e 1 Concluída → 201', async () => {
+    const app = await umaApp({ banco });
+    const { lab, ana } = await cenario();
+    for (const status of ['Confirmada', 'Confirmada', 'Cancelada', 'Concluida'] as const) {
+      await umaReserva(banco, { usuarioId: ana.id, status });
+    }
+
+    const resposta = await reservar(app, ana.id, {
+      recursoId: lab.id,
+      inicio: INICIO,
+      fim: FIM,
+      participantes: 20,
+    });
+
+    expect(resposta.statusCode).toBe(201);
+  });
+
+  it('RN07 · as Ocorrências ativas de uma Série contam como 1: Docente com uma Série de 12 e 8 avulsas → 201', async () => {
+    const app = await umaApp({ banco });
+    const lab = await umEspaco(banco, { horarios: SEG_A_SEX_7H_23H });
+    const docente = await umUsuario(banco, 'Docente');
+    const sala = await umEspaco(banco);
+    const serie = await banco.serie.create({
+      data: { usuarioId: docente.id, recursoId: sala.id, criadaEm: new Date(INICIO) },
+    });
+    const SEMANA = 7 * 24 * 60 * 60_000;
+    const semanas = (instante: string, n: number) =>
+      new Date(Date.parse(instante) + n * SEMANA).toISOString();
+    for (let n = 0; n < 12; n++) {
+      await umaReserva(banco, {
+        usuarioId: docente.id,
+        recursoId: sala.id,
+        serieId: serie.id,
+        inicio: semanas('2026-11-10T14:00:00-03:00', n),
+        fim: semanas('2026-11-10T16:00:00-03:00', n),
+      });
+    }
+    for (let i = 0; i < 8; i++) await umaReserva(banco, { usuarioId: docente.id });
+
+    const resposta = await reservar(app, docente.id, {
+      recursoId: lab.id,
+      inicio: INICIO,
+      fim: FIM,
+      participantes: 20,
+    });
+
+    expect(resposta.statusCode).toBe(201);
+    const outra = await reservar(app, docente.id, {
+      recursoId: lab.id,
+      inicio: '2026-11-10T13:00:00-03:00',
+      fim: '2026-11-10T14:00:00-03:00',
+      participantes: 20,
+    });
+    expect(outra.statusCode).toBe(422);
+    expect(outra.json().erro.violacoes).toMatchObject([{ rn: 'RN07' }]);
+  });
+
+  it('RNF11 · RN07: duas requisições simultâneas com uma vaga na Cota → 1 Reserva, a outra cita a RN07', async () => {
+    const app = await umaApp({ banco });
+    const { lab, ana } = await cenario();
+    const sala = await umEspaco(banco, { horarios: SEG_A_SEX_7H_23H });
+    await umaReserva(banco, { usuarioId: ana.id });
+    await umaReserva(banco, { usuarioId: ana.id });
+
+    const respostas = await Promise.all(
+      [lab, sala].map(({ id }) =>
+        reservar(app, ana.id, { recursoId: id, inicio: INICIO, fim: FIM, participantes: 20 }),
+      ),
+    );
+
+    const status = respostas.map(({ statusCode }) => statusCode).sort();
+    expect(status).toEqual([201, 422]);
+    const recusada = respostas.find(({ statusCode }) => statusCode === 422);
+    expect(recusada?.json().erro.violacoes).toMatchObject([{ rn: 'RN07' }]);
+    expect(await banco.reserva.count({ where: { usuarioId: ana.id } })).toBe(3);
+  });
 });
