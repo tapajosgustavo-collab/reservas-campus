@@ -1,9 +1,9 @@
 // Ponto de entrada de `npm run carga`: executa carga leve (10 conexões por 30s) e publica Markdown.
 import { appendFileSync } from 'node:fs';
-import { erroDeCargaMd, medirCargaDoIncremento1, relatorioDeCargaMd } from './carga';
+import { erroDeCargaMd, medirCarga, relatorioDeCargaMd } from './carga';
 
 try {
-  const medidas = await medirCargaDoIncremento1();
+  const medidas = await medirCarga();
   const md = relatorioDeCargaMd(medidas);
 
   if (process.env.GITHUB_STEP_SUMMARY) {
