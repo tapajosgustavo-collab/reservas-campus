@@ -1,13 +1,8 @@
 import { Alert, Button, Group, Paper, Stack, Text, TextInput } from '@mantine/core';
 import { useState, type FormEvent } from 'react';
 import { useSessao } from '../conduta';
-import {
-  ATALHOS_DE_MINUTOS,
-  corpoIrPara,
-  paraCampoDeDataHora,
-  rotuloDoAgora,
-  useMudarRelogio,
-} from './relogio';
+import { rotuloDoInstante } from '../reservas';
+import { ATALHOS_DE_MINUTOS, corpoIrPara, paraCampoDeDataHora, useMudarRelogio } from './relogio';
 
 /**
  * RNF02 (#52): barra da demo local (`DEMO=1`) para o apresentador ver o `agora` do servidor e
@@ -22,7 +17,8 @@ export function BarraDoRelogio() {
   if (!sessao.data?.demo) return null;
 
   const { agora } = sessao.data;
-  const dataHora = editado?.base === agora ? editado.valor : paraCampoDeDataHora(agora);
+  const padrao = paraCampoDeDataHora(agora);
+  const dataHora = editado?.base === agora ? editado.valor : padrao;
 
   function avancarLivre(evento: FormEvent) {
     evento.preventDefault();
@@ -44,7 +40,7 @@ export function BarraDoRelogio() {
       <Stack gap="xs">
         <Group justify="space-between" gap="xs" wrap="wrap">
           <Text size="sm" fw={500}>
-            Agora no servidor: {rotuloDoAgora(agora)}
+            Agora no servidor: {rotuloDoInstante(agora)}
           </Text>
 
           <Group gap={6} wrap="wrap">
@@ -83,6 +79,7 @@ export function BarraDoRelogio() {
               <Group gap={4} wrap="nowrap">
                 <TextInput
                   type="datetime-local"
+                  min={padrao}
                   required
                   size="xs"
                   aria-label="Ir para data e hora"

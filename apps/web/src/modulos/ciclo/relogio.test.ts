@@ -6,7 +6,6 @@ import {
   corpoIrPara,
   depoisDeMudarRelogio,
   paraCampoDeDataHora,
-  rotuloDoAgora,
 } from './relogio';
 
 const sessaoInicial: Sessao = {
@@ -16,10 +15,6 @@ const sessaoInicial: Sessao = {
 };
 
 describe('RNF02 · Barra de avançar relógio na tela', () => {
-  it('mostra o agora do servidor no horário de São Paulo, mesmo quando vem em UTC', () => {
-    expect(rotuloDoAgora('2026-11-10T11:00:00Z')).toBe('10/11/2026 às 08:00');
-  });
-
   it('sincroniza o valor do campo datetime-local com o agora em São Paulo', () => {
     expect(paraCampoDeDataHora('2026-11-10T11:00:00Z')).toBe('2026-11-10T08:00');
     expect(paraCampoDeDataHora('2026-11-10T10:16:00-03:00')).toBe('2026-11-10T10:16');

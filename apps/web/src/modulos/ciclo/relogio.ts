@@ -13,16 +13,9 @@ export const ATALHOS_DE_MINUTOS = [
   { minutos: 60, rotulo: '+1h' },
 ] as const;
 
-const emSaoPaulo = (instante: string) => new TZDate(instante, FUSO);
-
-/** Mostra o `agora` do servidor no fuso de São Paulo (RNF08). */
-export function rotuloDoAgora(agora: string) {
-  return format(emSaoPaulo(agora), "dd/MM/yyyy 'às' HH:mm");
-}
-
 /** Valor do `input[type="datetime-local"]` (`YYYY-MM-DDTHH:mm`) sincronizado com o `agora` em São Paulo. */
 export function paraCampoDeDataHora(agora: string) {
-  return format(emSaoPaulo(agora), "yyyy-MM-dd'T'HH:mm");
+  return format(new TZDate(agora, FUSO), "yyyy-MM-dd'T'HH:mm");
 }
 
 /** Converte `YYYY-MM-DDTHH:mm` do horário de São Paulo no corpo `{ ir }` com deslocamento explícito. */
