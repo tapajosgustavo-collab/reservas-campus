@@ -16,6 +16,7 @@ import {
 import { useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { opcoesDeMeiaHora } from '../../comum/minutos';
+import { useSessao } from '../conduta';
 import { corpoDaIndisponibilidade, resumoDaIndisponibilidade } from './indisponibilidade';
 import { useCriarIndisponibilidade, useRecurso } from './recursos';
 
@@ -36,6 +37,9 @@ export function CadastroDeIndisponibilidade() {
   const [semFim, setSemFim] = useState(false);
   const [motivo, setMotivo] = useState('');
   const [confirmando, setConfirmando] = useState(false);
+  // Só ajuda a escolher: quem recusa o início no passado é a API (RN04). O agora da sessão vem com
+  // o deslocamento de São Paulo, então os 10 primeiros caracteres são o dia de hoje lá.
+  const hoje = useSessao().data?.agora.slice(0, 10);
 
   function pedirConfirmacao(evento: FormEvent) {
     evento.preventDefault();
@@ -73,6 +77,7 @@ export function CadastroDeIndisponibilidade() {
                 label="Data de início"
                 type="date"
                 required
+                min={hoje}
                 value={dataInicio}
                 onChange={(evento) => setDataInicio(evento.currentTarget.value)}
               />
@@ -95,6 +100,7 @@ export function CadastroDeIndisponibilidade() {
                   label="Data de fim"
                   type="date"
                   required
+                  min={dataInicio || hoje}
                   value={dataFim}
                   onChange={(evento) => setDataFim(evento.currentTarget.value)}
                 />

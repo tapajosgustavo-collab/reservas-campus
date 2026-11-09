@@ -1,5 +1,6 @@
 import { violacao, type Status, type Violacao } from '@reservas/shared';
-import type { StatusMudou } from '../../reservas';
+import { horaEmSaoPaulo } from '../../../comum/instante';
+import type { ReservasCanceladasPeloSistema } from '../../reservas';
 import type { Quem, RecursoCadastrado } from './recurso';
 
 /** O período e o motivo que o Gestor informou. `fim` vazio = sem previsão de volta. */
@@ -28,8 +29,14 @@ export interface IndisponibilidadeCriada {
 }
 
 export type Decisao =
-  | { tipo: 'aceita'; efeitos: [IndisponibilidadeCriada, ...StatusMudou[]] }
-  | { tipo: 'recusada'; violacoes: Violacao[] };
+  | {
+      tipo: 'aceita';
+      efeitos: [IndisponibilidadeCriada] | [IndisponibilidadeCriada, ReservasCanceladasPeloSistema];
+    }
+  | { tipo: 'recusada'; violacoes: Violacao[] }
+  | { tipo: 'proibida'; violacoes: Violacao[] };
+
+const MEIA_HORA_MS = 30 * 60_000;
 
 /** RN04: só a Pendente e a Confirmada são canceladas; a Em uso continua até o fim. */
 const CANCELAVEIS: readonly Status[] = ['Pendente', 'Confirmada'];
@@ -37,6 +44,22 @@ const CANCELAVEIS: readonly Status[] = ['Pendente', 'Confirmada'];
 /** O Intervalo `[inicio, fim)` toca o período? Sem fim, o período não acaba. */
 function noPeriodo({ inicio, fim }: PedidoDeIndisponibilidade, reserva: ReservaNoPeriodo) {
   return reserva.fim > inicio && (fim === null || reserva.inicio < fim);
+}
+
+/**
+ * RN04: começar no passado cancelaria sem Penalidade Reservas que o tempo já resolveu (Não
+ * comparecimento, Cancelamento tardio). O primeiro horário possível é a próxima meia hora.
+ */
+function noPassado(inicio: Date, agora: Date): Violacao[] {
+  if (inicio >= agora) return [];
+  const primeiro = new Date(Math.ceil(agora.getTime() / MEIA_HORA_MS) * MEIA_HORA_MS);
+  return [
+    violacao(
+      'RN04',
+      'A Indisponibilidade não pode começar no passado: ' +
+        `o primeiro horário possível é ${horaEmSaoPaulo(primeiro)}.`,
+    ),
+  ];
 }
 
 /**
@@ -50,9 +73,10 @@ export function decidirIndisponibilidade(
   quem: Quem,
   agora: Date,
 ): Decisao {
+  // RN13, regra de dono (403): vem antes das outras.
   if (quem.id !== recurso.gestorId) {
     return {
-      tipo: 'recusada',
+      tipo: 'proibida',
       violacoes: [
         violacao(
           'RN13',
@@ -62,22 +86,27 @@ export function decidirIndisponibilidade(
     };
   }
 
-  const observacao = `Cancelamento pelo sistema: o Recurso ficou indisponível (${pedido.motivo}).`;
-  const cancelamentos = reservas
+  const violacoes = noPassado(pedido.inicio, agora);
+  if (violacoes.length > 0) return { tipo: 'recusada', violacoes };
+
+  const criada: IndisponibilidadeCriada = {
+    evento: 'IndisponibilidadeCriada',
+    indisponibilidade: { ...pedido, recursoId: recurso.id, criadaEm: agora },
+  };
+  const atingidas = reservas
     .filter((reserva) => CANCELAVEIS.includes(reserva.status) && noPeriodo(pedido, reserva))
-    .map(({ id, status }): StatusMudou => ({
-      evento: 'StatusMudou',
-      reservaId: id,
-      transicao: { de: status, para: 'Cancelada', em: agora, porId: null, observacao },
-    }));
+    .map(({ id, status }) => ({ id, de: status }));
+  if (atingidas.length === 0) return { tipo: 'aceita', efeitos: [criada] };
   return {
     tipo: 'aceita',
     efeitos: [
+      criada,
       {
-        evento: 'IndisponibilidadeCriada',
-        indisponibilidade: { ...pedido, recursoId: recurso.id, criadaEm: agora },
+        evento: 'ReservasCanceladasPeloSistema',
+        reservas: atingidas,
+        em: agora,
+        observacao: `Cancelamento pelo sistema: o Recurso ficou indisponível (${pedido.motivo}).`,
       },
-      ...cancelamentos,
     ],
   };
 }

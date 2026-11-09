@@ -52,14 +52,22 @@ export interface ReservaCriada {
   transicao: { de: null; para: Status; em: Date; porId: number };
 }
 
-/**
- * A Reserva muda de Status, com a linha do histórico. Quem decide é outro módulo (o Check-in é do
- * M4). `porId` vazio é o sistema, com a causa na `observacao` (Cancelamento pelo sistema, RN04).
- */
+/** A Reserva muda de Status, com a linha do histórico. Quem decide é outro módulo (o Check-in é do M4). */
 export interface StatusMudou {
   evento: 'StatusMudou';
   reservaId: number;
-  transicao: { de: Status; para: Status; em: Date; porId: number | null; observacao?: string };
+  transicao: { de: Status; para: Status; em: Date; porId: number };
+}
+
+/**
+ * RN04: Cancelamento pelo sistema de várias Reservas de uma vez, cada uma com o Status de antes.
+ * Sem Usuário (`por` vazio) e com a causa na observação. Quem decide é o M2 (Indisponibilidade).
+ */
+export interface ReservasCanceladasPeloSistema {
+  evento: 'ReservasCanceladasPeloSistema';
+  reservas: { id: number; de: Status }[];
+  em: Date;
+  observacao: string;
 }
 
 export type Efeito = ReservaCriada | StatusMudou;

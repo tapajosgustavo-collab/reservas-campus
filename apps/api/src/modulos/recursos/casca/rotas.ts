@@ -12,7 +12,7 @@ import {
 } from '@reservas/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { ErroApi, proibidoPelaRegra } from '../../../comum/erros';
+import { ErroApi, proibidoPelaRegra, regraViolada } from '../../../comum/erros';
 import { limitesDaSemana, paraIsoSaoPaulo, segundaDaSemana } from '../../../comum/instante';
 import { exigirPerfil, exigirSessao } from '../../../comum/sessao';
 import type { Prisma } from '../../../generated/prisma/client';
@@ -53,12 +53,17 @@ async function buscarRecurso(request: FastifyRequest, id: number) {
   return recurso;
 }
 
+/** Log de cada efeito executado: o evento e só ids (spec §2). */
+function registrar(request: FastifyRequest, evento: string, ids: Record<string, unknown>) {
+  request.log.info({ evento, ...ids }, evento);
+}
+
 /** Executa os efeitos de uma decisão aceita e devolve o id do Recurso. */
 async function aplicar(request: FastifyRequest, efeitos: Efeito[]) {
   let recursoId = 0;
   for (const efeito of efeitos) {
     recursoId = await executar(request.tx, efeito);
-    request.log.info({ evento: efeito.evento, recursoId }, efeito.evento);
+    registrar(request, efeito.evento, { recursoId });
   }
   return recursoId;
 }
@@ -159,18 +164,16 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
     },
     async (request, reply) => {
       const quem = await exigirPerfil(request, 'Gestor');
-      const { id } = request.params;
-      const recurso = await request.tx.recurso.findUnique({
-        where: { id },
-        select: { id: true, gestorId: true },
-      });
-      if (!recurso) throw naoEncontrado(id);
+      const { id, gestor } = await buscarRecurso(request, request.params.id);
+      const recurso = { id, gestorId: gestor.id };
       const pedido = {
         inicio: new Date(request.body.inicio),
         fim: request.body.fim === null ? null : new Date(request.body.fim),
         motivo: request.body.motivo,
       };
-      // Todas as Reservas que tocam o período: quem escolhe as que são canceladas é o núcleo.
+      // Todas as Reservas que tocam o período: quem escolhe as que são canceladas é o núcleo. Nenhuma
+      // Reserva nova entra entre esta leitura e o commit: toda requisição roda sob o mesmo
+      // `pg_advisory_xact_lock` (`comum/transacao.ts`, ADR 0001).
       const reservas = await request.tx.reserva.findMany({
         where: {
           recursoId: recurso.id,
@@ -180,29 +183,26 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
         select: { id: true, inicio: true, fim: true, status: true },
       });
       const decisao = decidirIndisponibilidade({ recurso, reservas }, pedido, quem, request.agora);
-      if (decisao.tipo === 'recusada') throw proibidoPelaRegra(decisao.violacoes);
+      if (decisao.tipo === 'proibida') throw proibidoPelaRegra(decisao.violacoes);
+      if (decisao.tipo === 'recusada') throw regraViolada(decisao.violacoes);
 
-      const [criada, ...cancelamentos] = decisao.efeitos;
-      const indisponibilidadeId = await executar(request.tx, criada);
-      request.log.info({ evento: criada.evento, indisponibilidadeId }, criada.evento);
-      // Só o M3 grava em `reserva` e `transicao`.
-      for (const cancelamento of cancelamentos) {
-        await executarEmReservas(request.tx, cancelamento);
-        request.log.info(
-          { evento: cancelamento.evento, reservaId: cancelamento.reservaId },
-          cancelamento.evento,
-        );
+      const [criada, canceladas] = decisao.efeitos;
+      const indisponibilidade = await executar(request.tx, criada);
+      registrar(request, criada.evento, { indisponibilidadeId: indisponibilidade.id });
+      // Só o M3 grava em `reserva` e `transicao`: todas as Reservas num efeito só.
+      if (canceladas) {
+        await executarEmReservas(request.tx, canceladas);
+        registrar(request, canceladas.evento, {
+          reservaIds: canceladas.reservas.map((reserva) => reserva.id),
+        });
       }
-      const indisponibilidade = await request.tx.indisponibilidade.findUniqueOrThrow({
-        where: { id: indisponibilidadeId },
-      });
       reply.status(201);
       return {
         indisponibilidade: {
           ...indisponibilidadeEmSaoPaulo(indisponibilidade),
           criadaEm: paraIsoSaoPaulo(indisponibilidade.criadaEm),
         },
-        reservasCanceladas: cancelamentos.length,
+        reservasCanceladas: canceladas?.reservas.length ?? 0,
       };
     },
   );
