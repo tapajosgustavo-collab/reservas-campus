@@ -126,6 +126,39 @@ comBanco('US05 · Cadastrar Indisponibilidade', () => {
       reservasCanceladas: 2,
     });
     expect(await banco.reserva.count({ where: { status: 'Cancelada' } })).toBe(2);
+    const transicoes = await banco.transicao.findMany({ orderBy: { reservaId: 'asc' } });
+    expect(transicoes.map(({ de, para, porId }) => ({ de, para, porId }))).toEqual([
+      { de: 'Confirmada', para: 'Cancelada', porId: null },
+      { de: 'Pendente', para: 'Cancelada', porId: null },
+    ]);
+  });
+
+  it('RN04 · início no passado → 422 citando a RN04, nada gravado e nenhuma Reserva cancelada', async () => {
+    const app = await umaApp({ banco });
+    const { carlos, sala, bia } = await cenario();
+    await umaReserva(banco, { usuarioId: bia.id, recursoId: sala.id });
+
+    const resposta = await app.inject({
+      method: 'POST',
+      url: `/api/recursos/${sala.id}/indisponibilidades`,
+      cookies: sessaoDe(app, carlos.id),
+      payload: { inicio: '2026-11-01T08:00:00-03:00', fim: null, motivo: 'Fora de uso' },
+    });
+
+    expect(resposta.statusCode).toBe(422);
+    expect(resposta.json().erro).toMatchObject({
+      codigo: 'regra_violada',
+      violacoes: [
+        {
+          rn: 'RN04',
+          mensagem:
+            'A Indisponibilidade não pode começar no passado: o primeiro horário possível é 08:00.',
+        },
+      ],
+    });
+    expect(await banco.indisponibilidade.count()).toBe(0);
+    expect(await banco.reserva.count({ where: { status: 'Confirmada' } })).toBe(1);
+    expect(await banco.transicao.count()).toBe(0);
   });
 
   it('RN13 · Dora marcando Indisponibilidade na Sala 102 do Carlos → 403 citando a RN13, e nada muda', async () => {

@@ -34,8 +34,8 @@ function daBia(dados: Partial<ReservaNoPeriodo> = {}): ReservaNoPeriodo {
   };
 }
 
-function decidir(reservas: ReservaNoPeriodo[], pedido = manutencao) {
-  return decidirIndisponibilidade({ recurso: sala102, reservas }, pedido, carlos, agora);
+function decidir(reservas: ReservaNoPeriodo[], pedido = manutencao, quando = agora) {
+  return decidirIndisponibilidade({ recurso: sala102, reservas }, pedido, carlos, quando);
 }
 
 const criada = (pedido = manutencao) => ({
@@ -43,18 +43,20 @@ const criada = (pedido = manutencao) => ({
   indisponibilidade: { ...pedido, recursoId: sala102.id, criadaEm: agora },
 });
 
-const cancelamento = (reservaId: number, de: Status) => ({
-  evento: 'StatusMudou',
-  reservaId,
-  transicao: { de, para: 'Cancelada', em: agora, porId: null, observacao: CAUSA },
+/** O Cancelamento pelo sistema de todas as Reservas de uma vez, com o Status de antes de cada uma. */
+const canceladas = (...reservas: { id: number; de: Status }[]) => ({
+  evento: 'ReservasCanceladasPeloSistema',
+  reservas,
+  em: agora,
+  observacao: CAUSA,
 });
 
 describe('RN13 · Gestor do Recurso', () => {
-  it('RN13 · Carlos cadastrou a Sala 102, Dora tenta marcar Indisponibilidade → recusado', () => {
+  it('RN13 · Carlos cadastrou a Sala 102, Dora tenta marcar Indisponibilidade → proibido', () => {
     expect(
       decidirIndisponibilidade({ recurso: sala102, reservas: [daBia()] }, manutencao, dora, agora),
     ).toEqual({
-      tipo: 'recusada',
+      tipo: 'proibida',
       violacoes: [
         {
           rn: 'RN13',
@@ -67,6 +69,33 @@ describe('RN13 · Gestor do Recurso', () => {
 });
 
 describe('RN04 · Indisponibilidade', () => {
+  it('RN04 · são 8h e a Indisponibilidade começa às 7h30 → recusado, nada é cancelado', () => {
+    const noPassado = { ...manutencao, inicio: new Date('2026-11-10T07:30:00-03:00') };
+
+    expect(decidir([daBia()], noPassado)).toEqual({
+      tipo: 'recusada',
+      violacoes: [
+        {
+          rn: 'RN04',
+          nome: 'Indisponibilidade',
+          mensagem:
+            'A Indisponibilidade não pode começar no passado: o primeiro horário possível é 08:00.',
+        },
+      ],
+    });
+  });
+
+  it('RN04 · são 8h10 e a Indisponibilidade começa às 8h → recusado, o primeiro horário é 08:30', () => {
+    expect(decidir([], manutencao, new Date('2026-11-10T08:10:00-03:00'))).toMatchObject({
+      tipo: 'recusada',
+      violacoes: [{ rn: 'RN04', mensagem: expect.stringContaining('é 08:30.') }],
+    });
+  });
+
+  it('RN04 · Indisponibilidade começando agora → aceita', () => {
+    expect(decidir([])).toMatchObject({ tipo: 'aceita' });
+  });
+
   it('RN04 · Sala 102 sem Reservas no período → aceita, só a Indisponibilidade', () => {
     expect(decidir([])).toEqual({ tipo: 'aceita', efeitos: [criada()] });
   });
@@ -74,14 +103,14 @@ describe('RN04 · Indisponibilidade', () => {
   it('RN04 · Reserva Confirmada da Bia no período → Cancelamento pelo sistema com a causa, sem Penalidade', () => {
     expect(decidir([daBia()])).toEqual({
       tipo: 'aceita',
-      efeitos: [criada(), cancelamento(50, 'Confirmada')],
+      efeitos: [criada(), canceladas({ id: 50, de: 'Confirmada' })],
     });
   });
 
   it('RN04 · Reserva Pendente no período → Cancelamento pelo sistema', () => {
     expect(decidir([daBia({ status: 'Pendente' })])).toEqual({
       tipo: 'aceita',
-      efeitos: [criada(), cancelamento(50, 'Pendente')],
+      efeitos: [criada(), canceladas({ id: 50, de: 'Pendente' })],
     });
   });
 
@@ -121,7 +150,7 @@ describe('RN04 · Indisponibilidade', () => {
     });
     expect(decidir([atravessa])).toEqual({
       tipo: 'aceita',
-      efeitos: [criada(), cancelamento(50, 'Confirmada')],
+      efeitos: [criada(), canceladas({ id: 50, de: 'Confirmada' })],
     });
   });
 
@@ -134,7 +163,10 @@ describe('RN04 · Indisponibilidade', () => {
     });
     expect(decidir([daBia(), noAnoQueVem], semFim)).toEqual({
       tipo: 'aceita',
-      efeitos: [criada(semFim), cancelamento(50, 'Confirmada'), cancelamento(70, 'Confirmada')],
+      efeitos: [
+        criada(semFim),
+        canceladas({ id: 50, de: 'Confirmada' }, { id: 70, de: 'Confirmada' }),
+      ],
     });
   });
 });
