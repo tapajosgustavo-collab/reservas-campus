@@ -81,7 +81,7 @@ export interface ReservaCriada {
 export interface StatusMudou {
   evento: 'StatusMudou';
   reservaId: number;
-  transicao: { de: Status; para: Status; em: Date; porId: number };
+  transicao: { de: Status; para: Status; em: Date; porId: number; observacao?: string };
 }
 
 /**
