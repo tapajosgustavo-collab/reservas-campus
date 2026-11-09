@@ -140,6 +140,25 @@ describe('US07 · Grade semanal da agenda', () => {
     expect(intervaloDoArraste(terca, 15 * 60, 13 * 60)).toEqual(esperado);
   });
 
+  it('RN04 · arrastar não entra na Indisponibilidade nem a atravessa, nas duas direções', () => {
+    const dasDezAsOnze = {
+      inicio: '2026-11-10T10:00:00-03:00',
+      fim: '2026-11-10T11:00:00-03:00',
+      motivo: 'Pintura',
+    };
+
+    expect(intervaloDoArraste(terca, 9 * 60 + 30, 11 * 60, [dasDezAsOnze])).toEqual({
+      data: '2026-11-10',
+      inicio: 9 * 60 + 30,
+      fim: 10 * 60,
+    });
+    expect(intervaloDoArraste(terca, 12 * 60, 9 * 60, [dasDezAsOnze])).toEqual({
+      data: '2026-11-10',
+      inicio: 11 * 60,
+      fim: 12 * 60 + 30,
+    });
+  });
+
   it('a grade de uma semana sem Horário de funcionamento não tem dias nem linhas', () => {
     const dias = diasDaGrade('2026-11-09', []);
 
