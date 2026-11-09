@@ -84,6 +84,17 @@ export interface StatusMudou {
   transicao: { de: Status; para: Status; em: Date; porId: number };
 }
 
+/**
+ * RN04: Cancelamento pelo sistema de várias Reservas de uma vez, cada uma com o Status de antes.
+ * Sem Usuário (`por` vazio) e com a causa na observação. Quem decide é o M2 (Indisponibilidade).
+ */
+export interface ReservasCanceladasPeloSistema {
+  evento: 'ReservasCanceladasPeloSistema';
+  reservas: { id: number; de: Status }[];
+  em: Date;
+  observacao: string;
+}
+
 export type Efeito = ReservaCriada | StatusMudou;
 
 export type Decisao =

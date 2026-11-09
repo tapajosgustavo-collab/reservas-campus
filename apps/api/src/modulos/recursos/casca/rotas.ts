@@ -3,20 +3,23 @@ import {
   esquemaBuscarAgenda,
   esquemaBuscarRecursos,
   esquemaCadastrarRecurso,
+  esquemaCriarIndisponibilidade,
   esquemaEditarRecurso,
   esquemaIdDoRecurso,
+  esquemaIndisponibilidadeCriada,
   esquemaRecurso,
   esquemaRecursos,
 } from '@reservas/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { ErroApi, proibidoPelaRegra } from '../../../comum/erros';
+import { ErroApi, proibidoPelaRegra, regraViolada } from '../../../comum/erros';
 import { limitesDaSemana, paraIsoSaoPaulo, segundaDaSemana } from '../../../comum/instante';
 import { exigirPerfil, exigirSessao } from '../../../comum/sessao';
 import type { Prisma } from '../../../generated/prisma/client';
 import { agendaPara } from '../nucleo/agenda';
+import { decidirIndisponibilidade } from '../nucleo/indisponibilidade';
 import { decidirCadastro, decidirEdicao, type Efeito } from '../nucleo/recurso';
-import { violacoesDoIntervalo } from '../../reservas';
+import { executar as executarEmReservas, violacoesDoIntervalo } from '../../reservas';
 import { executar } from './efeitos';
 
 const COLUNAS_DO_RESUMO = {
@@ -50,17 +53,36 @@ async function buscarRecurso(request: FastifyRequest, id: number) {
   return recurso;
 }
 
+/** Log de cada efeito executado: o evento e só ids (spec §2). */
+function registrar(request: FastifyRequest, evento: string, ids: Record<string, unknown>) {
+  request.log.info({ evento, ...ids }, evento);
+}
+
 /** Executa os efeitos de uma decisão aceita e devolve o id do Recurso. */
 async function aplicar(request: FastifyRequest, efeitos: Efeito[]) {
   let recursoId = 0;
   for (const efeito of efeitos) {
     recursoId = await executar(request.tx, efeito);
-    request.log.info({ evento: efeito.evento, recursoId }, efeito.evento);
+    registrar(request, efeito.evento, { recursoId });
   }
   return recursoId;
 }
 
-/** Rotas do M2 do incremento 1: cadastrar, editar, ver e "Meus recursos" (US04), e a agenda (US07). */
+/** Instantes de uma Indisponibilidade na resposta, com o deslocamento de São Paulo. */
+function indisponibilidadeEmSaoPaulo<T extends { inicio: Date; fim: Date | null }>(
+  indisponibilidade: T,
+) {
+  return {
+    ...indisponibilidade,
+    inicio: paraIsoSaoPaulo(indisponibilidade.inicio),
+    fim: indisponibilidade.fim && paraIsoSaoPaulo(indisponibilidade.fim),
+  };
+}
+
+/**
+ * Rotas do M2: cadastrar, editar, ver e "Meus recursos" (US04), a Indisponibilidade (US05), a
+ * busca (US06) e a agenda (US07).
+ */
 export function registrarRotasDeRecursos(app: FastifyInstance) {
   const rotas = app.withTypeProvider<ZodTypeProvider>();
 
@@ -124,6 +146,64 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
       }
       await aplicar(request, decisao.efeitos);
       return buscarRecurso(request, recurso.id);
+    },
+  );
+
+  rotas.post(
+    '/api/recursos/:id/indisponibilidades',
+    {
+      schema: {
+        summary:
+          'Marca o Recurso como indisponível (só o Gestor responsável); as Reservas Pendentes e ' +
+          'Confirmadas no período recebem Cancelamento pelo sistema, sem Penalidade (RN04)',
+        tags: ['recursos'],
+        params: esquemaIdDoRecurso,
+        body: esquemaCriarIndisponibilidade,
+        response: { 201: esquemaIndisponibilidadeCriada },
+      },
+    },
+    async (request, reply) => {
+      const quem = await exigirPerfil(request, 'Gestor');
+      const { id, gestor } = await buscarRecurso(request, request.params.id);
+      const recurso = { id, gestorId: gestor.id };
+      const pedido = {
+        inicio: new Date(request.body.inicio),
+        fim: request.body.fim === null ? null : new Date(request.body.fim),
+        motivo: request.body.motivo,
+      };
+      // Todas as Reservas que tocam o período: quem escolhe as que são canceladas é o núcleo. Nenhuma
+      // Reserva nova entra entre esta leitura e o commit: toda requisição roda sob o mesmo
+      // `pg_advisory_xact_lock` (`comum/transacao.ts`, ADR 0001).
+      const reservas = await request.tx.reserva.findMany({
+        where: {
+          recursoId: recurso.id,
+          fim: { gt: pedido.inicio },
+          ...(pedido.fim && { inicio: { lt: pedido.fim } }),
+        },
+        select: { id: true, inicio: true, fim: true, status: true },
+      });
+      const decisao = decidirIndisponibilidade({ recurso, reservas }, pedido, quem, request.agora);
+      if (decisao.tipo === 'proibida') throw proibidoPelaRegra(decisao.violacoes);
+      if (decisao.tipo === 'recusada') throw regraViolada(decisao.violacoes);
+
+      const [criada, canceladas] = decisao.efeitos;
+      const indisponibilidade = await executar(request.tx, criada);
+      registrar(request, criada.evento, { indisponibilidadeId: indisponibilidade.id });
+      // Só o M3 grava em `reserva` e `transicao`: todas as Reservas num efeito só.
+      if (canceladas) {
+        await executarEmReservas(request.tx, canceladas);
+        registrar(request, canceladas.evento, {
+          reservaIds: canceladas.reservas.map((reserva) => reserva.id),
+        });
+      }
+      reply.status(201);
+      return {
+        indisponibilidade: {
+          ...indisponibilidadeEmSaoPaulo(indisponibilidade),
+          criadaEm: paraIsoSaoPaulo(indisponibilidade.criadaEm),
+        },
+        reservasCanceladas: canceladas?.reservas.length ?? 0,
+      };
     },
   );
 
@@ -230,22 +310,27 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
         select: { id: true, usuarioId: true, inicio: true, fim: true, status: true },
         orderBy: [{ inicio: 'asc' }, { id: 'asc' }],
       });
+      // As Indisponibilidades que tocam a semana, inclusive as sem fim que começaram antes.
+      const indisponibilidades = await request.tx.indisponibilidade.findMany({
+        where: {
+          recursoId: recurso.id,
+          inicio: { lt: fim },
+          OR: [{ fim: null }, { fim: { gt: inicio } }],
+        },
+        select: { inicio: true, fim: true, motivo: true },
+        orderBy: [{ inicio: 'asc' }, { id: 'asc' }],
+      });
       const agenda = agendaPara(quem, {
         agora: request.agora,
         recurso,
-        // A Indisponibilidade entra na agenda com o #45; até lá, nenhuma.
-        indisponibilidades: [],
+        indisponibilidades,
         reservas,
       });
       return {
         ...agenda,
         agora: paraIsoSaoPaulo(agenda.agora),
         semana,
-        indisponibilidades: agenda.indisponibilidades.map((indisponibilidade) => ({
-          ...indisponibilidade,
-          inicio: paraIsoSaoPaulo(indisponibilidade.inicio),
-          fim: indisponibilidade.fim && paraIsoSaoPaulo(indisponibilidade.fim),
-        })),
+        indisponibilidades: agenda.indisponibilidades.map(indisponibilidadeEmSaoPaulo),
         ocupacoes: agenda.ocupacoes.map((ocupacao) => ({
           ...ocupacao,
           inicio: paraIsoSaoPaulo(ocupacao.inicio),

@@ -39,6 +39,8 @@ export const esquemaIndisponibilidadeNaAgenda = z.object({
   motivo: z.string().describe('Público'),
 });
 
+export type IndisponibilidadeNaAgenda = z.infer<typeof esquemaIndisponibilidadeNaAgenda>;
+
 export const esquemaAgenda = z.object({
   agora: instante.describe(
     'O agora da API: a tela calcula Passado com ele, não com o relógio dela',

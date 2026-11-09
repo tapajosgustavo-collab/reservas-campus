@@ -6,3 +6,5 @@ export { executar } from './casca/efeitos';
 export { violacoesDoIntervalo, type FatosDoIntervalo, type Intervalo } from './nucleo/reservar';
 // Quem decide uma mudança de Status (o Check-in, no M4) devolve este efeito e pede ao M3 que grave.
 export type { StatusMudou } from './nucleo/reservar';
+// A Indisponibilidade (US05, no M2) cancela as Reservas do período por este efeito (RN04).
+export type { ReservasCanceladasPeloSistema } from './nucleo/reservar';

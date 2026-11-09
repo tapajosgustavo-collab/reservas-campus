@@ -69,6 +69,12 @@ export function MeusRecursos() {
                       <Anchor component={Link} to={`/gestao/recursos/${recurso.id}/editar`}>
                         Editar<VisuallyHidden> {recurso.nome}</VisuallyHidden>
                       </Anchor>
+                      <Anchor
+                        component={Link}
+                        to={`/gestao/recursos/${recurso.id}/indisponibilidade`}
+                      >
+                        Indisponibilidade<VisuallyHidden> de {recurso.nome}</VisuallyHidden>
+                      </Anchor>
                     </Group>
                   </Table.Td>
                 </Table.Tr>

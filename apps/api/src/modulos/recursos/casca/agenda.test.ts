@@ -202,6 +202,35 @@ comBanco('US07 · Agenda do Recurso', () => {
     expect(resposta.statusCode).toBe(404);
   });
 
+  it('RN04 · a agenda mostra a Indisponibilidade com o motivo, só as que tocam a semana', async () => {
+    const app = await umaApp({ banco });
+    const { lab, ana } = await cenario();
+    const indisponibilidade = (inicio: string, fim: string | null, motivo: string) =>
+      banco.indisponibilidade.create({
+        data: {
+          recursoId: lab.id,
+          inicio: new Date(inicio),
+          fim: fim && new Date(fim),
+          motivo,
+          criadaEm: new Date('2026-11-01T08:00:00-03:00'),
+        },
+      });
+    await indisponibilidade('2026-11-02T08:00:00-03:00', '2026-11-03T08:00:00-03:00', 'Antiga');
+    await indisponibilidade('2026-11-11T08:00:00-03:00', '2026-11-11T12:00:00-03:00', 'Pintura');
+    await indisponibilidade('2026-11-13T18:00:00-03:00', null, 'Fora de uso');
+
+    const resposta = await app.inject({
+      method: 'GET',
+      url: `/api/recursos/${lab.id}/agenda?semana=2026-11-09`,
+      cookies: sessaoDe(app, ana.id),
+    });
+
+    expect(resposta.json().indisponibilidades).toEqual([
+      { inicio: '2026-11-11T08:00:00-03:00', fim: '2026-11-11T12:00:00-03:00', motivo: 'Pintura' },
+      { inicio: '2026-11-13T18:00:00-03:00', fim: null, motivo: 'Fora de uso' },
+    ]);
+  });
+
   it('sem sessão → 401', async () => {
     const app = await umaApp({ banco });
     const { lab } = await cenario();

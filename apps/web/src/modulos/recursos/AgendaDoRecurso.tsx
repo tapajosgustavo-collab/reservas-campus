@@ -15,9 +15,10 @@ import {
 import type { Agenda, Reserva } from '@reservas/shared';
 import { addDays, format, parseISO } from 'date-fns';
 import { useRef, useState, type CSSProperties, type PointerEvent } from 'react';
-import { useParams, useSearchParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { useSessao } from '../conduta';
 import { JanelaDeReserva, reservaCobre, resumoDaCriada, semanaDe } from '../reservas';
+import { periodoDaIndisponibilidade } from './indisponibilidade';
 import { ROTULO_DO_TIPO } from './FormularioDoRecurso';
 import {
   diasDaGrade,
@@ -38,6 +39,7 @@ const ROTULO_DO_ESTADO: Record<EstadoDaCelula, string> = {
   ocupado: 'Ocupado',
   'minha-confirmada': 'Sua reserva (Confirmada)',
   'minha-pendente': 'Sua reserva (Pendente)',
+  indisponivel: 'Indisponível',
   fechado: 'Fechado',
   passado: 'Passado',
 };
@@ -52,6 +54,7 @@ const ESTILO_DO_ESTADO: Record<EstadoDaCelula, CSSProperties> = {
     background: 'var(--mantine-color-blue-1)',
     boxShadow: 'inset 0 0 0 2px var(--mantine-color-blue-7)',
   },
+  indisponivel: { background: `${LISTRAS}, var(--mantine-color-orange-2)` },
   fechado: { background: `${LISTRAS}, var(--mantine-color-gray-1)` },
   passado: { background: 'var(--mantine-color-gray-2)' },
 };
@@ -162,7 +165,9 @@ function Grade({
         fimDoArraste.abort();
         const fim = arrasteAtual.current;
         mudarArraste(null);
-        if (fim && fim.de !== fim.ate) aoEscolher(intervaloDoArraste(fim.dia, fim.de, fim.ate));
+        if (fim && fim.de !== fim.ate) {
+          aoEscolher(intervaloDoArraste(fim.dia, fim.de, fim.ate, agenda.indisponibilidades));
+        }
       },
       { signal: fimDoArraste.signal },
     );
@@ -212,7 +217,13 @@ function Grade({
                 {rotuloDoMinuto(minuto)}
               </Table.Th>
               {dias.map((dia) => {
-                const estado = estadoDaCelula(dia, minuto, agenda.ocupacoes, agora);
+                const estado = estadoDaCelula(
+                  dia,
+                  minuto,
+                  agenda.ocupacoes,
+                  agora,
+                  agenda.indisponibilidades,
+                );
                 const rotulo = `${rotuloDoDia(dia)}, ${rotuloDoMinuto(minuto)}: ${ROTULO_DO_ESTADO[estado]}`;
                 return (
                   <Table.Td
@@ -237,7 +248,15 @@ function Grade({
                         onPointerDown={(evento) => aoApertar(evento, dia, minuto)}
                         onPointerEnter={() => aoPassar(dia, minuto)}
                         onClick={() =>
-                          aoEscolher(intervaloDoClique(dia, minuto, agenda.ocupacoes, agora))
+                          aoEscolher(
+                            intervaloDoClique(
+                              dia,
+                              minuto,
+                              agenda.ocupacoes,
+                              agora,
+                              agenda.indisponibilidades,
+                            ),
+                          )
                         }
                       />
                     ) : (
@@ -259,7 +278,8 @@ export function AgendaDoRecurso() {
   const id = Number(useParams().id);
   const [parametros, setParametros] = useSearchParams();
   const agenda = useAgenda(id, parametros.get('semana'));
-  const ehGestor = useSessao().data?.usuario.perfil === 'Gestor';
+  const usuario = useSessao().data?.usuario;
+  const ehGestor = usuario?.perfil === 'Gestor';
   const [intervalo, setIntervalo] = useState<IntervaloEscolhido | null>(null);
   const [criada, setCriada] = useState<Reserva | null>(null);
   const recarregarAgenda = useRecarregarAgenda(id);
@@ -284,10 +304,31 @@ export function AgendaDoRecurso() {
     );
   }
 
-  const { semana, recurso } = agenda.data;
+  const { semana, recurso, indisponibilidades } = agenda.data;
   return (
     <Stack gap="md">
-      <Cabecalho recurso={recurso} />
+      <Group justify="space-between" align="flex-start">
+        <Cabecalho recurso={recurso} />
+        {usuario?.id === recurso.gestor.id && (
+          <Button
+            component={Link}
+            to={`/gestao/recursos/${recurso.id}/indisponibilidade`}
+            variant="default"
+          >
+            Cadastrar Indisponibilidade
+          </Button>
+        )}
+      </Group>
+
+      {indisponibilidades.map((indisponibilidade) => (
+        <Alert
+          // Duas podem começar no mesmo instante, e a API não manda o id.
+          key={`${indisponibilidade.inicio} ${indisponibilidade.fim} ${indisponibilidade.motivo}`}
+          color="orange"
+        >
+          {periodoDaIndisponibilidade(indisponibilidade, semana)}
+        </Alert>
+      ))}
 
       <Group justify="space-between" gap="xs">
         <Text fw={500}>
