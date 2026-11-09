@@ -3,6 +3,8 @@ import {
   violacao,
   type Horario,
   type Perfil,
+  type PerfilQueReserva,
+  type Politica,
   type Status,
   type Violacao,
 } from '@reservas/shared';
@@ -13,6 +15,9 @@ export interface Quem {
   id: number;
   perfil: Perfil;
 }
+
+/** O Gestor não cria Reservas: a rota só deixa passar Aluno e Docente. */
+type QuemReserva = Quem & { perfil: PerfilQueReserva };
 
 /** As RNs do Intervalo marcam Início e Fim juntos na tela. */
 const CAMPO_DO_INTERVALO = 'intervalo';
@@ -41,9 +46,22 @@ export interface ReservaDoRecurso {
   status: Status;
 }
 
-export interface FatosDaReserva {
+/** Uma Reserva ativa de quem está reservando, para a Cota. */
+export interface ReservaNaCota {
+  id: number;
+  serieId: number | null;
+}
+
+/** O que decide se o Recurso pode ser usado no Intervalo. */
+export interface FatosDoIntervalo {
   horarios: Horario[];
   reservasDoRecurso: ReservaDoRecurso[];
+}
+
+export interface FatosDaReserva extends FatosDoIntervalo {
+  /** Só as Reservas ativas (Pendente, Confirmada e Em uso) de quem está reservando. */
+  ativasDoUsuario: ReservaNaCota[];
+  politica: Politica;
 }
 
 export interface ReservaCriada {
@@ -135,7 +153,7 @@ function semConflito(pedido: Intervalo, reservas: ReservaDoRecurso[]): Violacao[
  * RN01, RN02 e RN03: o que impede usar o Recurso no Intervalo. O reservar (US08) e a busca de
  * Recurso livre (US06, no M2) usam a mesma regra.
  */
-export function violacoesDoIntervalo(intervalo: Intervalo, fatos: FatosDaReserva): Violacao[] {
+export function violacoesDoIntervalo(intervalo: Intervalo, fatos: FatosDoIntervalo): Violacao[] {
   return [
     ...semConflito(intervalo, fatos.reservasDoRecurso),
     ...intervaloValido(intervalo),
@@ -143,14 +161,36 @@ export function violacoesDoIntervalo(intervalo: Intervalo, fatos: FatosDaReserva
   ];
 }
 
+/**
+ * RN07: a Cota conta as Reservas ativas, e as Ocorrências de uma mesma Série contam como uma só
+ * (RN21). A chave separa Série e Reserva, porque os ids delas vêm de sequências diferentes.
+ */
+function dentroDaCota(
+  ativas: ReservaNaCota[],
+  { perfil }: QuemReserva,
+  { cota }: Politica,
+): Violacao[] {
+  const usadas = new Set(
+    ativas.map(({ id, serieId }) => (serieId !== null ? `s${serieId}` : `r${id}`)),
+  ).size;
+  const limite = cota[perfil];
+  if (usadas < limite) return [];
+  return [
+    violacao('RN07', `Você já tem ${usadas} Reservas ativas, e a Cota de ${perfil} é ${limite}.`),
+  ];
+}
+
 /** US08: criar uma Reserva. Devolve todas as RNs violadas, não só a primeira. */
 export function decidirReserva(
   fatos: FatosDaReserva,
   pedido: PedidoDeReserva,
-  quem: Quem,
+  quem: QuemReserva,
   agora: Date,
 ): Decisao {
-  const violacoes = violacoesDoIntervalo(pedido, fatos);
+  const violacoes = [
+    ...violacoesDoIntervalo(pedido, fatos),
+    ...dentroDaCota(fatos.ativasDoUsuario, quem, fatos.politica),
+  ];
   if (violacoes.length > 0) return { tipo: 'recusada', violacoes };
 
   const status = 'Confirmada';
