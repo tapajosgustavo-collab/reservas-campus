@@ -13,6 +13,7 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import type { Perfil } from '@reservas/shared';
 import { Link, Outlet, useLocation } from 'react-router';
+import { BarraDoRelogio } from '../modulos/ciclo';
 import { Entrar, useSair, useSessao } from '../modulos/conduta';
 import { Versao } from './Versao';
 
@@ -111,7 +112,10 @@ export function Layout() {
             {sessao.error.message} Recarregue a página para tentar de novo.
           </Alert>
         ) : usuario ? (
-          <Outlet />
+          <>
+            <BarraDoRelogio />
+            <Outlet />
+          </>
         ) : (
           <Entrar />
         )}

@@ -1,6 +1,6 @@
-import { Alert, Anchor, Loader, Stack, Table, Text, Title } from '@mantine/core';
+import { Alert, Anchor, Group, Loader, Stack, Table, Text, Title } from '@mantine/core';
 import { Link, useParams } from 'react-router';
-import { BotaoDeCheckIn } from '../ciclo';
+import { BotaoDeCancelar, BotaoDeCheckIn } from '../ciclo';
 import { useSessao } from '../conduta';
 import {
   rotuloDaTransicao,
@@ -15,8 +15,8 @@ export function DetalheDaReserva() {
   const reserva = useReserva(Number(useParams().id));
   const sessao = useSessao().data;
   const ehGestor = sessao?.usuario.perfil === 'Gestor';
-  // O Gestor responsável também abre o detalhe, mas o Check-in é só do dono (RN14): só ele recebe
-  // o agora da API que o botão usa.
+  // O Gestor responsável também abre o detalhe, mas Check-in (RN14) e Cancelamento (RN16) são só
+  // do dono: só ele recebe o agora da API que os botões usam.
   const agoraDoDono =
     sessao && sessao.usuario.id === reserva.data?.usuario.id ? sessao.agora : undefined;
 
@@ -47,11 +47,18 @@ export function DetalheDaReserva() {
           </Stack>
 
           {agoraDoDono && (
-            <BotaoDeCheckIn
-              reserva={reserva.data}
-              agora={agoraDoDono}
-              nomeDoRecurso={reserva.data.recurso.nome}
-            />
+            <Group gap="xs" align="center">
+              <BotaoDeCheckIn
+                reserva={reserva.data}
+                agora={agoraDoDono}
+                nomeDoRecurso={reserva.data.recurso.nome}
+              />
+              <BotaoDeCancelar
+                reserva={reserva.data}
+                agora={agoraDoDono}
+                nomeDoRecurso={reserva.data.recurso.nome}
+              />
+            </Group>
           )}
 
           <Title order={3}>Histórico</Title>

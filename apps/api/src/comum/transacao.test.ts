@@ -298,6 +298,22 @@ comBanco('RNF02 · Relógio da demo com DEMO=1', () => {
     expect(resposta.json()).toEqual({ agora: '2026-11-10T10:16:00-03:00' });
   });
 
+  it('POST {ir} no passado → 400 entrada_invalida, e o relógio não volta', async () => {
+    const { app, cookies } = await appDaDemo();
+
+    const resposta = await app.inject({
+      method: 'POST',
+      url: '/api/demo/relogio',
+      cookies,
+      payload: { ir: '2026-11-10T07:59:00-03:00' },
+    });
+
+    expect(resposta.statusCode).toBe(400);
+    expect(resposta.json().erro.codigo).toBe('entrada_invalida');
+    const depois = await app.inject({ method: 'GET', url: '/api/demo/relogio', cookies });
+    expect(depois.json()).toEqual({ agora: '2026-11-10T08:00:00-03:00' });
+  });
+
   it('a próxima requisição já usa o relógio novo', async () => {
     const { app, cookies } = await appDaDemo();
     app.get('/api/teste/agora', async (request) => ({ agora: paraIsoSaoPaulo(request.agora) }));

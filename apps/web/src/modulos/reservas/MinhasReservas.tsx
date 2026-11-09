@@ -13,7 +13,7 @@ import {
 } from '@mantine/core';
 import { esquemaSituacao, type Situacao } from '@reservas/shared';
 import { Link, useSearchParams } from 'react-router';
-import { BotaoDeCheckIn } from '../ciclo';
+import { BotaoDeCancelar, BotaoDeCheckIn } from '../ciclo';
 import { useSessao } from '../conduta';
 import { paginasDe, rotuloDoIntervalo, ROTULO_DO_STATUS } from './apresentacao';
 import { useMinhasReservas } from './reservas';
@@ -27,7 +27,7 @@ const SEM_RESERVAS: Record<Situacao, string> = {
 
 function ListaDeReservas({ situacao, pagina }: { situacao: Situacao; pagina: number }) {
   const reservas = useMinhasReservas(situacao, pagina);
-  // O botão de Check-in usa o agora da API, que vem com a sessão.
+  // As ações do ciclo usam o agora da API, que vem com a sessão.
   const agora = useSessao().data?.agora;
 
   if (reservas.isPending) return <Loader aria-label="Carregando Reservas" />;
@@ -69,11 +69,18 @@ function ListaDeReservas({ situacao, pagina }: { situacao: Situacao; pagina: num
               <Table.Td>
                 <Group gap="xs" align="center">
                   {agora && (
-                    <BotaoDeCheckIn
-                      reserva={reserva}
-                      agora={agora}
-                      nomeDoRecurso={reserva.recurso.nome}
-                    />
+                    <>
+                      <BotaoDeCheckIn
+                        reserva={reserva}
+                        agora={agora}
+                        nomeDoRecurso={reserva.recurso.nome}
+                      />
+                      <BotaoDeCancelar
+                        reserva={reserva}
+                        agora={agora}
+                        nomeDoRecurso={reserva.recurso.nome}
+                      />
+                    </>
                   )}
                   <Anchor component={Link} to={`/reservas/${reserva.id}`}>
                     Detalhes<VisuallyHidden> da Reserva de {reserva.recurso.nome}</VisuallyHidden>
