@@ -80,7 +80,7 @@ export function useEditarRecurso(id: number) {
   });
 }
 
-/** US05: as agendas e as buscas mudam, e as Reservas canceladas também (RN04). */
+/** US05: a agenda do Recurso, as buscas e as Reservas canceladas mudam (RN04). */
 export function useCriarIndisponibilidade(id: number) {
   const cliente = useQueryClient();
   return useMutation({
@@ -91,6 +91,11 @@ export function useCriarIndisponibilidade(id: number) {
         indisponibilidade,
         esquemaIndisponibilidadeCriada,
       ),
-    onSuccess: () => cliente.invalidateQueries(),
+    onSuccess: () =>
+      Promise.all([
+        cliente.invalidateQueries({ queryKey: [CHAVE, id, 'agenda'] }),
+        cliente.invalidateQueries({ queryKey: [CHAVE, 'busca'] }),
+        cliente.invalidateQueries({ queryKey: ['reservas'] }),
+      ]),
   });
 }

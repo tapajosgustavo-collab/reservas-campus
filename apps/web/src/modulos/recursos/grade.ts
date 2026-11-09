@@ -58,6 +58,19 @@ function instanteDe(data: string, minuto: number): number {
   return new TZDate(ano!, mes! - 1, dia!, 0, minuto, FUSO).getTime();
 }
 
+/** A meia hora que começa em `minuto` toca alguma Indisponibilidade (RN04)? */
+function indisponivelNa(
+  dia: DiaDaGrade,
+  minuto: number,
+  indisponibilidades: IndisponibilidadeNaAgenda[],
+) {
+  const inicio = instanteDe(dia.data, minuto);
+  const fim = instanteDe(dia.data, minuto + MEIA_HORA);
+  return indisponibilidades.some(
+    (i) => Date.parse(i.inicio) < fim && (i.fim === null || Date.parse(i.fim) > inicio),
+  );
+}
+
 /**
  * O que a célula de meia hora mostra. A Reserva (inclusive a Em uso dentro de uma Indisponibilidade,
  * RN04) e a Indisponibilidade aparecem mesmo no passado; o resto do que já começou é Passado, pelo
@@ -77,10 +90,7 @@ export function estadoDaCelula(
   if (ocupacao?.minha)
     return ocupacao.status === 'Pendente' ? 'minha-pendente' : 'minha-confirmada';
   if (ocupacao) return 'ocupado';
-  const indisponivel = indisponibilidades.some(
-    (i) => Date.parse(i.inicio) < fim && (i.fim === null || Date.parse(i.fim) > inicio),
-  );
-  if (indisponivel) return 'indisponivel';
+  if (indisponivelNa(dia, minuto, indisponibilidades)) return 'indisponivel';
   return inicio < agora.getTime() ? 'passado' : 'livre';
 }
 
@@ -97,7 +107,20 @@ export function intervaloDoClique(
   return { data: dia.data, inicio: minuto, fim: minuto + (seguinteLivre ? 2 : 1) * MEIA_HORA };
 }
 
-/** Arrastar de uma célula a outra do mesmo dia: o Intervalo cobre as duas, em qualquer direção. */
-export function intervaloDoArraste(dia: DiaDaGrade, de: number, ate: number): IntervaloEscolhido {
-  return { data: dia.data, inicio: Math.min(de, ate), fim: Math.max(de, ate) + MEIA_HORA };
+/**
+ * Arrastar de uma célula a outra do mesmo dia: o Intervalo vai de `de` na direção de `ate`, em
+ * qualquer direção, e para na última célula antes de uma bloqueada, sem atravessá-la.
+ */
+export function intervaloDoArraste(
+  dia: DiaDaGrade,
+  de: number,
+  ate: number,
+  indisponibilidades: IndisponibilidadeNaAgenda[] = [],
+): IntervaloEscolhido {
+  // Bloqueada é a célula Indisponível (RN04). As ocupadas por Reserva entram aqui no #95.
+  const bloqueada = (minuto: number) => indisponivelNa(dia, minuto, indisponibilidades);
+  const passo = ate >= de ? MEIA_HORA : -MEIA_HORA;
+  let ultima = de;
+  while (ultima !== ate && !bloqueada(ultima + passo)) ultima += passo;
+  return { data: dia.data, inicio: Math.min(de, ultima), fim: Math.max(de, ultima) + MEIA_HORA };
 }

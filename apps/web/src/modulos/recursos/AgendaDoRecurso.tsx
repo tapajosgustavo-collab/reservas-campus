@@ -165,7 +165,9 @@ function Grade({
         fimDoArraste.abort();
         const fim = arrasteAtual.current;
         mudarArraste(null);
-        if (fim && fim.de !== fim.ate) aoEscolher(intervaloDoArraste(fim.dia, fim.de, fim.ate));
+        if (fim && fim.de !== fim.ate) {
+          aoEscolher(intervaloDoArraste(fim.dia, fim.de, fim.ate, agenda.indisponibilidades));
+        }
       },
       { signal: fimDoArraste.signal },
     );
@@ -319,8 +321,12 @@ export function AgendaDoRecurso() {
       </Group>
 
       {indisponibilidades.map((indisponibilidade) => (
-        <Alert key={indisponibilidade.inicio} color="orange">
-          {periodoDaIndisponibilidade(indisponibilidade)}
+        <Alert
+          // Duas podem começar no mesmo instante, e a API não manda o id.
+          key={`${indisponibilidade.inicio} ${indisponibilidade.fim} ${indisponibilidade.motivo}`}
+          color="orange"
+        >
+          {periodoDaIndisponibilidade(indisponibilidade, semana)}
         </Alert>
       ))}
 

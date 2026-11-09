@@ -39,10 +39,19 @@ export function resumoDaIndisponibilidade(reservasCanceladas: number) {
   return `${inicio} ${quantas} Cancelamento pelo sistema, sem Penalidade.`;
 }
 
-const diaEHora = (instante: string) => format(new TZDate(instante, FUSO), 'dd/MM HH:mm');
-
-/** RN04: a linha da agenda com o período e o motivo, que é público. */
-export function periodoDaIndisponibilidade({ inicio, fim, motivo }: IndisponibilidadeNaAgenda) {
+/**
+ * RN04: a linha da agenda com o período e o motivo, que é público. A data leva o ano quando ele
+ * não é o da `semana` exibida (segunda, `YYYY-MM-DD`).
+ */
+export function periodoDaIndisponibilidade(
+  { inicio, fim, motivo }: IndisponibilidadeNaAgenda,
+  semana: string,
+) {
+  const diaEHora = (instante: string) => {
+    const emSaoPaulo = new TZDate(instante, FUSO);
+    const mesmoAno = format(emSaoPaulo, 'yyyy') === semana.slice(0, 4);
+    return format(emSaoPaulo, mesmoAno ? 'dd/MM HH:mm' : 'dd/MM/yyyy HH:mm');
+  };
   const periodo = fim
     ? `de ${diaEHora(inicio)} a ${diaEHora(fim)}`
     : `a partir de ${diaEHora(inicio)}, sem previsão de volta`;
