@@ -317,6 +317,22 @@ describe('RN07 · Cota', () => {
     expect(decisao).toMatchObject({ violacoes: [{ rn: 'RN07' }] });
   });
 
+  it('a Cota sai da Política: com a Cota de Aluno em 1, a 2ª Reserva ativa é recusada', () => {
+    const decisao = decidirReserva(
+      fatos({
+        ativasDoUsuario: avulsas(1),
+        politica: { ...POLITICA, cota: { Aluno: 1, Docente: 10 } },
+      }),
+      pedido('10:00', '12:00'),
+      ANA,
+      AGORA,
+    );
+
+    expect(decisao).toMatchObject({
+      violacoes: [{ rn: 'RN07', mensagem: 'Você já tem 1 Reserva ativa, e a Cota de Aluno é 1.' }],
+    });
+  });
+
   it('Cota cheia e Intervalo ocupado → RN01 e RN07 na mesma resposta', () => {
     const decisao = decidirReserva(
       fatos({

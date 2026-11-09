@@ -176,7 +176,10 @@ function dentroDaCota(
   const limite = cota[perfil];
   if (usadas < limite) return [];
   return [
-    violacao('RN07', `Você já tem ${usadas} Reservas ativas, e a Cota de ${perfil} é ${limite}.`),
+    violacao(
+      'RN07',
+      `Você já tem ${usadas} ${usadas === 1 ? 'Reserva ativa' : 'Reservas ativas'}, e a Cota de ${perfil} é ${limite}.`,
+    ),
   ];
 }
 
