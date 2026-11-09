@@ -77,6 +77,7 @@ function Formulario({ recurso, intervalo, aoFechar, aoCriar }: PropsDoFormulario
 
   const violacoes = criar.error instanceof ErroDaApi ? criar.error.violacoes : [];
   const intervaloEmErro = violacoes.some(({ campo }) => campo === 'intervalo');
+  const participantesEmErro = violacoes.some(({ campo }) => campo === 'participantes');
 
   function enviar(evento: FormEvent) {
     evento.preventDefault();
@@ -119,11 +120,13 @@ function Formulario({ recurso, intervalo, aoFechar, aoCriar }: PropsDoFormulario
         {espaco && (
           <NumberInput
             label="Participantes"
+            required
             description={`Capacidade: ${recurso.capacidade} pessoas`}
             min={1}
             allowDecimal={false}
             value={participantes}
             onChange={setParticipantes}
+            error={participantesEmErro}
           />
         )}
         <Textarea

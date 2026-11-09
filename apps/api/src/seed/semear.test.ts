@@ -215,7 +215,7 @@ comBanco('RNF10 · Seed', () => {
         method: 'POST',
         url: '/api/reservas',
         cookies,
-        payload: { recursoId, inicio, fim },
+        payload: { recursoId, inicio, fim, participantes: 10 },
       });
 
     const conflito = await reservar('2026-11-10T11:00:00-03:00', '2026-11-10T13:00:00-03:00');
