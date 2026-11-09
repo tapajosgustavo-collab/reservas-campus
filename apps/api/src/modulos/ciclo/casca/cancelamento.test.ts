@@ -79,15 +79,17 @@ comBanco('US13 · Cancelar', () => {
       },
     ]);
 
-    // O Intervalo ficou livre para outra Reserva (RN01).
+    // O Intervalo ficou livre para outra Reserva (RN01). Começa às 10:30, sobre a cancelada, pela
+    // Antecedência mínima de 1h (RN05).
     const nova = await app.inject({
       method: 'POST',
       url: '/api/reservas',
       cookies: sessaoDe(app, bruno.id),
       payload: {
         recursoId: lab.id,
-        inicio: '2026-11-10T10:00:00-03:00',
+        inicio: '2026-11-10T10:30:00-03:00',
         fim: '2026-11-10T12:00:00-03:00',
+        participantes: 20,
       },
     });
     expect(nova.statusCode).toBe(201);

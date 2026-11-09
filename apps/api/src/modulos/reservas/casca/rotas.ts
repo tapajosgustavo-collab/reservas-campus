@@ -60,7 +60,11 @@ export function registrarRotasDeReservas(app: FastifyInstance) {
       const { body, tx, agora } = request;
       const recurso = await tx.recurso.findUnique({
         where: { id: body.recursoId },
-        select: { tipo: true, horarios: { select: { diaSemana: true, abre: true, fecha: true } } },
+        select: {
+          tipo: true,
+          capacidade: true,
+          horarios: { select: { diaSemana: true, abre: true, fecha: true } },
+        },
       });
       if (!recurso) {
         throw new ErroApi('nao_encontrado', `Recurso ${body.recursoId} não encontrado.`);
@@ -87,7 +91,13 @@ export function registrarRotasDeReservas(app: FastifyInstance) {
         select: { id: true, serieId: true },
       });
       const decisao = decidirReserva(
-        { horarios: recurso.horarios, reservasDoRecurso, ativasDoUsuario, politica: POLITICA },
+        {
+          horarios: recurso.horarios,
+          reservasDoRecurso,
+          recurso: { tipo: recurso.tipo, capacidade: recurso.capacidade },
+          ativasDoUsuario,
+          politica: POLITICA,
+        },
         pedido,
         quem,
         agora,

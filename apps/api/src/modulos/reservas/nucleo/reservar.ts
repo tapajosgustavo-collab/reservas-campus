@@ -6,6 +6,7 @@ import {
   type PerfilQueReserva,
   type Politica,
   type Status,
+  type TipoRecurso,
   type Violacao,
 } from '@reservas/shared';
 import { emSaoPaulo } from '../../../comum/instante';
@@ -21,8 +22,12 @@ type QuemReserva = Quem & { perfil: PerfilQueReserva };
 
 /** As RNs do Intervalo marcam Início e Fim juntos na tela. */
 const CAMPO_DO_INTERVALO = 'intervalo';
+const CAMPO_DE_PARTICIPANTES = 'participantes';
+
+const NOME_DO_TIPO: Record<TipoRecurso, string> = { Espaco: 'Espaço', Equipamento: 'Equipamento' };
 
 const MINUTO = 60_000;
+const DIA = 24 * 60 * MINUTO;
 const MEIA_HORA = 30;
 
 /** Um Intervalo pedido ou buscado. */
@@ -59,6 +64,8 @@ export interface FatosDoIntervalo {
 }
 
 export interface FatosDaReserva extends FatosDoIntervalo {
+  /** `capacidade` é `null` só em Equipamento. */
+  recurso: { tipo: TipoRecurso; capacidade: number | null };
   /** Só as Reservas ativas (Pendente, Confirmada e Em uso) de quem está reservando. */
   ativasDoUsuario: ReservaNaCota[];
   politica: Politica;
@@ -161,6 +168,35 @@ export function violacoesDoIntervalo(intervalo: Intervalo, fatos: FatosDoInterva
   ];
 }
 
+/** RN05. A Antecedência mínima também recusa início já passado. */
+function dentroDaAntecedencia(
+  { inicio }: Intervalo,
+  { perfil }: QuemReserva,
+  { antecedenciaMinimaMin, antecedenciaMaximaDias }: Politica,
+  agora: Date,
+): Violacao[] {
+  const antecedencia = inicio.getTime() - agora.getTime();
+  if (antecedencia < antecedenciaMinimaMin * MINUTO) {
+    const horas = antecedenciaMinimaMin / 60;
+    return [
+      violacao(
+        'RN05',
+        `O início precisa ser pelo menos ${horas}h depois de agora.`,
+        CAMPO_DO_INTERVALO,
+      ),
+    ];
+  }
+  const dias = antecedenciaMaximaDias[perfil];
+  if (antecedencia <= dias * DIA) return [];
+  return [
+    violacao(
+      'RN05',
+      `O início pode ser no máximo ${dias} dias depois de agora.`,
+      CAMPO_DO_INTERVALO,
+    ),
+  ];
+}
+
 /**
  * RN07: a Cota conta as Reservas ativas, e as Ocorrências de uma mesma Série contam como uma só
  * (RN21). A chave separa Série e Reserva, porque os ids delas vêm de sequências diferentes.
@@ -183,6 +219,41 @@ function dentroDaCota(
   ];
 }
 
+/** RN06. Um Intervalo sem dia (RN02) não tem duração para conferir. */
+function dentroDaDuracao(
+  pedido: Intervalo,
+  { perfil }: QuemReserva,
+  { tipo }: FatosDaReserva['recurso'],
+  { duracaoMaximaMin }: Politica,
+): Violacao[] {
+  const dia = noDia(pedido);
+  if (!dia) return [];
+  const maxima = duracaoMaximaMin[tipo][perfil];
+  if (dia.ate - dia.de <= maxima) return [];
+  return [
+    violacao(
+      'RN06',
+      `A Duração máxima de ${perfil} em ${NOME_DO_TIPO[tipo]} é ${maxima / 60}h.`,
+      CAMPO_DO_INTERVALO,
+    ),
+  ];
+}
+
+/** RN08. Só Espaço tem Capacidade, e quem reserva informa os participantes. */
+function dentroDaCapacidade(
+  { participantes }: PedidoDeReserva,
+  { capacidade }: FatosDaReserva['recurso'],
+): Violacao[] {
+  if (capacidade === null) return [];
+  if (participantes === undefined) {
+    return [violacao('RN08', 'Informe o número de participantes.', CAMPO_DE_PARTICIPANTES)];
+  }
+  if (participantes <= capacidade) return [];
+  return [
+    violacao('RN08', `Este Espaço comporta até ${capacidade} pessoas.`, CAMPO_DE_PARTICIPANTES),
+  ];
+}
+
 /** US08: criar uma Reserva. Devolve todas as RNs violadas, não só a primeira. */
 export function decidirReserva(
   fatos: FatosDaReserva,
@@ -192,7 +263,10 @@ export function decidirReserva(
 ): Decisao {
   const violacoes = [
     ...violacoesDoIntervalo(pedido, fatos),
+    ...dentroDaAntecedencia(pedido, quem, fatos.politica, agora),
+    ...dentroDaDuracao(pedido, quem, fatos.recurso, fatos.politica),
     ...dentroDaCota(fatos.ativasDoUsuario, quem, fatos.politica),
+    ...dentroDaCapacidade(pedido, fatos.recurso),
   ];
   if (violacoes.length > 0) return { tipo: 'recusada', violacoes };
 

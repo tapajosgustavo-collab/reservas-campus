@@ -61,6 +61,8 @@ test('fluxo de reservar com verificação de conflito e acessibilidade (US07, RN
   await selectFim.click();
   await page.getByRole('option', { name: '12:00', exact: true }).click();
 
+  // RN08: Espaço pede Participantes (a Sala 101 comporta 40)
+  await modal.getByLabel('Participantes').fill('10');
   await modal.getByRole('button', { name: 'Reservar' }).click();
 
   // Confere que a API recusa e o quadro exibe a violação da RN01 (Sem Conflito):
@@ -81,6 +83,7 @@ test('fluxo de reservar com verificação de conflito e acessibilidade (US07, RN
   await selectFim.click();
   await page.getByRole('option', { name: '14:00', exact: true }).click();
 
+  await modal.getByLabel('Participantes').fill('10');
   await modal.getByLabel('Finalidade').fill('Grupo de estudos de Engenharia de Software');
   await modal.getByRole('button', { name: 'Reservar' }).click();
 
