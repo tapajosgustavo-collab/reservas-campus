@@ -44,6 +44,7 @@ export { esquemaInstante } from './instante';
 export { POLITICA, type PerfilQueReserva, type Politica } from './politica';
 export {
   esquemaBuscarReservas,
+  esquemaCancelamento,
   esquemaCriarReserva,
   esquemaDetalheDaReserva,
   esquemaIdDaReserva,
@@ -55,6 +56,7 @@ export {
   esquemaTransicao,
   RESERVAS_POR_PAGINA,
   STATUS_ATIVOS,
+  type Cancelamento,
   type CriarReserva,
   type DetalheDaReserva,
   type ItemDeReserva,
