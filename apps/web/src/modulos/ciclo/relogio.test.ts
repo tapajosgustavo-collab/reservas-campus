@@ -15,9 +15,10 @@ const sessaoInicial: Sessao = {
 };
 
 describe('RNF02 · Barra de avançar relógio na tela', () => {
-  it('sincroniza o valor do campo datetime-local com o agora em São Paulo', () => {
+  it('sincroniza o valor do campo datetime-local com o agora em São Paulo, arredondando segundos para cima', () => {
     expect(paraCampoDeDataHora('2026-11-10T11:00:00Z')).toBe('2026-11-10T08:00');
     expect(paraCampoDeDataHora('2026-11-10T10:16:00-03:00')).toBe('2026-11-10T10:16');
+    expect(paraCampoDeDataHora('2026-11-10T08:00:30-03:00')).toBe('2026-11-10T08:01');
   });
 
   it('monta o corpo {ir} com o deslocamento de São Paulo a partir do campo datetime-local', () => {

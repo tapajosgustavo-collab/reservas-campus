@@ -6,6 +6,7 @@ import { enviarJson } from '../../comum/api';
 import { voltarAoEntrarNo401 } from '../conduta';
 
 const FUSO = 'America/Sao_Paulo';
+const MINUTO_MS = 60_000;
 
 export const ATALHOS_DE_MINUTOS = [
   { minutos: 15, rotulo: '+15m' },
@@ -13,9 +14,14 @@ export const ATALHOS_DE_MINUTOS = [
   { minutos: 60, rotulo: '+1h' },
 ] as const;
 
-/** Valor do `input[type="datetime-local"]` (`YYYY-MM-DDTHH:mm`) sincronizado com o `agora` em São Paulo. */
+/**
+ * Valor e `min` do `input[type="datetime-local"]` (`YYYY-MM-DDTHH:mm`) em São Paulo. Se o relógio
+ * tiver segundos (ex.: `08:00:30`), arredonda para o próximo minuto (`08:01`) para o `min` nunca
+ * permitir um instante anterior ao `agora`.
+ */
 export function paraCampoDeDataHora(agora: string) {
-  return format(new TZDate(agora, FUSO), "yyyy-MM-dd'T'HH:mm");
+  const proximoMinuto = Math.ceil(Date.parse(agora) / MINUTO_MS) * MINUTO_MS;
+  return format(new TZDate(proximoMinuto, FUSO), "yyyy-MM-dd'T'HH:mm");
 }
 
 /** Converte `YYYY-MM-DDTHH:mm` do horário de São Paulo no corpo `{ ir }` com deslocamento explícito. */
