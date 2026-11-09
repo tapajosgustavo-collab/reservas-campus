@@ -65,7 +65,7 @@ export interface FatosDoIntervalo {
 
 export interface FatosDaReserva extends FatosDoIntervalo {
   /** `capacidade` é `null` só em Equipamento. */
-  recurso: { tipo: TipoRecurso; capacidade: number | null };
+  recurso: { tipo: TipoRecurso; capacidade: number | null; restrito: boolean };
   /** Só as Reservas ativas (Pendente, Confirmada e Em uso) de quem está reservando. */
   ativasDoUsuario: ReservaNaCota[];
   politica: Politica;
@@ -168,20 +168,25 @@ export function violacoesDoIntervalo(intervalo: Intervalo, fatos: FatosDoInterva
   ];
 }
 
-/** RN05. A Antecedência mínima também recusa início já passado. */
+/**
+ * RN05. A Antecedência mínima também recusa início já passado. Em Recurso restrito vale a mínima
+ * em Recurso restrito; a máxima é a do Perfil nos dois casos.
+ */
 function dentroDaAntecedencia(
   { inicio }: Intervalo,
   { perfil }: QuemReserva,
-  { antecedenciaMinimaMin, antecedenciaMaximaDias }: Politica,
+  { restrito }: FatosDaReserva['recurso'],
+  { antecedenciaMinimaMin, antecedenciaMinimaRestritoMin, antecedenciaMaximaDias }: Politica,
   agora: Date,
 ): Violacao[] {
   const antecedencia = inicio.getTime() - agora.getTime();
-  if (antecedencia < antecedenciaMinimaMin * MINUTO) {
-    const horas = antecedenciaMinimaMin / 60;
+  const minima = restrito ? antecedenciaMinimaRestritoMin : antecedenciaMinimaMin;
+  if (antecedencia < minima * MINUTO) {
+    const onde = restrito ? 'Em Recurso restrito, o início' : 'O início';
     return [
       violacao(
         'RN05',
-        `O início precisa ser pelo menos ${horas}h depois de agora.`,
+        `${onde} precisa ser pelo menos ${minima / 60}h depois de agora.`,
         CAMPO_DO_INTERVALO,
       ),
     ];
@@ -263,14 +268,15 @@ export function decidirReserva(
 ): Decisao {
   const violacoes = [
     ...violacoesDoIntervalo(pedido, fatos),
-    ...dentroDaAntecedencia(pedido, quem, fatos.politica, agora),
+    ...dentroDaAntecedencia(pedido, quem, fatos.recurso, fatos.politica, agora),
     ...dentroDaDuracao(pedido, quem, fatos.recurso, fatos.politica),
     ...dentroDaCota(fatos.ativasDoUsuario, quem, fatos.politica),
     ...dentroDaCapacidade(pedido, fatos.recurso),
   ];
   if (violacoes.length > 0) return { tipo: 'recusada', violacoes };
 
-  const status = 'Confirmada';
+  // RN10: o Pedido já ocupa o Intervalo e conta na Cota, como toda Reserva ativa.
+  const status = fatos.recurso.restrito ? 'Pendente' : 'Confirmada';
   return {
     tipo: 'aceita',
     efeitos: [

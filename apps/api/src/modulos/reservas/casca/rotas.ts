@@ -63,6 +63,7 @@ export function registrarRotasDeReservas(app: FastifyInstance) {
         select: {
           tipo: true,
           capacidade: true,
+          restrito: true,
           horarios: { select: { diaSemana: true, abre: true, fecha: true } },
         },
       });
@@ -94,7 +95,11 @@ export function registrarRotasDeReservas(app: FastifyInstance) {
         {
           horarios: recurso.horarios,
           reservasDoRecurso,
-          recurso: { tipo: recurso.tipo, capacidade: recurso.capacidade },
+          recurso: {
+            tipo: recurso.tipo,
+            capacidade: recurso.capacidade,
+            restrito: recurso.restrito,
+          },
           ativasDoUsuario,
           politica: POLITICA,
         },

@@ -26,6 +26,7 @@ const COLUNAS_DO_RESUMO = {
   local: true,
   capacidade: true,
   patrimonio: true,
+  restrito: true,
 } as const;
 
 const COLUNAS_DO_RECURSO = {
@@ -198,13 +199,14 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
           ({ horarios, reservas }) =>
             violacoesDoIntervalo(intervalo, { horarios, reservasDoRecurso: reservas }).length === 0,
         )
-        .map(({ id, tipo, nome, local, capacidade, patrimonio }) => ({
+        .map(({ id, tipo, nome, local, capacidade, patrimonio, restrito }) => ({
           id,
           tipo,
           nome,
           local,
           capacidade,
           patrimonio,
+          restrito,
         }));
     },
   );

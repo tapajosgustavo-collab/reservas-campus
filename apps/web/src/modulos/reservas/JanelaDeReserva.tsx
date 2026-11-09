@@ -16,7 +16,7 @@ import { useState, type FormEvent } from 'react';
 import { ErroDaApi } from '../../comum/api';
 import { opcoesDeMeiaHora } from '../../comum/minutos';
 import { linhaDaViolacao } from '../../comum/violacoes';
-import { corpoDaReserva, tituloDasViolacoes } from './pedido';
+import { avisoDoPedido, corpoDaReserva, tituloDasViolacoes } from './pedido';
 import { useCriarReserva } from './reservas';
 
 const OPCOES_DE_INICIO = opcoesDeMeiaHora(0, 24 * 60 - 30);
@@ -28,6 +28,8 @@ interface RecursoDaJanela {
   nome: string;
   tipo: TipoRecurso;
   capacidade: number | null;
+  restrito: boolean;
+  gestor: { nome: string };
 }
 
 /** O Intervalo que veio da agenda, em minutos desde 0h do dia em São Paulo. */
@@ -138,13 +140,18 @@ function Formulario({ recurso, intervalo, aoFechar, aoCriar }: PropsDoFormulario
           value={finalidade}
           onChange={(evento) => setFinalidade(evento.currentTarget.value)}
         />
+        {recurso.restrito && (
+          <Alert color="orange" variant="light">
+            {avisoDoPedido(recurso.gestor.nome, { data, inicio })}
+          </Alert>
+        )}
         {criar.error && <Erro erro={criar.error} />}
         <Group justify="flex-end">
           <Button variant="default" onClick={aoFechar}>
             Cancelar
           </Button>
           <Button type="submit" loading={criar.isPending}>
-            Reservar
+            {recurso.restrito ? 'Enviar pedido' : 'Reservar'}
           </Button>
         </Group>
       </Stack>
@@ -158,7 +165,11 @@ export function JanelaDeReserva({
   ...props
 }: Omit<PropsDoFormulario, 'intervalo'> & { intervalo: IntervaloInicial | null }) {
   return (
-    <Modal opened={intervalo !== null} onClose={props.aoFechar} title="Nova Reserva">
+    <Modal
+      opened={intervalo !== null}
+      onClose={props.aoFechar}
+      title={props.recurso.restrito ? 'Novo Pedido' : 'Nova Reserva'}
+    >
       {intervalo && <Formulario intervalo={intervalo} {...props} />}
     </Modal>
   );
