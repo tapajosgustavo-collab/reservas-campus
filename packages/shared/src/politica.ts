@@ -15,6 +15,8 @@ export interface Politica {
   antecedenciaMaximaDias: Record<PerfilQueReserva, number>;
   /** RN06: a Duração máxima. */
   duracaoMaximaMin: Record<TipoRecurso, Record<PerfilQueReserva, number>>;
+  /** RN17: Tolerância de Devolução, em minutos depois do fim do Intervalo. */
+  toleranciaDeDevolucaoMin: number;
   /** RN07: quantas Reservas ativas cada Perfil pode ter (a Série conta como 1, RN21). */
   cota: Record<PerfilQueReserva, number>;
   /** RN14: o Check-in abre esses minutos antes do início. */
@@ -31,6 +33,7 @@ export const POLITICA = {
     Espaco: { Aluno: 120, Docente: 240 },
     Equipamento: { Aluno: 240, Docente: 480 },
   },
+  toleranciaDeDevolucaoMin: 15,
   cota: { Aluno: 3, Docente: 10 },
   checkInAntesDoInicioMin: 15,
   toleranciaMin: 15,
