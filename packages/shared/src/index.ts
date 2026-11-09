@@ -41,7 +41,7 @@ export {
   type TipoRecurso,
 } from './recursos';
 export { esquemaInstante } from './instante';
-export { POLITICA } from './politica';
+export { POLITICA, type PerfilQueReserva, type Politica } from './politica';
 export {
   esquemaBuscarReservas,
   esquemaCriarReserva,

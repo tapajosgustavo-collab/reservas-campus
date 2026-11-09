@@ -1,8 +1,10 @@
+import { POLITICA } from '@reservas/shared';
 import { describe, expect, it } from 'vitest';
 import { decidirReserva, type FatosDaReserva, type PedidoDeReserva } from './reservar';
 
 const AGORA = new Date('2026-11-09T08:00:00-03:00');
 const ANA = { id: 7, perfil: 'Aluno' } as const;
+const BRUNO = { id: 8, perfil: 'Docente' } as const;
 
 /** Terça, 10/11/2026, em São Paulo. */
 const em = (hora: string) => new Date(`2026-11-10T${hora}:00-03:00`);
@@ -16,6 +18,8 @@ const pedido = (inicio: string, fim: string): PedidoDeReserva => ({
 const fatos = (dados: Partial<FatosDaReserva> = {}): FatosDaReserva => ({
   horarios: [{ diaSemana: 2, abre: 7 * 60, fecha: 23 * 60 }],
   reservasDoRecurso: [],
+  ativasDoUsuario: [],
+  politica: POLITICA,
   ...dados,
 });
 
@@ -225,5 +229,121 @@ describe('US08 · Todas as violações numa resposta', () => {
 
     expect(decisao).toMatchObject({ violacoes: [{ rn: 'RN02' }] });
     expect(decisao).not.toMatchObject({ violacoes: [{}, {}] });
+  });
+});
+
+describe('RN07 · Cota', () => {
+  /** Reservas avulsas ativas da pessoa, com ids 1..n. */
+  const avulsas = (quantas: number) =>
+    Array.from({ length: quantas }, (_, i) => ({ id: i + 1, serieId: null }));
+
+  it('Aluno com 3 Reservas ativas tenta a 4ª → recusado, dizendo a Cota do Perfil', () => {
+    const decisao = decidirReserva(
+      fatos({ ativasDoUsuario: avulsas(3) }),
+      pedido('10:00', '12:00'),
+      ANA,
+      AGORA,
+    );
+
+    expect(decisao).toEqual({
+      tipo: 'recusada',
+      violacoes: [
+        {
+          rn: 'RN07',
+          nome: 'Cota',
+          mensagem: 'Você já tem 3 Reservas ativas, e a Cota de Aluno é 3.',
+        },
+      ],
+    });
+  });
+
+  it('Aluno com 2 Reservas ativas → aceito (a 3ª ainda cabe)', () => {
+    const decisao = decidirReserva(
+      fatos({ ativasDoUsuario: avulsas(2) }),
+      pedido('10:00', '12:00'),
+      ANA,
+      AGORA,
+    );
+
+    expect(decisao.tipo).toBe('aceita');
+  });
+
+  it('Docente com 9 Reservas ativas → aceito; com 10 → recusado', () => {
+    const com = (quantas: number) =>
+      decidirReserva(
+        fatos({ ativasDoUsuario: avulsas(quantas) }),
+        pedido('10:00', '12:00'),
+        BRUNO,
+        AGORA,
+      );
+
+    expect(com(9).tipo).toBe('aceita');
+    expect(com(10)).toMatchObject({
+      violacoes: [
+        { rn: 'RN07', mensagem: 'Você já tem 10 Reservas ativas, e a Cota de Docente é 10.' },
+      ],
+    });
+  });
+
+  it('Docente com 4 Séries ativas de 18 Ocorrências e 5 avulsas usa 9 de 10 → aceito (RN21)', () => {
+    const ocorrencias = [1, 2, 3, 4].flatMap((serieId) =>
+      Array.from({ length: 18 }, (_, i) => ({ id: 100 * serieId + i, serieId })),
+    );
+
+    const decisao = decidirReserva(
+      fatos({ ativasDoUsuario: [...ocorrencias, ...avulsas(5)] }),
+      pedido('10:00', '12:00'),
+      BRUNO,
+      AGORA,
+    );
+
+    expect(decisao.tipo).toBe('aceita');
+  });
+
+  it('a Série 1 e a Reserva avulsa 1 são duas na Cota, mesmo com o mesmo número', () => {
+    const decisao = decidirReserva(
+      fatos({
+        ativasDoUsuario: [
+          { id: 1, serieId: null },
+          { id: 2, serieId: 1 },
+          { id: 3, serieId: null },
+        ],
+      }),
+      pedido('10:00', '12:00'),
+      ANA,
+      AGORA,
+    );
+
+    expect(decisao).toMatchObject({ violacoes: [{ rn: 'RN07' }] });
+  });
+
+  it('a Cota sai da Política: com a Cota de Aluno em 1, a 2ª Reserva ativa é recusada', () => {
+    const decisao = decidirReserva(
+      fatos({
+        ativasDoUsuario: avulsas(1),
+        politica: { ...POLITICA, cota: { Aluno: 1, Docente: 10 } },
+      }),
+      pedido('10:00', '12:00'),
+      ANA,
+      AGORA,
+    );
+
+    expect(decisao).toMatchObject({
+      violacoes: [{ rn: 'RN07', mensagem: 'Você já tem 1 Reserva ativa, e a Cota de Aluno é 1.' }],
+    });
+  });
+
+  it('Cota cheia e Intervalo ocupado → RN01 e RN07 na mesma resposta', () => {
+    const decisao = decidirReserva(
+      fatos({
+        ativasDoUsuario: avulsas(3),
+        reservasDoRecurso: [{ inicio: em('10:00'), fim: em('12:00'), status: 'Confirmada' }],
+      }),
+      pedido('10:00', '12:00'),
+      ANA,
+      AGORA,
+    );
+
+    expect(decisao).toMatchObject({ violacoes: [{ rn: 'RN01' }, { rn: 'RN07' }] });
   });
 });

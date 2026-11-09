@@ -5,6 +5,7 @@ import {
   esquemaIdDaReserva,
   esquemaPaginaDeReservas,
   esquemaReserva,
+  POLITICA,
   RESERVAS_POR_PAGINA,
   STATUS_ATIVOS,
 } from '@reservas/shared';
@@ -79,8 +80,14 @@ export function registrarRotasDeReservas(app: FastifyInstance) {
         select: { inicio: true, fim: true, status: true },
         orderBy: { inicio: 'asc' },
       });
+      // Só as ativas de quem reserva: com o advisory lock da requisição, duas ao mesmo tempo não
+      // leem a mesma Cota (RNF11, ADR 0001).
+      const ativasDoUsuario = await tx.reserva.findMany({
+        where: { usuarioId: quem.id, status: { in: [...STATUS_ATIVOS] } },
+        select: { id: true, serieId: true },
+      });
       const decisao = decidirReserva(
-        { horarios: recurso.horarios, reservasDoRecurso },
+        { horarios: recurso.horarios, reservasDoRecurso, ativasDoUsuario, politica: POLITICA },
         pedido,
         quem,
         agora,
