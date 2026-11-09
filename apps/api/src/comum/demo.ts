@@ -1,6 +1,7 @@
 import { esquemaMudarRelogio, esquemaRelogio } from '@reservas/shared';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { ErroApi } from './erros';
 import { paraIsoSaoPaulo } from './instante';
 import type { RelogioFixo } from './relogio';
 import { exigirSessao } from './sessao';
@@ -38,8 +39,15 @@ export function registrarRelogioDaDemo(app: FastifyInstance, relogio: RelogioFix
     async (request) => {
       await exigirSessao(request);
       const corpo = request.body;
-      if ('ir' in corpo) relogio.ir(new Date(corpo.ir));
-      else relogio.avancar(corpo.avancarMinutos);
+      if ('ir' in corpo) {
+        const destino = new Date(corpo.ir);
+        if (destino < relogio.agora()) {
+          throw new ErroApi('entrada_invalida', 'O relógio da demo não pode voltar ao passado.');
+        }
+        relogio.ir(destino);
+      } else {
+        relogio.avancar(corpo.avancarMinutos);
+      }
       return resposta();
     },
   );
