@@ -112,6 +112,27 @@ describe('US07 · Grade semanal da agenda', () => {
     expect(intervaloDoClique(terca, 22 * 60 + 30, [], agora)).toMatchObject({ fim: 23 * 60 });
   });
 
+  it('RN04 · célula dentro de uma Indisponibilidade é Indisponível, mesmo sem fim', () => {
+    const pintura = {
+      inicio: '2026-11-10T14:00:00-03:00',
+      fim: '2026-11-10T16:00:00-03:00',
+      motivo: 'Pintura',
+    };
+    const foraDeUso = { inicio: '2026-11-10T20:00:00-03:00', fim: null, motivo: 'Fora de uso' };
+
+    expect(estadoDaCelula(terca, 15 * 60, [], agora, [pintura])).toBe('indisponivel');
+    expect(estadoDaCelula(terca, 16 * 60, [], agora, [pintura])).toBe('livre');
+    expect(estadoDaCelula(terca, 22 * 60, [], agora, [foraDeUso])).toBe('indisponivel');
+  });
+
+  it('RN04 · clique antes de uma Indisponibilidade escolhe só 30 min', () => {
+    const pintura = { inicio: '2026-11-10T14:00:00-03:00', fim: null, motivo: 'Pintura' };
+
+    expect(intervaloDoClique(terca, 13 * 60 + 30, [], agora, [pintura])).toMatchObject({
+      fim: 14 * 60,
+    });
+  });
+
   it('arrastar escolhe o Intervalo das duas células, em qualquer direção', () => {
     const esperado = { data: '2026-11-10', inicio: 13 * 60, fim: 15 * 60 + 30 };
 
