@@ -1,5 +1,6 @@
 import { Alert, Anchor, Loader, Stack, Table, Text, Title } from '@mantine/core';
 import { Link, useParams } from 'react-router';
+import { BotaoDeCheckIn } from '../ciclo';
 import { useSessao } from '../conduta';
 import {
   rotuloDaTransicao,
@@ -12,7 +13,12 @@ import { useReserva } from './reservas';
 /** US10: a Reserva com cada mudança de Status. Quem não pode abrir vê a mensagem da RN22. */
 export function DetalheDaReserva() {
   const reserva = useReserva(Number(useParams().id));
-  const ehGestor = useSessao().data?.usuario.perfil === 'Gestor';
+  const sessao = useSessao().data;
+  const ehGestor = sessao?.usuario.perfil === 'Gestor';
+  // O Gestor responsável também abre o detalhe, mas o Check-in é só do dono (RN14): só ele recebe
+  // o agora da API que o botão usa.
+  const agoraDoDono =
+    sessao && sessao.usuario.id === reserva.data?.usuario.id ? sessao.agora : undefined;
 
   return (
     <Stack gap="md">
@@ -39,6 +45,14 @@ export function DetalheDaReserva() {
             )}
             {reserva.data.finalidade && <Text>Finalidade: {reserva.data.finalidade}</Text>}
           </Stack>
+
+          {agoraDoDono && (
+            <BotaoDeCheckIn
+              reserva={reserva.data}
+              agora={agoraDoDono}
+              nomeDoRecurso={reserva.data.recurso.nome}
+            />
+          )}
 
           <Title order={3}>Histórico</Title>
           <Table.ScrollContainer minWidth={520} type="native">

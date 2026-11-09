@@ -1,6 +1,7 @@
 import {
   Alert,
   Anchor,
+  Group,
   Loader,
   Pagination,
   Stack,
@@ -12,6 +13,8 @@ import {
 } from '@mantine/core';
 import { esquemaSituacao, type Situacao } from '@reservas/shared';
 import { Link, useSearchParams } from 'react-router';
+import { BotaoDeCheckIn } from '../ciclo';
+import { useSessao } from '../conduta';
 import { paginasDe, rotuloDoIntervalo, ROTULO_DO_STATUS } from './apresentacao';
 import { useMinhasReservas } from './reservas';
 
@@ -24,6 +27,8 @@ const SEM_RESERVAS: Record<Situacao, string> = {
 
 function ListaDeReservas({ situacao, pagina }: { situacao: Situacao; pagina: number }) {
   const reservas = useMinhasReservas(situacao, pagina);
+  // O botão de Check-in usa o agora da API, que vem com a sessão.
+  const agora = useSessao().data?.agora;
 
   if (reservas.isPending) return <Loader aria-label="Carregando Reservas" />;
   if (reservas.isError) {
@@ -52,19 +57,28 @@ function ListaDeReservas({ situacao, pagina }: { situacao: Situacao; pagina: num
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
-          {reservas.data.itens.map(({ id, recurso, inicio, fim, status }) => (
-            <Table.Tr key={id}>
+          {reservas.data.itens.map((reserva) => (
+            <Table.Tr key={reserva.id}>
               <Table.Td>
                 <Text size="sm" fw={500}>
-                  {recurso.nome}
+                  {reserva.recurso.nome}
                 </Text>
-                <Text size="sm">{rotuloDoIntervalo(inicio, fim)}</Text>
+                <Text size="sm">{rotuloDoIntervalo(reserva.inicio, reserva.fim)}</Text>
               </Table.Td>
-              <Table.Td>{ROTULO_DO_STATUS[status]}</Table.Td>
+              <Table.Td>{ROTULO_DO_STATUS[reserva.status]}</Table.Td>
               <Table.Td>
-                <Anchor component={Link} to={`/reservas/${id}`}>
-                  Detalhes<VisuallyHidden> da Reserva de {recurso.nome}</VisuallyHidden>
-                </Anchor>
+                <Group gap="xs" align="center">
+                  {agora && (
+                    <BotaoDeCheckIn
+                      reserva={reserva}
+                      agora={agora}
+                      nomeDoRecurso={reserva.recurso.nome}
+                    />
+                  )}
+                  <Anchor component={Link} to={`/reservas/${reserva.id}`}>
+                    Detalhes<VisuallyHidden> da Reserva de {reserva.recurso.nome}</VisuallyHidden>
+                  </Anchor>
+                </Group>
               </Table.Td>
             </Table.Tr>
           ))}
