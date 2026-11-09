@@ -67,6 +67,7 @@ comBanco('US06 · Buscar Recurso livre', () => {
         local: null,
         capacidade: null,
         patrimonio: 'PAT-00042',
+        restrito: false,
       },
       {
         id: lab.id,
@@ -75,6 +76,7 @@ comBanco('US06 · Buscar Recurso livre', () => {
         local: 'Bloco A',
         capacidade: 30,
         patrimonio: null,
+        restrito: false,
       },
     ]);
   });
@@ -212,6 +214,7 @@ comBanco('US06 · Buscar Recurso livre', () => {
         local: null,
         capacidade: null,
         patrimonio: 'PAT-00002',
+        restrito: false,
       },
     ]);
   });

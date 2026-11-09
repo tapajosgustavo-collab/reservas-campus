@@ -60,6 +60,7 @@ comBanco('US04 · Cadastrar Recurso', () => {
       local: 'Bloco A, 2º andar',
       capacidade: 30,
       patrimonio: null,
+      restrito: false,
       gestor: { id: carlos.id, nome: 'Carlos' },
       horarios: SEG_A_SEX_7H_23H,
     });
@@ -169,7 +170,7 @@ comBanco('US04 · Cadastrar Recurso', () => {
     { caso: 'Espaço com patrimônio', payload: { ...LAB, patrimonio: 'P-1' } },
     { caso: 'Equipamento sem patrimônio', payload: { ...PROJETOR, patrimonio: undefined } },
     { caso: 'Equipamento com Capacidade', payload: { ...PROJETOR, capacidade: 2 } },
-    { caso: 'o campo restrito (só no incremento 3)', payload: { ...LAB, restrito: true } },
+    { caso: 'restrito que não é booleano', payload: { ...LAB, restrito: 'sim' } },
   ])('$caso → 400', async ({ payload }) => {
     const app = await umaApp({ banco });
     const carlos = await umUsuario(banco, 'Gestor');
@@ -183,6 +184,37 @@ comBanco('US04 · Cadastrar Recurso', () => {
 
     expect(resposta.statusCode).toBe(400);
     expect(await banco.recurso.count()).toBe(0);
+  });
+
+  it('RN10 · POST com restrito: true → 201, e o Recurso nasce restrito', async () => {
+    const app = await umaApp({ banco });
+    const carlos = await umUsuario(banco, 'Gestor');
+
+    const resposta = await app.inject({
+      method: 'POST',
+      url: '/api/recursos',
+      cookies: sessaoDe(app, carlos.id),
+      payload: { ...LAB, restrito: true },
+    });
+
+    expect(resposta.statusCode).toBe(201);
+    expect(resposta.json()).toMatchObject({ nome: 'Laboratório 3', restrito: true });
+    expect(await banco.recurso.findFirstOrThrow()).toMatchObject({ restrito: true });
+  });
+
+  it('POST sem o campo restrito → o Recurso nasce comum', async () => {
+    const app = await umaApp({ banco });
+    const carlos = await umUsuario(banco, 'Gestor');
+
+    const resposta = await app.inject({
+      method: 'POST',
+      url: '/api/recursos',
+      cookies: sessaoDe(app, carlos.id),
+      payload: PROJETOR,
+    });
+
+    expect(resposta.statusCode).toBe(201);
+    expect(resposta.json().restrito).toBe(false);
   });
 
   it('dia sem faixa fica fechado: o Recurso pode nascer só com a segunda', async () => {
@@ -380,6 +412,40 @@ comBanco('US04 · Editar Recurso', () => {
     expect(await banco.reserva.findUniqueOrThrow({ where: { id: reserva.id } })).toEqual(reserva);
   });
 
+  it('RN10 · PATCH restrito: true → 200, e o Recurso passa a ser restrito', async () => {
+    const app = await umaApp({ banco });
+    const carlos = await umUsuario(banco, 'Gestor');
+    const lab = await umEspaco(banco, { gestorId: carlos.id });
+
+    const resposta = await app.inject({
+      method: 'PATCH',
+      url: `/api/recursos/${lab.id}`,
+      cookies: sessaoDe(app, carlos.id),
+      payload: { restrito: true },
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json()).toMatchObject({ id: lab.id, restrito: true });
+  });
+
+  it('deixar de ser restrito não muda as Reservas: o Pedido Pendente continua esperando decisão', async () => {
+    const app = await umaApp({ banco });
+    const carlos = await umUsuario(banco, 'Gestor');
+    const lab = await umEspaco(banco, { gestorId: carlos.id, restrito: true });
+    const pedido = await umaReserva(banco, { recursoId: lab.id, status: 'Pendente' });
+
+    const resposta = await app.inject({
+      method: 'PATCH',
+      url: `/api/recursos/${lab.id}`,
+      cookies: sessaoDe(app, carlos.id),
+      payload: { restrito: false },
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json().restrito).toBe(false);
+    expect(await banco.reserva.findUniqueOrThrow({ where: { id: pedido.id } })).toEqual(pedido);
+  });
+
   it('Aluno editando → 403', async () => {
     const app = await umaApp({ banco });
     const aluno = await umUsuario(banco, 'Aluno');
@@ -449,6 +515,7 @@ comBanco('US04 · Ver Recurso e Meus recursos', () => {
       local: 'Bloco A',
       capacidade: 30,
       patrimonio: null,
+      restrito: false,
       gestor: { id: carlos.id, nome: 'Carlos' },
       horarios: [
         { diaSemana: 1, abre: 420, fecha: 1380 },

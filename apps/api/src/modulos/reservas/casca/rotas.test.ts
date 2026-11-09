@@ -16,6 +16,9 @@ let banco: Banco;
 // O agora da `umaApp` é terça, 10/11/2026, 8h.
 const INICIO = '2026-11-10T10:00:00-03:00';
 const FIM = '2026-11-10T12:00:00-03:00';
+// Quarta, 26h depois do agora: passa das 24h do Recurso restrito (RN05).
+const AMANHA_INICIO = '2026-11-11T10:00:00-03:00';
+const AMANHA_FIM = '2026-11-11T12:00:00-03:00';
 
 const SEG_A_SEX_7H_23H = {
   create: [1, 2, 3, 4, 5].map((diaSemana) => ({ diaSemana, abre: 7 * 60, fecha: 23 * 60 })),
@@ -299,6 +302,100 @@ comBanco('US08 · Reservar', () => {
 
     expect(resposta.statusCode).toBe(201);
     expect(resposta.json().inicio).toBe('2026-11-10T22:00:00-03:00');
+  });
+
+  it('RN10 · Aluno reserva um Recurso restrito → 201 Pendente, com a primeira transição', async () => {
+    const app = await umaApp({ banco });
+    const { ana } = await cenario();
+    const restrito = await umEspaco(banco, { restrito: true, horarios: SEG_A_SEX_7H_23H });
+
+    const resposta = await reservar(app, ana.id, {
+      recursoId: restrito.id,
+      inicio: AMANHA_INICIO,
+      fim: AMANHA_FIM,
+      participantes: 20,
+    });
+
+    expect(resposta.statusCode).toBe(201);
+    const pedido = resposta.json();
+    expect(pedido).toMatchObject({ status: 'Pendente', inicio: AMANHA_INICIO, fim: AMANHA_FIM });
+    const transicoes = await banco.transicao.findMany({ where: { reservaId: pedido.id } });
+    expect(transicoes).toMatchObject([{ de: null, para: 'Pendente', porId: ana.id }]);
+  });
+
+  it('RN05 · Recurso restrito a menos de 24h → 422 com a Antecedência em Recurso restrito, nada gravado', async () => {
+    const app = await umaApp({ banco });
+    const { ana } = await cenario();
+    const restrito = await umEspaco(banco, { restrito: true, horarios: SEG_A_SEX_7H_23H });
+
+    // Hoje às 10h: passa da 1h de um Recurso comum, mas não das 24h do restrito.
+    const resposta = await reservar(app, ana.id, {
+      recursoId: restrito.id,
+      inicio: INICIO,
+      fim: FIM,
+      participantes: 20,
+    });
+
+    expect(resposta.statusCode).toBe(422);
+    expect(resposta.json().erro.violacoes).toEqual([
+      {
+        rn: 'RN05',
+        nome: 'Antecedência',
+        mensagem: 'Em Recurso restrito, o início precisa ser pelo menos 24h depois de agora.',
+        campo: 'intervalo',
+      },
+    ]);
+    expect(await banco.reserva.count()).toBe(0);
+  });
+
+  it('RN10 · o Pedido Pendente já ocupa o Intervalo: Bruno no mesmo Intervalo → 422 RN01', async () => {
+    const app = await umaApp({ banco });
+    const { ana } = await cenario();
+    const bruno = await umUsuario(banco, 'Aluno');
+    const restrito = await umEspaco(banco, { restrito: true, horarios: SEG_A_SEX_7H_23H });
+    const corpo = {
+      recursoId: restrito.id,
+      inicio: AMANHA_INICIO,
+      fim: AMANHA_FIM,
+      participantes: 5,
+    };
+    expect((await reservar(app, ana.id, corpo)).statusCode).toBe(201);
+
+    const resposta = await reservar(app, bruno.id, corpo);
+
+    expect(resposta.statusCode).toBe(422);
+    expect(resposta.json().erro.violacoes).toMatchObject([{ rn: 'RN01' }]);
+    expect(await banco.reserva.count()).toBe(1);
+  });
+
+  it('RN10 · o Pedido conta na Cota: Aluno com 2 Confirmadas e 1 Pendente → 422 RN07', async () => {
+    const app = await umaApp({ banco });
+    const { lab, ana } = await cenario();
+    for (const dia of ['12', '13']) {
+      await umaReserva(banco, {
+        usuarioId: ana.id,
+        inicio: `2026-11-${dia}T10:00:00-03:00`,
+        fim: `2026-11-${dia}T12:00:00-03:00`,
+      });
+    }
+    await umaReserva(banco, {
+      usuarioId: ana.id,
+      inicio: AMANHA_INICIO,
+      fim: AMANHA_FIM,
+      status: 'Pendente',
+    });
+
+    const resposta = await reservar(app, ana.id, {
+      recursoId: lab.id,
+      inicio: INICIO,
+      fim: FIM,
+      participantes: 20,
+    });
+
+    expect(resposta.statusCode).toBe(422);
+    expect(resposta.json().erro.violacoes).toMatchObject([
+      { rn: 'RN07', mensagem: 'Você já tem 3 Reservas ativas, e a Cota de Aluno é 3.' },
+    ]);
   });
 
   it('Gestor tentando reservar → 403', async () => {
