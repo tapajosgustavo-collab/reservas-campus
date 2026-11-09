@@ -72,5 +72,13 @@ export {
   esquemaOcupacao,
   type Agenda,
   type BuscarAgenda,
+  type IndisponibilidadeNaAgenda,
   type Ocupacao,
 } from './agenda';
+export {
+  esquemaCriarIndisponibilidade,
+  esquemaIndisponibilidade,
+  esquemaIndisponibilidadeCriada,
+  type CriarIndisponibilidade,
+  type IndisponibilidadeCriada,
+} from './indisponibilidades';

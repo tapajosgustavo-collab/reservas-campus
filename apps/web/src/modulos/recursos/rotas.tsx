@@ -1,6 +1,7 @@
 import type { RouteObject } from 'react-router';
 import { AgendaDoRecurso } from './AgendaDoRecurso';
 import { BuscaDeRecursos } from './BuscaDeRecursos';
+import { CadastroDeIndisponibilidade } from './CadastroDeIndisponibilidade';
 import { CadastrarRecurso, EditarRecurso } from './CadastroDoRecurso';
 import { MeusRecursos } from './MeusRecursos';
 
@@ -12,4 +13,6 @@ export const rotasRecursos: RouteObject[] = [
   { path: 'gestao/recursos', Component: MeusRecursos },
   { path: 'gestao/recursos/novo', Component: CadastrarRecurso },
   { path: 'gestao/recursos/:id/editar', Component: EditarRecurso },
+  // US05: só o Gestor responsável; a API recusa os outros (RN13).
+  { path: 'gestao/recursos/:id/indisponibilidade', Component: CadastroDeIndisponibilidade },
 ];

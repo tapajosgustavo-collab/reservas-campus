@@ -1,6 +1,10 @@
 import type { Status } from '@reservas/shared';
 import { describe, expect, it } from 'vitest';
-import { decidirIndisponibilidade, type ReservaNoPeriodo } from './indisponibilidade';
+import {
+  decidirIndisponibilidade,
+  type PedidoDeIndisponibilidade,
+  type ReservaNoPeriodo,
+} from './indisponibilidade';
 
 const carlos = { id: 3, perfil: 'Gestor' } as const;
 const dora = { id: 4, perfil: 'Gestor' } as const;
@@ -11,7 +15,7 @@ const sala102 = { id: 10, gestorId: carlos.id } as const;
 const agora = new Date('2026-11-10T08:00:00-03:00');
 
 /** Manutenção de 10/11 8h a 12/11 18h. */
-const manutencao = {
+const manutencao: PedidoDeIndisponibilidade = {
   inicio: new Date('2026-11-10T08:00:00-03:00'),
   fim: new Date('2026-11-12T18:00:00-03:00'),
   motivo: 'Troca do ar-condicionado',

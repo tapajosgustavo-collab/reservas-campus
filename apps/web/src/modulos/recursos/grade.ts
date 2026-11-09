@@ -1,5 +1,5 @@
 import { TZDate } from '@date-fns/tz';
-import type { Horario, Ocupacao } from '@reservas/shared';
+import type { Horario, IndisponibilidadeNaAgenda, Ocupacao } from '@reservas/shared';
 import { addDays, addWeeks, format, parseISO } from 'date-fns';
 
 const FUSO = 'America/Sao_Paulo';
@@ -19,7 +19,13 @@ export interface IntervaloEscolhido {
 }
 
 export type EstadoDaCelula =
-  'livre' | 'ocupado' | 'minha-confirmada' | 'minha-pendente' | 'fechado' | 'passado';
+  | 'livre'
+  | 'ocupado'
+  | 'minha-confirmada'
+  | 'minha-pendente'
+  | 'indisponivel'
+  | 'fechado'
+  | 'passado';
 
 /** Segunda `YYYY-MM-DD` mais (ou menos) `semanas` semanas. Só calendário, sem fuso. */
 export function semanaVizinha(semana: string, semanas: number): string {
@@ -53,14 +59,16 @@ function instanteDe(data: string, minuto: number): number {
 }
 
 /**
- * O que a célula de meia hora mostra. A Reserva aparece mesmo no passado; o resto do que já
- * começou é Passado, pelo `agora` da API. Sem pré-bloqueio por Política: quem explica é a RN.
+ * O que a célula de meia hora mostra. A Reserva (inclusive a Em uso dentro de uma Indisponibilidade,
+ * RN04) e a Indisponibilidade aparecem mesmo no passado; o resto do que já começou é Passado, pelo
+ * `agora` da API. Sem pré-bloqueio por Política: quem explica é a RN.
  */
 export function estadoDaCelula(
   dia: DiaDaGrade,
   minuto: number,
   ocupacoes: Ocupacao[],
   agora: Date,
+  indisponibilidades: IndisponibilidadeNaAgenda[] = [],
 ): EstadoDaCelula {
   if (minuto < dia.abre || minuto + MEIA_HORA > dia.fecha) return 'fechado';
   const inicio = instanteDe(dia.data, minuto);
@@ -69,6 +77,10 @@ export function estadoDaCelula(
   if (ocupacao?.minha)
     return ocupacao.status === 'Pendente' ? 'minha-pendente' : 'minha-confirmada';
   if (ocupacao) return 'ocupado';
+  const indisponivel = indisponibilidades.some(
+    (i) => Date.parse(i.inicio) < fim && (i.fim === null || Date.parse(i.fim) > inicio),
+  );
+  if (indisponivel) return 'indisponivel';
   return inicio < agora.getTime() ? 'passado' : 'livre';
 }
 
@@ -78,8 +90,10 @@ export function intervaloDoClique(
   minuto: number,
   ocupacoes: Ocupacao[],
   agora: Date,
+  indisponibilidades: IndisponibilidadeNaAgenda[] = [],
 ): IntervaloEscolhido {
-  const seguinteLivre = estadoDaCelula(dia, minuto + MEIA_HORA, ocupacoes, agora) === 'livre';
+  const seguinte = estadoDaCelula(dia, minuto + MEIA_HORA, ocupacoes, agora, indisponibilidades);
+  const seguinteLivre = seguinte === 'livre';
   return { data: dia.data, inicio: minuto, fim: minuto + (seguinteLivre ? 2 : 1) * MEIA_HORA };
 }
 

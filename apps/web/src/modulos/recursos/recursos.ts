@@ -1,8 +1,10 @@
 import {
   esquemaAgenda,
+  esquemaIndisponibilidadeCriada,
   esquemaRecurso,
   esquemaRecursos,
   type CadastrarRecurso,
+  type CriarIndisponibilidade,
   type EditarRecurso,
 } from '@reservas/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -75,5 +77,20 @@ export function useEditarRecurso(id: number) {
     mutationFn: (edicao: EditarRecurso) =>
       enviarJson('PATCH', `/api/recursos/${id}`, edicao, esquemaRecurso),
     onSuccess: () => cliente.invalidateQueries({ queryKey: [CHAVE] }),
+  });
+}
+
+/** US05: as agendas e as buscas mudam, e as Reservas canceladas também (RN04). */
+export function useCriarIndisponibilidade(id: number) {
+  const cliente = useQueryClient();
+  return useMutation({
+    mutationFn: (indisponibilidade: CriarIndisponibilidade) =>
+      enviarJson(
+        'POST',
+        `/api/recursos/${id}/indisponibilidades`,
+        indisponibilidade,
+        esquemaIndisponibilidadeCriada,
+      ),
+    onSuccess: () => cliente.invalidateQueries(),
   });
 }
