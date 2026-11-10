@@ -57,10 +57,18 @@ export interface ReservaNaCota {
   serieId: number | null;
 }
 
+/** Uma Indisponibilidade do Recurso em volta do Intervalo. `fim` vazio = sem previsão de volta. */
+export interface IndisponibilidadeDoRecurso {
+  inicio: Date;
+  fim: Date | null;
+  motivo: string;
+}
+
 /** O que decide se o Recurso pode ser usado no Intervalo. */
 export interface FatosDoIntervalo {
   horarios: Horario[];
   reservasDoRecurso: ReservaDoRecurso[];
+  indisponibilidades: IndisponibilidadeDoRecurso[];
 }
 
 export interface FatosDaReserva extends FatosDoIntervalo {
@@ -168,14 +176,37 @@ function semConflito(pedido: Intervalo, reservas: ReservaDoRecurso[]): Violacao[
 }
 
 /**
- * RN01, RN02 e RN03: o que impede usar o Recurso no Intervalo. O reservar (US08) e a busca de
- * Recurso livre (US06, no M2) usam a mesma regra.
+ * RN04: uma violação só, com o motivo de cada Indisponibilidade (a agenda já mostra o motivo a
+ * todos). Sem fim, a Indisponibilidade cobre tudo dali em diante.
+ */
+function semIndisponibilidade(
+  pedido: Intervalo,
+  indisponibilidades: IndisponibilidadeDoRecurso[],
+): Violacao[] {
+  if (pedido.fim <= pedido.inicio) return [];
+  const motivos = indisponibilidades
+    .filter(({ inicio, fim }) => inicio < pedido.fim && (fim === null || pedido.inicio < fim))
+    .map(({ motivo }) => motivo);
+  if (motivos.length === 0) return [];
+  return [
+    violacao(
+      'RN04',
+      `Este Recurso está indisponível neste Intervalo: ${[...new Set(motivos)].join('; ')}.`,
+      CAMPO_DO_INTERVALO,
+    ),
+  ];
+}
+
+/**
+ * RN01 a RN04: o que impede usar o Recurso no Intervalo. O reservar (US08) e a busca de Recurso
+ * livre (US06, no M2) usam a mesma regra.
  */
 export function violacoesDoIntervalo(intervalo: Intervalo, fatos: FatosDoIntervalo): Violacao[] {
   return [
     ...semConflito(intervalo, fatos.reservasDoRecurso),
     ...intervaloValido(intervalo),
     ...dentroDoHorario(intervalo, fatos.horarios),
+    ...semIndisponibilidade(intervalo, fatos.indisponibilidades),
   ];
 }
 

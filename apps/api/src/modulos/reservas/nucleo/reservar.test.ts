@@ -26,6 +26,7 @@ const pedidoSemParticipantes = (inicio: string, fim: string): PedidoDeReserva =>
 const fatos = (dados: Partial<FatosDaReserva> = {}): FatosDaReserva => ({
   horarios: [{ diaSemana: 2, abre: 7 * 60, fecha: 23 * 60 }],
   reservasDoRecurso: [],
+  indisponibilidades: [],
   recurso: { tipo: 'Espaco', capacidade: 30, restrito: false },
   ativasDoUsuario: [],
   politica: POLITICA,
@@ -212,6 +213,147 @@ describe('RN03 · Dentro do Horário de funcionamento', () => {
     const decisao = decidirReserva(fatos(), pedido('22:00', '22:30'), ANA, AGORA);
 
     expect(decisao.tipo).toBe('aceita');
+  });
+});
+
+describe('RN04 · Indisponibilidade', () => {
+  const manutencao = {
+    inicio: em('08:00'),
+    fim: em('18:00'),
+    motivo: 'Troca do ar-condicionado',
+  };
+
+  it('Indisponibilidade 8h–18h, pedir 10h–12h → recusado, dizendo o motivo', () => {
+    const decisao = decidirReserva(
+      fatos({ indisponibilidades: [manutencao] }),
+      pedido('10:00', '12:00'),
+      ANA,
+      AGORA,
+    );
+
+    expect(decisao).toEqual({
+      tipo: 'recusada',
+      violacoes: [
+        {
+          rn: 'RN04',
+          nome: 'Indisponibilidade',
+          mensagem: 'Este Recurso está indisponível neste Intervalo: Troca do ar-condicionado.',
+          campo: 'intervalo',
+        },
+      ],
+    });
+  });
+
+  it('Indisponibilidade 8h–18h, pedir 17h–19h (só uma parte dentro) → recusado', () => {
+    const decisao = decidirReserva(
+      fatos({ indisponibilidades: [manutencao] }),
+      pedido('17:00', '19:00'),
+      BRUNO,
+      AGORA,
+    );
+
+    expect(decisao).toMatchObject({ tipo: 'recusada', violacoes: [{ rn: 'RN04' }] });
+  });
+
+  it.each([
+    ['7h–8h', '07:00', '08:00'],
+    ['18h–20h', '18:00', '20:00'],
+  ])('Indisponibilidade 8h–18h, pedir %s (só encosta) → aceito', (_nome, inicio, fim) => {
+    const decisao = decidirReserva(
+      fatos({ indisponibilidades: [manutencao] }),
+      pedido(inicio, fim),
+      ANA,
+      AGORA,
+    );
+
+    expect(decisao.tipo).toBe('aceita');
+  });
+
+  it('Indisponibilidade de segunda a quinta cobre a terça inteira', () => {
+    const semana = {
+      inicio: new Date('2026-11-09T07:00:00-03:00'),
+      fim: new Date('2026-11-12T23:00:00-03:00'),
+      motivo: 'Reforma',
+    };
+
+    const decisao = decidirReserva(
+      fatos({ indisponibilidades: [semana] }),
+      pedido('21:00', '23:00'),
+      ANA,
+      AGORA,
+    );
+
+    expect(decisao).toMatchObject({ violacoes: [{ rn: 'RN04' }] });
+  });
+
+  describe('sem fim (sem previsão de volta)', () => {
+    const foraDeUso = { inicio: em('00:00'), fim: null, motivo: 'Fora de uso' };
+
+    it('cobre o mesmo dia → recusado', () => {
+      const decisao = decidirReserva(
+        fatos({ indisponibilidades: [foraDeUso] }),
+        pedido('10:00', '12:00'),
+        ANA,
+        AGORA,
+      );
+
+      expect(decisao).toMatchObject({
+        violacoes: [
+          { rn: 'RN04', mensagem: 'Este Recurso está indisponível neste Intervalo: Fora de uso.' },
+        ],
+      });
+    });
+
+    it('cobre qualquer data futura: Docente pede 29/12, sete semanas depois → recusado', () => {
+      const decisao = decidirReserva(
+        fatos({ indisponibilidades: [foraDeUso] }),
+        {
+          ...pedido('10:00', '12:00'),
+          inicio: new Date('2026-12-29T10:00:00-03:00'),
+          fim: new Date('2026-12-29T12:00:00-03:00'),
+        },
+        BRUNO,
+        AGORA,
+      );
+
+      expect(decisao).toMatchObject({ tipo: 'recusada', violacoes: [{ rn: 'RN04' }] });
+    });
+
+    it('não cobre o que vem antes do início: sem fim a partir das 14h, pedir 10h–12h → aceito', () => {
+      const decisao = decidirReserva(
+        fatos({ indisponibilidades: [{ ...foraDeUso, inicio: em('14:00') }] }),
+        pedido('10:00', '12:00'),
+        ANA,
+        AGORA,
+      );
+
+      expect(decisao.tipo).toBe('aceita');
+    });
+  });
+
+  it('pedido por cima de duas Indisponibilidades → uma violação com os dois motivos', () => {
+    const decisao = decidirReserva(
+      fatos({
+        indisponibilidades: [
+          { inicio: em('08:00'), fim: em('11:00'), motivo: 'Dedetização' },
+          { inicio: em('11:00'), fim: em('13:00'), motivo: 'Evento institucional' },
+        ],
+      }),
+      pedido('10:00', '12:00'),
+      ANA,
+      AGORA,
+    );
+
+    expect(decisao).toMatchObject({
+      violacoes: [
+        {
+          rn: 'RN04',
+          mensagem:
+            'Este Recurso está indisponível neste Intervalo: Dedetização; Evento institucional.',
+        },
+      ],
+    });
+    expect(decisao).not.toMatchObject({ violacoes: [{}, {}] });
   });
 });
 
@@ -472,6 +614,35 @@ describe('US08 · Todas as violações numa resposta', () => {
     expect(decisao).toMatchObject({
       violacoes: [{ rn: 'RN03' }, { rn: 'RN05' }, { rn: 'RN06' }, { rn: 'RN08' }],
     });
+  });
+
+  it('RN04 junto das outras: RN01, RN03, RN04, RN05 e RN08 na mesma resposta', () => {
+    const decisao = decidirReserva(
+      fatos({
+        horarios: [{ diaSemana: 2, abre: 9 * 60, fecha: 23 * 60 }],
+        reservasDoRecurso: [{ inicio: em('08:00'), fim: em('09:00'), status: 'Confirmada' }],
+        indisponibilidades: [{ inicio: em('08:00'), fim: null, motivo: 'Fora de uso' }],
+      }),
+      { ...pedido('08:30', '10:00'), participantes: 31 },
+      ANA,
+      new Date('2026-11-10T08:00:00-03:00'),
+    );
+
+    expect(decisao).toMatchObject({
+      violacoes: [{ rn: 'RN01' }, { rn: 'RN03' }, { rn: 'RN04' }, { rn: 'RN05' }, { rn: 'RN08' }],
+    });
+  });
+
+  it('RN02 · Intervalo de duração zero dentro de uma Indisponibilidade não vira RN04', () => {
+    const decisao = decidirReserva(
+      fatos({ indisponibilidades: [{ inicio: em('08:00'), fim: null, motivo: 'Fora de uso' }] }),
+      pedido('11:00', '11:00'),
+      ANA,
+      AGORA,
+    );
+
+    expect(decisao).toMatchObject({ violacoes: [{ rn: 'RN02' }] });
+    expect(decisao).not.toMatchObject({ violacoes: [{}, {}] });
   });
 
   it('RN02 · Intervalo que atravessa o dia não vira RN06', () => {

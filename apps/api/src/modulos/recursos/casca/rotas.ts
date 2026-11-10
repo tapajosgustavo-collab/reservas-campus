@@ -270,14 +270,26 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
             where: { inicio: { lt: intervalo.fim }, fim: { gt: intervalo.inicio } },
             select: { inicio: true, fim: true, status: true },
           },
+          // As Indisponibilidades que tocam o Intervalo, inclusive as sem fim (RN04).
+          indisponibilidades: {
+            where: {
+              inicio: { lt: intervalo.fim },
+              OR: [{ fim: null }, { fim: { gt: intervalo.inicio } }],
+            },
+            select: { inicio: true, fim: true, motivo: true },
+          },
         },
       });
-      // Livre é o que o reservar aceitaria pelas RN01–RN03: a regra é a do M3, não uma cópia.
+      // Livre é o que o reservar aceitaria pelas RN01–RN04: a regra é a do M3, não uma cópia.
       // Só o resumo sai: nada das Reservas de outras pessoas (RN22).
       return candidatos
         .filter(
-          ({ horarios, reservas }) =>
-            violacoesDoIntervalo(intervalo, { horarios, reservasDoRecurso: reservas }).length === 0,
+          ({ horarios, reservas, indisponibilidades }) =>
+            violacoesDoIntervalo(intervalo, {
+              horarios,
+              reservasDoRecurso: reservas,
+              indisponibilidades,
+            }).length === 0,
         )
         .map(({ id, tipo, nome, local, capacidade, patrimonio, restrito }) => ({
           id,
