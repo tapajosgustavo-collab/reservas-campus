@@ -11,6 +11,8 @@ export type PerfilQueReserva = Exclude<Perfil, 'Gestor'>;
 export interface Politica {
   /** RN05: a Antecedência mínima, igual nos dois Perfis. */
   antecedenciaMinimaMin: number;
+  /** RN05: a Antecedência mínima em Recurso restrito, para o Gestor ter tempo de decidir (RN12). */
+  antecedenciaMinimaRestritoMin: number;
   /** RN05: a Antecedência máxima. */
   antecedenciaMaximaDias: Record<PerfilQueReserva, number>;
   /** RN06: a Duração máxima. */
@@ -23,11 +25,14 @@ export interface Politica {
   checkInAntesDoInicioMin: number;
   /** RN14: Tolerância, em minutos depois do início. */
   toleranciaMin: number;
+  /** RN12: o Prazo de decisão do Pedido, em minutos antes do início. */
+  prazoDeDecisaoMin: number;
 }
 
 /** Os limites da Política. Cada um entra aqui no ticket que o usa. */
 export const POLITICA = {
   antecedenciaMinimaMin: 60,
+  antecedenciaMinimaRestritoMin: 24 * 60,
   antecedenciaMaximaDias: { Aluno: 14, Docente: 60 },
   duracaoMaximaMin: {
     Espaco: { Aluno: 120, Docente: 240 },
@@ -37,4 +42,5 @@ export const POLITICA = {
   cota: { Aluno: 3, Docente: 10 },
   checkInAntesDoInicioMin: 15,
   toleranciaMin: 15,
+  prazoDeDecisaoMin: 120,
 } as const satisfies Politica;

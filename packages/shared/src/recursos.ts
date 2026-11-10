@@ -42,14 +42,19 @@ export const esquemaHorarios = z
 const nome = z.string().trim().min(1).max(120);
 const local = z.string().trim().min(1).max(120);
 const capacidade = z.number().int().min(1).max(10_000);
+const restrito = z
+  .boolean()
+  .describe('Recurso restrito: a Reserva nasce Pendente e o Gestor responsável decide (RN10)');
+const restritoNoCadastro = restrito.optional().describe('Sem ele, o Recurso nasce comum');
 
-// Só a forma (ADR 0001). O `restrito` entra no incremento 3 (#47).
+// Só a forma (ADR 0001).
 export const esquemaCadastrarRecurso = z.discriminatedUnion('tipo', [
   z.strictObject({
     tipo: z.literal('Espaco'),
     nome,
     local,
     capacidade,
+    restrito: restritoNoCadastro,
     horarios: esquemaHorarios,
   }),
   z.strictObject({
@@ -57,6 +62,7 @@ export const esquemaCadastrarRecurso = z.discriminatedUnion('tipo', [
     nome,
     local: local.optional(),
     patrimonio: z.string().trim().min(1).max(40).describe('Número de patrimônio, único'),
+    restrito: restritoNoCadastro,
     horarios: esquemaHorarios,
   }),
 ]);
@@ -68,6 +74,9 @@ export const esquemaEditarRecurso = z.strictObject({
   nome: nome.optional(),
   local: local.nullable().optional().describe('`null` apaga; só Equipamento fica sem local'),
   capacidade: capacidade.optional().describe('Só Espaço'),
+  restrito: restrito
+    .optional()
+    .describe('Vale para as Reservas criadas depois: os Pedidos Pendentes continuam esperando'),
   horarios: esquemaHorarios.optional(),
 });
 
@@ -80,6 +89,7 @@ export const esquemaResumoDoRecurso = z.object({
   local: z.string().nullable(),
   capacidade: z.number().int().nullable(),
   patrimonio: z.string().nullable(),
+  restrito,
 });
 
 export type ResumoDoRecurso = z.infer<typeof esquemaResumoDoRecurso>;

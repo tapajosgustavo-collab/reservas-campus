@@ -34,6 +34,7 @@ export interface DadosDoFormulario {
   local: string;
   capacidade: number;
   patrimonio: string;
+  restrito: boolean;
   horarios: Horario[];
 }
 
@@ -56,6 +57,7 @@ export function FormularioDoRecurso({ recurso, enviando, erro, rotuloDoBotao, ao
   const [local, setLocal] = useState(recurso?.local ?? '');
   const [capacidade, setCapacidade] = useState<number | string>(recurso?.capacidade ?? '');
   const [patrimonio, setPatrimonio] = useState(recurso?.patrimonio ?? '');
+  const [restrito, setRestrito] = useState(recurso?.restrito ?? false);
   const [linhas, setLinhas] = useState(() => linhasDoHorario(recurso?.horarios ?? HORARIO_INICIAL));
   const espaco = tipo === 'Espaco';
 
@@ -73,6 +75,7 @@ export function FormularioDoRecurso({ recurso, enviando, erro, rotuloDoBotao, ao
       local,
       capacidade: Number(capacidade),
       patrimonio,
+      restrito,
       horarios: horariosDasLinhas(linhas),
     });
   }
@@ -133,6 +136,13 @@ export function FormularioDoRecurso({ recurso, enviando, erro, rotuloDoBotao, ao
             onChange={(evento) => setPatrimonio(evento.currentTarget.value)}
           />
         )}
+
+        <Checkbox
+          label="Recurso restrito"
+          description="As Reservas nascem como Pedido Pendente e só valem depois da sua Aprovação."
+          checked={restrito}
+          onChange={(evento) => setRestrito(evento.currentTarget.checked)}
+        />
 
         <Fieldset legend="Horário de funcionamento">
           <Stack gap="xs">

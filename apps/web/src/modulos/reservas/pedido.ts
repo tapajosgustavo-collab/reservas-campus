@@ -1,5 +1,5 @@
 import { TZDate } from '@date-fns/tz';
-import type { CriarReserva, Reserva } from '@reservas/shared';
+import { POLITICA, type CriarReserva, type Reserva } from '@reservas/shared';
 import { format, formatISO, parseISO, startOfWeek } from 'date-fns';
 import { janelaDoCheckIn } from '../ciclo';
 
@@ -43,15 +43,45 @@ export function tituloDasViolacoes(quantas: number) {
 }
 
 const emSaoPaulo = (instante: string) => new TZDate(instante, FUSO);
+const hora = (ms: number) => format(new TZDate(ms, FUSO), 'HH:mm');
 
-/** O que a agenda diz depois de criar: o Intervalo e a janela de Check-in (RN14). */
-export function resumoDaCriada({ inicio, fim }: Pick<Reserva, 'inicio' | 'fim'>) {
-  const comeca = emSaoPaulo(inicio);
-  const { abre, fecha } = janelaDoCheckIn(inicio);
-  const hora = (ms: number) => format(new TZDate(ms, FUSO), 'HH:mm');
+/**
+ * RN10: o aviso da janela em Recurso restrito, com quem aprova e o Prazo de decisão do Intervalo
+ * escolhido. Quem expira o Pedido é a API; a tela só avisa.
+ */
+export function avisoDoPedido(
+  gestor: string,
+  { data, inicio }: Pick<FormularioDaReserva, 'data' | 'inicio'>,
+) {
+  const horas = POLITICA.prazoDeDecisaoMin / 60;
+  const prazo = instanteDe(data, inicio).getTime() - POLITICA.prazoDeDecisaoMin * 60_000;
+  // Com a Data apagada no formulário não há instante: o aviso fica sem a data, a janela não quebra.
+  const ate = Number.isNaN(prazo)
+    ? `${horas}h antes do início`
+    : `${format(new TZDate(prazo, FUSO), "dd/MM 'às' HH:mm")}, ${horas}h antes do início`;
   return (
-    `Reserva criada para ${format(comeca, 'dd/MM')}, ` +
-    `das ${hora(Date.parse(inicio))} às ${hora(Date.parse(fim))}. ` +
+    `Recurso restrito: o Pedido fica Pendente até ${gestor} aprovar, o que precisa acontecer ` +
+    `até ${ate}. Sem decisão até lá, ele expira.`
+  );
+}
+
+/**
+ * O que a agenda diz depois de criar: o Intervalo e o próximo passo, que na Reserva Confirmada é
+ * a janela de Check-in (RN14) e no Pedido é esperar a Aprovação (RN10).
+ */
+export function resumoDaCriada({
+  inicio,
+  fim,
+  status,
+}: Pick<Reserva, 'inicio' | 'fim' | 'status'>) {
+  const dia = format(emSaoPaulo(inicio), 'dd/MM');
+  const intervalo = `das ${hora(Date.parse(inicio))} às ${hora(Date.parse(fim))}`;
+  if (status === 'Pendente') {
+    return `Pedido enviado para ${dia}, ${intervalo}. Ele fica Pendente até a Aprovação do Gestor.`;
+  }
+  const { abre, fecha } = janelaDoCheckIn(inicio);
+  return (
+    `Reserva criada para ${dia}, ${intervalo}. ` +
     `Faça o Check-in das ${hora(abre)} às ${hora(fecha)}.`
   );
 }

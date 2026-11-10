@@ -18,11 +18,19 @@ export function CadastrarRecurso() {
   const cadastrar = useCadastrarRecurso();
   const navegar = useNavigate();
 
-  function enviar({ tipo, nome, local, capacidade, patrimonio, horarios }: DadosDoFormulario) {
+  function enviar({
+    tipo,
+    nome,
+    local,
+    capacidade,
+    patrimonio,
+    restrito,
+    horarios,
+  }: DadosDoFormulario) {
     cadastrar.mutate(
       tipo === 'Espaco'
-        ? { tipo, nome, local, capacidade, horarios }
-        : { tipo, nome, local: local || undefined, patrimonio, horarios },
+        ? { tipo, nome, local, capacidade, restrito, horarios }
+        : { tipo, nome, local: local || undefined, patrimonio, restrito, horarios },
       { onSuccess: () => navegar(MEUS_RECURSOS) },
     );
   }
@@ -48,13 +56,14 @@ export function EditarRecurso() {
   const editar = useEditarRecurso(id);
   const navegar = useNavigate();
 
-  function enviar({ tipo, nome, local, capacidade, horarios }: DadosDoFormulario) {
+  function enviar({ tipo, nome, local, capacidade, restrito, horarios }: DadosDoFormulario) {
     editar.mutate(
       {
         nome,
         // Equipamento com o local apagado fica sem local; Espaço sempre tem.
         local: local || (tipo === 'Equipamento' ? null : undefined),
         capacidade: tipo === 'Espaco' ? capacidade : undefined,
+        restrito,
         horarios,
       },
       { onSuccess: () => navegar(MEUS_RECURSOS) },

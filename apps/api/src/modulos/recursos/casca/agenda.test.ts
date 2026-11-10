@@ -60,6 +60,7 @@ comBanco('US07 · Agenda do Recurso', () => {
         local: 'Bloco A',
         capacidade: 30,
         patrimonio: null,
+        restrito: false,
         gestor: { id: carlos.id, nome: 'Carlos' },
         horarios: [1, 2, 3, 4, 5].map((diaSemana) => ({
           diaSemana,
@@ -173,6 +174,21 @@ comBanco('US07 · Agenda do Recurso', () => {
       semana: '2026-11-16',
       ocupacoes: [{ inicio: '2026-11-17T10:00:00-03:00', fim: '2026-11-17T11:00:00-03:00' }],
     });
+  });
+
+  it('RN10 · a agenda de um Recurso restrito traz restrito: true, para o selo', async () => {
+    const app = await umaApp({ banco });
+    const { lab, ana } = await cenario();
+    await banco.recurso.update({ where: { id: lab.id }, data: { restrito: true } });
+
+    const resposta = await app.inject({
+      method: 'GET',
+      url: `/api/recursos/${lab.id}/agenda`,
+      cookies: sessaoDe(app, ana.id),
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json().recurso.restrito).toBe(true);
   });
 
   it('semana que não começa na segunda → 400', async () => {

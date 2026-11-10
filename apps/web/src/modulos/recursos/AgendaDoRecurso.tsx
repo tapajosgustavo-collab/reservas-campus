@@ -1,5 +1,6 @@
 import {
   Alert,
+  Badge,
   Box,
   Button,
   Group,
@@ -104,6 +105,11 @@ function Cabecalho({ recurso }: { recurso: Agenda['recurso'] }) {
     <Stack gap={4}>
       <Title order={2}>{recurso.nome}</Title>
       <Text c="dimmed">{detalhes.join(' · ')}</Text>
+      {recurso.restrito && (
+        <Badge color="violet" variant="light" size="lg" tt="none" w="fit-content" maw="100%">
+          Restrito: precisa de Aprovação do Gestor
+        </Badge>
+      )}
     </Stack>
   );
 }

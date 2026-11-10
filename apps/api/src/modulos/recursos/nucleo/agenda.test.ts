@@ -13,6 +13,7 @@ const lab: Recurso = {
   local: 'Bloco A',
   capacidade: 30,
   patrimonio: null,
+  restrito: false,
   gestor: { id: 3, nome: 'Carlos' },
   horarios: [{ diaSemana: 2, abre: 7 * 60, fecha: 23 * 60 }],
 };

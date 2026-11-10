@@ -26,7 +26,7 @@ const pedidoSemParticipantes = (inicio: string, fim: string): PedidoDeReserva =>
 const fatos = (dados: Partial<FatosDaReserva> = {}): FatosDaReserva => ({
   horarios: [{ diaSemana: 2, abre: 7 * 60, fecha: 23 * 60 }],
   reservasDoRecurso: [],
-  recurso: { tipo: 'Espaco', capacidade: 30 },
+  recurso: { tipo: 'Espaco', capacidade: 30, restrito: false },
   ativasDoUsuario: [],
   politica: POLITICA,
   ...dados,
@@ -271,10 +271,68 @@ describe('RN05 · Antecedência', () => {
       violacoes: [{ rn: 'RN05', mensagem: 'O início pode ser no máximo 60 dias depois de agora.' }],
     });
   });
+
+  describe('em Recurso restrito', () => {
+    const AGORA_DO_LAB = new Date('2026-10-25T12:30:00-03:00');
+    const LAB_RESTRITO = { tipo: 'Espaco', capacidade: 30, restrito: true } as const;
+    const decidirNoLab = (comando: PedidoDeReserva, politica = POLITICA) =>
+      decidirReserva(
+        fatos({ horarios: TODO_DIA, recurso: LAB_RESTRITO, politica }),
+        comando,
+        ANA,
+        AGORA_DO_LAB,
+      );
+
+    it('Aluno, agora 25/10 às 12h30, pedir o laboratório restrito para 25/10 às 14h → recusado (menos de 24h)', () => {
+      expect(decidirNoLab(naData('2026-10-25', '14:00'))).toEqual({
+        tipo: 'recusada',
+        violacoes: [
+          {
+            rn: 'RN05',
+            nome: 'Antecedência',
+            mensagem: 'Em Recurso restrito, o início precisa ser pelo menos 24h depois de agora.',
+            campo: 'intervalo',
+          },
+        ],
+      });
+    });
+
+    it('Aluno, agora 25/10 às 12h30, pedir para 26/10 às 14h → aceito, nasce Pendente', () => {
+      expect(decidirNoLab(naData('2026-10-26', '14:00'))).toMatchObject({
+        tipo: 'aceita',
+        efeitos: [{ reserva: { status: 'Pendente' } }],
+      });
+    });
+
+    it('pedir para 26/10 às 12h30 → aceito (exatamente 24h)', () => {
+      expect(decidirNoLab(naData('2026-10-26', '12:30')).tipo).toBe('aceita');
+    });
+
+    it('a Antecedência mínima em Recurso restrito sai da Política: com 48h, pedir 26/10 às 14h → recusado', () => {
+      const politica = { ...POLITICA, antecedenciaMinimaRestritoMin: 48 * 60 };
+
+      expect(decidirNoLab(naData('2026-10-26', '14:00'), politica)).toMatchObject({
+        violacoes: [
+          {
+            rn: 'RN05',
+            mensagem: 'Em Recurso restrito, o início precisa ser pelo menos 48h depois de agora.',
+          },
+        ],
+      });
+    });
+
+    it('a Antecedência máxima continua valendo: Aluno pedindo para 10/11 → recusado (mais de 14 dias)', () => {
+      expect(decidirNoLab(naData('2026-11-10', '14:00'))).toMatchObject({
+        violacoes: [
+          { rn: 'RN05', mensagem: 'O início pode ser no máximo 14 dias depois de agora.' },
+        ],
+      });
+    });
+  });
 });
 
 describe('RN06 · Duração máxima', () => {
-  const EQUIPAMENTO = { tipo: 'Equipamento', capacidade: null } as const;
+  const EQUIPAMENTO = { tipo: 'Equipamento', capacidade: null, restrito: false } as const;
 
   it('Aluno pede sala por 2h30 → recusado, com o limite', () => {
     expect(decidirReserva(fatos(), pedido('10:00', '12:30'), ANA, AGORA)).toEqual({
@@ -373,7 +431,7 @@ describe('RN08 · Capacidade', () => {
 
   it('Equipamento não tem Capacidade → aceito sem participantes', () => {
     const comando = pedidoSemParticipantes('10:00', '12:00');
-    const projetor = fatos({ recurso: { tipo: 'Equipamento', capacidade: null } });
+    const projetor = fatos({ recurso: { tipo: 'Equipamento', capacidade: null, restrito: false } });
 
     expect(decidirReserva(projetor, comando, ANA, AGORA).tipo).toBe('aceita');
   });
@@ -552,5 +610,76 @@ describe('RN07 · Cota', () => {
     );
 
     expect(decisao).toMatchObject({ violacoes: [{ rn: 'RN01' }, { rn: 'RN07' }] });
+  });
+});
+
+describe('RN10 · Restrito começa Pendente', () => {
+  const LAB_RESTRITO = { tipo: 'Espaco', capacidade: 30, restrito: true } as const;
+
+  it('Reserva em Recurso restrito → Pendente, nascendo com a primeira transição (de vazio)', () => {
+    const decisao = decidirReserva(
+      fatos({ recurso: LAB_RESTRITO }),
+      pedido('10:00', '12:00'),
+      ANA,
+      new Date('2026-11-09T08:00:00-03:00'),
+    );
+
+    expect(decisao).toMatchObject({
+      tipo: 'aceita',
+      efeitos: [
+        {
+          evento: 'ReservaCriada',
+          reserva: { status: 'Pendente' },
+          transicao: { de: null, para: 'Pendente', porId: ANA.id },
+        },
+      ],
+    });
+  });
+
+  const pedidoDaAna = (status: 'Pendente' | 'Recusada' | 'Expirada') =>
+    ({ inicio: em('14:00'), fim: em('16:00'), status }) as const;
+
+  it('Ana pediu o laboratório restrito para terça 14h–16h; Bruno pede o mesmo Intervalo → RN01 (o Pedido Pendente já ocupa)', () => {
+    const decisao = decidirReserva(
+      fatos({ recurso: LAB_RESTRITO, reservasDoRecurso: [pedidoDaAna('Pendente')] }),
+      pedido('14:00', '16:00'),
+      BRUNO,
+      new Date('2026-11-09T09:00:00-03:00'),
+    );
+
+    expect(decisao).toMatchObject({
+      tipo: 'recusada',
+      violacoes: [{ rn: 'RN01', mensagem: 'Este Recurso já está ocupado das 14:00 às 16:00.' }],
+    });
+  });
+
+  it.each(['Recusada', 'Expirada'] as const)(
+    'o Pedido da Ana foi %s → o Intervalo fica livre, e o de Bruno nasce Pendente',
+    (status) => {
+      const decisao = decidirReserva(
+        fatos({ recurso: LAB_RESTRITO, reservasDoRecurso: [pedidoDaAna(status)] }),
+        pedido('14:00', '16:00'),
+        BRUNO,
+        new Date('2026-11-09T09:00:00-03:00'),
+      );
+
+      expect(decisao).toMatchObject({
+        tipo: 'aceita',
+        efeitos: [{ reserva: { status: 'Pendente' } }],
+      });
+    },
+  );
+
+  it('o Pedido conta na Cota: Aluno com 3 Reservas ativas tenta um Pedido → RN07', () => {
+    const ativas = [1, 2, 3].map((id) => ({ id, serieId: null }));
+
+    const decisao = decidirReserva(
+      fatos({ recurso: LAB_RESTRITO, ativasDoUsuario: ativas }),
+      pedido('10:00', '12:00'),
+      ANA,
+      new Date('2026-11-09T08:00:00-03:00'),
+    );
+
+    expect(decisao).toMatchObject({ tipo: 'recusada', violacoes: [{ rn: 'RN07' }] });
   });
 });
