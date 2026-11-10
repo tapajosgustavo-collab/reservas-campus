@@ -2,12 +2,15 @@ import {
   esquemaCancelamento,
   esquemaDevolucao,
   esquemaEmUso,
+  esquemaFila,
   esquemaIdDaReserva,
+  esquemaRecusa,
   esquemaReserva,
   POLITICA,
 } from '@reservas/shared';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import type { Transacao } from '../../../comum/banco';
 import { ErroApi, proibidoPelaRegra, regraViolada } from '../../../comum/erros';
 import { paraIsoSaoPaulo } from '../../../comum/instante';
 import { exigirPerfil, exigirSessao } from '../../../comum/sessao';
@@ -15,6 +18,13 @@ import { executar as executarEmReservas } from '../../reservas';
 import { decidirCancelamento } from '../nucleo/cancelamento';
 import { decidirCheckIn } from '../nucleo/check-in';
 import { decidirDevolucao, devolucaoAtrasada } from '../nucleo/devolucao';
+import {
+  decidirAprovacao,
+  decidirRecusa,
+  prazoDeDecisao,
+  type Decisao as DecisaoDoPedido,
+  type FatosDoPedido,
+} from '../nucleo/pedido';
 
 /** Os instantes da Reserva em ISO com o deslocamento de São Paulo. */
 function paraResposta<T extends { inicio: Date; fim: Date; criadaEm: Date }>(reserva: T) {
@@ -26,7 +36,27 @@ function paraResposta<T extends { inicio: Date; fim: Date; criadaEm: Date }>(res
   };
 }
 
-/** Rotas do M4: o Check-in (US12) e o Cancelamento (US13). */
+/** Os fatos da Aprovação e da Recusa (US11): o Pedido, o Gestor do Recurso dele e a Política. */
+async function fatosDoPedido(tx: Transacao, id: number): Promise<FatosDoPedido> {
+  const reserva = await tx.reserva.findUnique({
+    where: { id },
+    select: { id: true, status: true, inicio: true, recurso: { select: { gestorId: true } } },
+  });
+  if (!reserva) throw new ErroApi('nao_encontrado', `Reserva ${id} não encontrada.`);
+  return { reserva, politica: POLITICA };
+}
+
+/** Responde 403 ou 422 pela decisão recusada, ou pede ao M3 que grave a mudança de Status. */
+async function executarDecisao(request: FastifyRequest, decisao: DecisaoDoPedido) {
+  if (decisao.tipo === 'proibida') throw proibidoPelaRegra(decisao.violacoes);
+  if (decisao.tipo === 'recusada') throw regraViolada(decisao.violacoes);
+  const [efeito] = decisao.efeitos;
+  const reserva = await executarEmReservas(request.tx, efeito);
+  request.log.info({ evento: efeito.evento, reservaId: reserva.id }, efeito.evento);
+  return reserva;
+}
+
+/** Rotas do M4: a fila do Gestor (US11), o Check-in (US12), o Cancelamento (US13) e a Devolução (US14). */
 export function registrarRotasDoCiclo(app: FastifyInstance) {
   const rotas = app.withTypeProvider<ZodTypeProvider>();
 
@@ -94,6 +124,77 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
         reserva: paraResposta(cancelada),
         penalidade: null,
       };
+    },
+  );
+
+  rotas.get(
+    '/api/gestao/pedidos',
+    {
+      schema: {
+        summary: 'Fila dos Pedidos Pendentes dos Recursos do Gestor, pelo início (US11)',
+        tags: ['ciclo'],
+        response: { 200: esquemaFila },
+      },
+    },
+    async (request) => {
+      const quem = await exigirPerfil(request, 'Gestor');
+      const pedidos = await request.tx.reserva.findMany({
+        where: { status: 'Pendente', recurso: { gestorId: quem.id } },
+        select: {
+          id: true,
+          inicio: true,
+          fim: true,
+          participantes: true,
+          finalidade: true,
+          recurso: { select: { id: true, nome: true, tipo: true, capacidade: true } },
+          usuario: { select: { id: true, nome: true, perfil: true } },
+        },
+        orderBy: [{ inicio: 'asc' }, { id: 'asc' }],
+      });
+      return pedidos.map(({ inicio, fim, usuario, ...pedido }) => ({
+        ...pedido,
+        inicio: paraIsoSaoPaulo(inicio),
+        fim: paraIsoSaoPaulo(fim),
+        expiraEm: paraIsoSaoPaulo(prazoDeDecisao(inicio, POLITICA)),
+        solicitante: usuario,
+      }));
+    },
+  );
+
+  rotas.post(
+    '/api/reservas/:id/aprovacao',
+    {
+      schema: {
+        summary: 'Aprova o Pedido Pendente pelo Gestor responsável (US11, RN12, RN13)',
+        tags: ['ciclo'],
+        params: esquemaIdDaReserva,
+        response: { 200: esquemaReserva },
+      },
+    },
+    async (request) => {
+      const quem = await exigirPerfil(request, 'Gestor');
+      const fatos = await fatosDoPedido(request.tx, request.params.id);
+      const decisao = decidirAprovacao(fatos, quem, request.agora);
+      return paraResposta(await executarDecisao(request, decisao));
+    },
+  );
+
+  rotas.post(
+    '/api/reservas/:id/recusa',
+    {
+      schema: {
+        summary: 'Recusa o Pedido Pendente com justificativa (US11, RN11, RN12, RN13)',
+        tags: ['ciclo'],
+        params: esquemaIdDaReserva,
+        body: esquemaRecusa,
+        response: { 200: esquemaReserva },
+      },
+    },
+    async (request) => {
+      const quem = await exigirPerfil(request, 'Gestor');
+      const fatos = await fatosDoPedido(request.tx, request.params.id);
+      const decisao = decidirRecusa(fatos, request.body, quem, request.agora);
+      return paraResposta(await executarDecisao(request, decisao));
     },
   );
 

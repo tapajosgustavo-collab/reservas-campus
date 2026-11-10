@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { esquemaInstante } from './instante';
 import { esquemaTipoRecurso } from './recursos';
+import { esquemaPerfil } from './sessao';
 
 /** Status da Reserva, sem acento (spec §5). */
 export const esquemaStatus = z.enum([
@@ -114,6 +115,41 @@ export const esquemaDevolucao = z.strictObject({
 });
 
 export type RegistrarDevolucao = z.infer<typeof esquemaDevolucao>;
+
+/**
+ * US11: um Pedido Pendente na fila do Gestor. Os dados de conduta do solicitante (`penalidades30d`,
+ * `suspensoAte`) entram no incremento 4 (#58) e a Série como um item só, no 5 (#65).
+ */
+export const esquemaItemDaFila = z.object({
+  id: z.number().int(),
+  inicio: esquemaInstante,
+  fim: esquemaInstante,
+  expiraEm: esquemaInstante.describe('Prazo de decisão (RN12): depois dele, o Pedido expira'),
+  participantes: z.number().int().nullable(),
+  finalidade: z.string().nullable(),
+  recurso: z.object({
+    id: z.number().int(),
+    nome: z.string(),
+    tipo: esquemaTipoRecurso,
+    capacidade: z.number().int().nullable().describe('Só Espaço'),
+  }),
+  solicitante: esquemaPessoa.extend({ perfil: esquemaPerfil }),
+});
+
+export type ItemDaFila = z.infer<typeof esquemaItemDaFila>;
+
+export const esquemaFila = z
+  .array(esquemaItemDaFila)
+  .describe('Do início mais próximo ao mais distante');
+
+export type Fila = z.infer<typeof esquemaFila>;
+
+/** US11: a justificativa em branco passa na forma; quem a recusa é a RN11, no núcleo (422). */
+export const esquemaRecusa = z.strictObject({
+  justificativa: z.string().max(500).describe('Obrigatória (RN11): vai na Notificação ao Usuário'),
+});
+
+export type RecusarPedido = z.infer<typeof esquemaRecusa>;
 
 export const esquemaItemEmUso = z.object({
   id: z.number().int(),

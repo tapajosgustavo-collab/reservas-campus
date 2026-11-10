@@ -23,7 +23,7 @@ const MENU: { para: string; rotulo: string; perfis?: Perfil[] }[] = [
   { para: '/recursos', rotulo: 'Recursos' },
   { para: '/gestao/recursos', rotulo: 'Meus recursos', perfis: ['Gestor'] },
   { para: '/reservas', rotulo: 'Minhas reservas', perfis: ['Aluno', 'Docente'] },
-  { para: '/gestao/pedidos', rotulo: 'Pedidos' },
+  { para: '/gestao/pedidos', rotulo: 'Pedidos', perfis: ['Gestor'] },
   { para: '/gestao/em-uso', rotulo: 'Em uso', perfis: ['Gestor'] },
 ];
 
