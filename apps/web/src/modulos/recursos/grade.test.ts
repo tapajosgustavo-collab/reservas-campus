@@ -136,8 +136,35 @@ describe('US07 · Grade semanal da agenda', () => {
   it('arrastar escolhe o Intervalo das duas células, em qualquer direção', () => {
     const esperado = { data: '2026-11-10', inicio: 13 * 60, fim: 15 * 60 + 30 };
 
-    expect(intervaloDoArraste(terca, 13 * 60, 15 * 60)).toEqual(esperado);
-    expect(intervaloDoArraste(terca, 15 * 60, 13 * 60)).toEqual(esperado);
+    expect(intervaloDoArraste(terca, 13 * 60, 15 * 60, [], agora)).toEqual(esperado);
+    expect(intervaloDoArraste(terca, 15 * 60, 13 * 60, [], agora)).toEqual(esperado);
+  });
+
+  it('RN01 · arrastar para baixo por cima de uma Reserva para na última célula livre antes dela', () => {
+    expect(intervaloDoArraste(terca, 9 * 60, 12 * 60, [dasDezAoMeioDia], agora)).toEqual({
+      data: '2026-11-10',
+      inicio: 9 * 60,
+      fim: 10 * 60,
+    });
+  });
+
+  it('RN01 · arrastar para cima por cima de uma Reserva para na primeira célula livre depois dela', () => {
+    expect(intervaloDoArraste(terca, 13 * 60, 9 * 60, [dasDezAoMeioDia], agora)).toEqual({
+      data: '2026-11-10',
+      inicio: 12 * 60,
+      fim: 13 * 60 + 30,
+    });
+  });
+
+  it('arrastar também não atravessa Sua reserva nem o Passado', () => {
+    const minha: Ocupacao = { ...dasDezAoMeioDia, minha: true, reservaId: 1, status: 'Confirmada' };
+
+    expect(intervaloDoArraste(terca, 13 * 60, 9 * 60, [minha], agora)).toMatchObject({
+      inicio: 12 * 60,
+    });
+    expect(intervaloDoArraste(terca, 9 * 60, 7 * 60, [], agora)).toMatchObject({
+      inicio: 8 * 60,
+    });
   });
 
   it('RN04 · arrastar não entra na Indisponibilidade nem a atravessa, nas duas direções', () => {
@@ -147,12 +174,12 @@ describe('US07 · Grade semanal da agenda', () => {
       motivo: 'Pintura',
     };
 
-    expect(intervaloDoArraste(terca, 9 * 60 + 30, 11 * 60, [dasDezAsOnze])).toEqual({
+    expect(intervaloDoArraste(terca, 9 * 60 + 30, 11 * 60, [], agora, [dasDezAsOnze])).toEqual({
       data: '2026-11-10',
       inicio: 9 * 60 + 30,
       fim: 10 * 60,
     });
-    expect(intervaloDoArraste(terca, 12 * 60, 9 * 60, [dasDezAsOnze])).toEqual({
+    expect(intervaloDoArraste(terca, 12 * 60, 9 * 60, [], agora, [dasDezAsOnze])).toEqual({
       data: '2026-11-10',
       inicio: 11 * 60,
       fim: 12 * 60 + 30,
