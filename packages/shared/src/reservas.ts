@@ -103,3 +103,33 @@ export const esquemaCancelamento = z.object({
 });
 
 export type Cancelamento = z.infer<typeof esquemaCancelamento>;
+
+/** US14: o Gestor responsável registra a Devolução do Equipamento, com observação opcional (ou obrigatória em perda/roubo, RN17). */
+export const esquemaDevolucao = z.strictObject({
+  observacao: z.string().trim().max(200).optional(),
+  extraviado: z
+    .boolean()
+    .optional()
+    .describe('Equipamento perdido ou roubado: exige observação (RN17)'),
+});
+
+export type RegistrarDevolucao = z.infer<typeof esquemaDevolucao>;
+
+export const esquemaItemEmUso = z.object({
+  id: z.number().int(),
+  inicio: esquemaInstante,
+  fim: esquemaInstante,
+  devolucaoAtrasada: z.boolean(),
+  recurso: z.object({
+    id: z.number().int(),
+    nome: z.string(),
+    patrimonio: z.string(),
+  }),
+  usuario: esquemaPessoa,
+});
+
+export type ItemEmUso = z.infer<typeof esquemaItemEmUso>;
+
+export const esquemaEmUso = z.array(esquemaItemEmUso);
+
+export type EmUso = z.infer<typeof esquemaEmUso>;
