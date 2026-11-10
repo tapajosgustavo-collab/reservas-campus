@@ -58,6 +58,7 @@ export function registrarRotasDeReservas(app: FastifyInstance) {
     async (request, reply) => {
       const quem = await exigirPerfil(request, 'Aluno', 'Docente');
       const { body, tx, agora } = request;
+      const pedido = { ...body, inicio: new Date(body.inicio), fim: new Date(body.fim) };
       const recurso = await tx.recurso.findUnique({
         where: { id: body.recursoId },
         select: {
@@ -65,6 +66,15 @@ export function registrarRotasDeReservas(app: FastifyInstance) {
           capacidade: true,
           restrito: true,
           horarios: { select: { diaSemana: true, abre: true, fecha: true } },
+          // As Indisponibilidades que tocam o Intervalo, inclusive as sem fim (RN04).
+          indisponibilidades: {
+            where: {
+              inicio: { lt: pedido.fim },
+              OR: [{ fim: null }, { fim: { gt: pedido.inicio } }],
+            },
+            select: { inicio: true, fim: true, motivo: true },
+            orderBy: [{ inicio: 'asc' }, { id: 'asc' }],
+          },
         },
       });
       if (!recurso) {
@@ -74,7 +84,6 @@ export function registrarRotasDeReservas(app: FastifyInstance) {
         throw new ErroApi('entrada_invalida', 'Equipamento não tem Participantes.');
       }
 
-      const pedido = { ...body, inicio: new Date(body.inicio), fim: new Date(body.fim) };
       // Todas as Reservas em volta do Intervalo: quem escolhe as ativas é o núcleo.
       const reservasDoRecurso = await tx.reserva.findMany({
         where: {
@@ -95,6 +104,7 @@ export function registrarRotasDeReservas(app: FastifyInstance) {
         {
           horarios: recurso.horarios,
           reservasDoRecurso,
+          indisponibilidades: recurso.indisponibilidades,
           recurso: {
             tipo: recurso.tipo,
             capacidade: recurso.capacidade,
