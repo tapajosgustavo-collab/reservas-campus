@@ -274,16 +274,18 @@ function Grade({
                       <VisuallyHidden>{rotulo}</VisuallyHidden>
                     )}
                     {reserva?.primeira && (
-                      // Absoluto e truncado: o nome não alarga a coluna nem a grade no celular.
+                      // Absoluto e em até duas linhas (nome, depois Status): não alarga a coluna nem
+                      // a grade no celular.
                       <Text
                         aria-hidden
                         size="xs"
-                        truncate
+                        lineClamp={2}
                         pos="absolute"
                         inset={0}
                         px={4}
-                        lh="28px"
+                        lh="14px"
                         c="dark.9"
+                        style={{ wordBreak: 'break-word' }}
                       >
                         {reserva.texto}
                       </Text>
