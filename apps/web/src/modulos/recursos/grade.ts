@@ -71,6 +71,13 @@ function indisponivelNa(
   );
 }
 
+/** A Ocupação que toca a meia hora que começa em `minuto`, se houver. */
+export function ocupacaoNa(dia: DiaDaGrade, minuto: number, ocupacoes: Ocupacao[]) {
+  const inicio = instanteDe(dia.data, minuto);
+  const fim = instanteDe(dia.data, minuto + MEIA_HORA);
+  return ocupacoes.find((o) => Date.parse(o.inicio) < fim && Date.parse(o.fim) > inicio);
+}
+
 /**
  * O que a célula de meia hora mostra. A Reserva (inclusive a Em uso dentro de uma Indisponibilidade,
  * RN04) e a Indisponibilidade aparecem mesmo no passado; o resto do que já começou é Passado, pelo
@@ -84,14 +91,12 @@ export function estadoDaCelula(
   indisponibilidades: IndisponibilidadeNaAgenda[] = [],
 ): EstadoDaCelula {
   if (minuto < dia.abre || minuto + MEIA_HORA > dia.fecha) return 'fechado';
-  const inicio = instanteDe(dia.data, minuto);
-  const fim = instanteDe(dia.data, minuto + MEIA_HORA);
-  const ocupacao = ocupacoes.find((o) => Date.parse(o.inicio) < fim && Date.parse(o.fim) > inicio);
+  const ocupacao = ocupacaoNa(dia, minuto, ocupacoes);
   if (ocupacao?.minha)
     return ocupacao.status === 'Pendente' ? 'minha-pendente' : 'minha-confirmada';
   if (ocupacao) return 'ocupado';
   if (indisponivelNa(dia, minuto, indisponibilidades)) return 'indisponivel';
-  return inicio < agora.getTime() ? 'passado' : 'livre';
+  return instanteDe(dia.data, minuto) < agora.getTime() ? 'passado' : 'livre';
 }
 
 /** Clique num horário livre: 1h, ou 30 min se a meia hora seguinte não estiver livre. */

@@ -34,6 +34,7 @@ import {
 } from './grade';
 import { DIAS_DA_SEMANA, rotuloDoMinuto } from './horario';
 import { useAgenda, useRecarregarAgenda } from './recursos';
+import { reservaNaCelula } from './visaoDoGestor';
 
 const ROTULO_DO_ESTADO: Record<EstadoDaCelula, string> = {
   livre: 'Livre',
@@ -230,7 +231,10 @@ function Grade({
                   agora,
                   agenda.indisponibilidades,
                 );
-                const rotulo = `${rotuloDoDia(dia)}, ${rotuloDoMinuto(minuto)}: ${ROTULO_DO_ESTADO[estado]}`;
+                // Só o Gestor responsável recebe o nome da API (RN22); para os outros, é null.
+                const reserva =
+                  estado === 'ocupado' ? reservaNaCelula(dia, minuto, agenda.ocupacoes) : null;
+                const rotulo = `${rotuloDoDia(dia)}, ${rotuloDoMinuto(minuto)}: ${ROTULO_DO_ESTADO[estado]}${reserva ? `, ${reserva.descricao}` : ''}`;
                 return (
                   <Table.Td
                     key={dia.data}
@@ -238,6 +242,7 @@ function Grade({
                     // Contém o VisuallyHidden (absoluto) no quadro que rola: sem isso, a página rola no celular.
                     pos="relative"
                     h={28}
+                    title={reserva?.descricao}
                     style={{
                       ...(escolhida(dia, minuto) ? ESTILO_ESCOLHIDO : ESTILO_DO_ESTADO[estado]),
                       ...(destacada &&
@@ -268,6 +273,21 @@ function Grade({
                     ) : (
                       <VisuallyHidden>{rotulo}</VisuallyHidden>
                     )}
+                    {reserva?.primeira && (
+                      // Absoluto e truncado: o nome não alarga a coluna nem a grade no celular.
+                      <Text
+                        aria-hidden
+                        size="xs"
+                        truncate
+                        pos="absolute"
+                        inset={0}
+                        px={4}
+                        lh="28px"
+                        c="dark.9"
+                      >
+                        {reserva.texto}
+                      </Text>
+                    )}
                   </Table.Td>
                 );
               })}
@@ -279,7 +299,7 @@ function Grade({
   );
 }
 
-/** US07: a semana do Recurso em meia hora, sem dizer quem reservou (RN22). */
+/** US07: a semana do Recurso em meia hora. Só o Gestor responsável vê quem reservou (RN22). */
 export function AgendaDoRecurso() {
   const id = Number(useParams().id);
   const [parametros, setParametros] = useSearchParams();
@@ -360,6 +380,12 @@ export function AgendaDoRecurso() {
       )}
 
       <Legenda />
+      {usuario?.id === recurso.gestor.id && (
+        <Text size="sm" c="dimmed">
+          Como Gestor responsável, você vê em cada Reserva quem reservou e o Status. Passe o mouse
+          sobre a Reserva para ver a Finalidade.
+        </Text>
+      )}
       <Grade agenda={agenda.data} destacada={criada} aoEscolher={setIntervalo} />
       {ehGestor ? (
         <JanelaDoGestor aberta={intervalo !== null} aoFechar={() => setIntervalo(null)} />

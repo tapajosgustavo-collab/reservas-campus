@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { esquemaInstante as instante } from './instante';
 import { esquemaRecurso } from './recursos';
-import { STATUS_ATIVOS } from './reservas';
+import { esquemaPessoa, STATUS_ATIVOS } from './reservas';
 
 /** `YYYY-MM-DD` é segunda-feira? Só olha o calendário, sem fuso. */
 function ehSegunda(data: string) {
@@ -21,14 +21,21 @@ export type BuscarAgenda = z.infer<typeof esquemaBuscarAgenda>;
 
 /**
  * Uma Reserva ativa na agenda. Qualquer Usuário vê só `inicio` e `fim`; o dono vê também
- * `minha`, `reservaId` e `status` (RN22).
+ * `minha`, `reservaId` e `status`; o Gestor responsável vê `reservaId`, `status`, `usuario` e
+ * `finalidade` (RN22).
  */
 export const esquemaOcupacao = z.object({
   inicio: instante,
   fim: instante,
   minha: z.literal(true).optional().describe('Só nas Reservas do Usuário da sessão'),
-  reservaId: z.number().int().optional().describe('Só para o dono (RN22)'),
-  status: z.enum(STATUS_ATIVOS).optional().describe('Só para o dono (RN22)'),
+  reservaId: z.number().int().optional().describe('Só para o dono e o Gestor responsável (RN22)'),
+  status: z.enum(STATUS_ATIVOS).optional().describe('Só para o dono e o Gestor responsável (RN22)'),
+  usuario: esquemaPessoa.optional().describe('Quem reservou; só para o Gestor responsável (RN22)'),
+  finalidade: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('`null` = sem Finalidade; só para o Gestor responsável (RN22)'),
 });
 
 export type Ocupacao = z.infer<typeof esquemaOcupacao>;

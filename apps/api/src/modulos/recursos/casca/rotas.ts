@@ -306,7 +306,8 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
     '/api/recursos/:id/agenda',
     {
       schema: {
-        summary: 'Agenda da semana do Recurso; de quem não é o dono, só o Intervalo (RN22)',
+        summary:
+          'Agenda da semana do Recurso; só o dono e o Gestor responsável veem além do Intervalo (RN22)',
         tags: ['recursos'],
         params: esquemaIdDoRecurso,
         querystring: esquemaBuscarAgenda,
@@ -321,7 +322,14 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
       // Todas as Reservas que tocam a semana: quem escolhe as ativas é o núcleo.
       const reservas = await request.tx.reserva.findMany({
         where: { recursoId: recurso.id, inicio: { lt: fim }, fim: { gt: inicio } },
-        select: { id: true, usuarioId: true, inicio: true, fim: true, status: true },
+        select: {
+          id: true,
+          usuario: { select: { id: true, nome: true } },
+          inicio: true,
+          fim: true,
+          status: true,
+          finalidade: true,
+        },
         orderBy: [{ inicio: 'asc' }, { id: 'asc' }],
       });
       // As Indisponibilidades que tocam a semana, inclusive as sem fim que começaram antes.
