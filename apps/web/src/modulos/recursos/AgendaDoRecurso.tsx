@@ -172,7 +172,7 @@ function Grade({
         const fim = arrasteAtual.current;
         mudarArraste(null);
         if (fim && fim.de !== fim.ate) {
-          aoEscolher(intervaloDoArraste(fim.dia, fim.de, fim.ate, agenda.indisponibilidades));
+          aoEscolher(trechoDoArraste(fim));
         }
       },
       { signal: fimDoArraste.signal },
@@ -192,11 +192,14 @@ function Grade({
     if (atual?.dia.data === dia.data) mudarArraste({ ...atual, ate: minuto });
   }
 
+  function trechoDoArraste({ dia, de, ate }: Arraste) {
+    return intervaloDoArraste(dia, de, ate, agenda.ocupacoes, agora, agenda.indisponibilidades);
+  }
+
+  // Pinta só o que o soltar vai escolher: o arraste não atravessa célula que não é livre.
+  const trecho = arraste && trechoDoArraste(arraste);
   function escolhida(dia: DiaDaGrade, minuto: number) {
-    if (arraste?.dia.data !== dia.data) return false;
-    return (
-      minuto >= Math.min(arraste.de, arraste.ate) && minuto <= Math.max(arraste.de, arraste.ate)
-    );
+    return trecho?.data === dia.data && minuto >= trecho.inicio && minuto < trecho.fim;
   }
 
   if (dias.length === 0) {

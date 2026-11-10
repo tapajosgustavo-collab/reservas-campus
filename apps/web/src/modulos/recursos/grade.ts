@@ -108,19 +108,22 @@ export function intervaloDoClique(
 }
 
 /**
- * Arrastar de uma célula a outra do mesmo dia: o Intervalo vai de `de` na direção de `ate`, em
- * qualquer direção, e para na última célula antes de uma bloqueada, sem atravessá-la.
+ * Arrastar de uma célula livre a outra do mesmo dia: o Intervalo vai de `de` na direção de `ate`,
+ * em qualquer direção, e para na última célula livre antes da primeira que não é livre (Reserva,
+ * Sua reserva, Indisponível, Fechado ou Passado), sem atravessá-la. A tela pinta só esse trecho.
  */
 export function intervaloDoArraste(
   dia: DiaDaGrade,
   de: number,
   ate: number,
+  ocupacoes: Ocupacao[],
+  agora: Date,
   indisponibilidades: IndisponibilidadeNaAgenda[] = [],
 ): IntervaloEscolhido {
-  // Bloqueada é a célula Indisponível (RN04). As ocupadas por Reserva entram aqui no #95.
-  const bloqueada = (minuto: number) => indisponivelNa(dia, minuto, indisponibilidades);
+  const livre = (minuto: number) =>
+    estadoDaCelula(dia, minuto, ocupacoes, agora, indisponibilidades) === 'livre';
   const passo = ate >= de ? MEIA_HORA : -MEIA_HORA;
   let ultima = de;
-  while (ultima !== ate && !bloqueada(ultima + passo)) ultima += passo;
+  while (ultima !== ate && livre(ultima + passo)) ultima += passo;
   return { data: dia.data, inicio: Math.min(de, ultima), fim: Math.max(de, ultima) + MEIA_HORA };
 }
