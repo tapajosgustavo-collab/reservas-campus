@@ -5,6 +5,7 @@ import {
   bancoDeTeste,
   comBanco,
   esvaziar,
+  umaIndisponibilidade,
   umaReserva,
   umEquipamento,
   umEspaco,
@@ -188,6 +189,54 @@ comBanco('US06 · Buscar Recurso livre', () => {
 
     const sabado = { inicio: '2026-11-14T10:00:00-03:00', fim: '2026-11-14T12:00:00-03:00' };
     expect(await nomesDa(noIntervalo(sabado))).toEqual(['Quadra']);
+  });
+
+  it('RN04 · Indisponibilidade de segunda a quinta, buscar terça 10h–12h → o Recurso some', async () => {
+    const lab = await umEspaco(banco, { nome: 'Laboratório', horarios: DIAS_UTEIS });
+    await umEspaco(banco, { nome: 'Auditório', horarios: DIAS_UTEIS });
+    await umaIndisponibilidade(banco, {
+      recursoId: lab.id,
+      inicio: '2026-11-09T07:00:00-03:00',
+      fim: '2026-11-12T23:00:00-03:00',
+      motivo: 'Reforma',
+    });
+
+    expect(await nomesDa(noIntervalo(terca('10:00', '12:00')))).toEqual(['Auditório']);
+  });
+
+  it('RN04 · Indisponibilidade sem fim cobre qualquer data futura: buscar 29/12 → some', async () => {
+    const projetor = await umEquipamento(banco, { nome: 'Projetor perdido', horarios: DIAS_UTEIS });
+    await umEquipamento(banco, { nome: 'Projetor Epson', horarios: DIAS_UTEIS });
+    await umaIndisponibilidade(banco, {
+      recursoId: projetor.id,
+      inicio: '2026-11-10T08:00:00-03:00',
+      fim: null,
+      motivo: 'Perdido',
+    });
+
+    const daquiASeteSemanas = {
+      inicio: '2026-12-29T10:00:00-03:00',
+      fim: '2026-12-29T12:00:00-03:00',
+    };
+    expect(await nomesDa(noIntervalo(daquiASeteSemanas))).toEqual(['Projetor Epson']);
+  });
+
+  it('RN04 · Indisponibilidade 8h–10h, buscar 10h–12h (só encosta) → aparece', async () => {
+    const lab = await umEspaco(banco, { nome: 'Laboratório', horarios: DIAS_UTEIS });
+    await umaIndisponibilidade(banco, {
+      recursoId: lab.id,
+      inicio: '2026-11-10T08:00:00-03:00',
+      fim: '2026-11-10T10:00:00-03:00',
+    });
+
+    expect(await nomesDa(noIntervalo(terca('10:00', '12:00')))).toEqual(['Laboratório']);
+  });
+
+  it('RN04 · sem Intervalo na busca, o Recurso indisponível continua aparecendo', async () => {
+    const lab = await umEspaco(banco, { nome: 'Laboratório', horarios: DIAS_UTEIS });
+    await umaIndisponibilidade(banco, { recursoId: lab.id, fim: null });
+
+    expect(await nomesDa('')).toEqual(['Laboratório']);
   });
 
   it('Equipamento por unidade: dos dois projetores, aparece só o livre, com o patrimônio', async () => {

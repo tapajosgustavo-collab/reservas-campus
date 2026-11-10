@@ -105,3 +105,29 @@ export async function umaReserva(banco: Banco, dados: DadosDaReserva = {}) {
     },
   });
 }
+
+type DadosDaIndisponibilidade = Omit<
+  Partial<Prisma.IndisponibilidadeUncheckedCreateInput>,
+  'inicio' | 'fim'
+> & {
+  recursoId: number;
+  inicio?: string;
+  fim?: string | null;
+};
+
+/**
+ * Indisponibilidade no `INTERVALO_PADRAO` do Recurso, a não ser que venham `inicio`, `fim` ou
+ * `motivo`. `fim: null` = sem previsão de volta. Datas em ISO com deslocamento.
+ */
+export function umaIndisponibilidade(banco: Banco, dados: DadosDaIndisponibilidade) {
+  const fim = dados.fim === undefined ? INTERVALO_PADRAO.fim : dados.fim;
+  return banco.indisponibilidade.create({
+    data: {
+      motivo: 'Manutenção',
+      criadaEm: new Date('2026-11-01T08:00:00-03:00'),
+      ...dados,
+      inicio: new Date(dados.inicio ?? INTERVALO_PADRAO.inicio),
+      fim: fim === null ? null : new Date(fim),
+    },
+  });
+}

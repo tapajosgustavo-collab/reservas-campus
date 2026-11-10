@@ -5,6 +5,7 @@ import {
   bancoDeTeste,
   comBanco,
   esvaziar,
+  umaIndisponibilidade,
   umaReserva,
   umEquipamento,
   umEspaco,
@@ -203,6 +204,111 @@ comBanco('US08 · Reservar', () => {
         campo: 'intervalo',
       },
     ]);
+  });
+
+  it('RN04 · Intervalo dentro de uma Indisponibilidade → 422 citando a RN04 com o motivo, nada gravado', async () => {
+    const app = await umaApp({ banco });
+    const { lab, ana } = await cenario();
+    await umaIndisponibilidade(banco, {
+      recursoId: lab.id,
+      inicio: '2026-11-10T09:00:00-03:00',
+      fim: '2026-11-12T18:00:00-03:00',
+      motivo: 'Troca do ar-condicionado',
+    });
+
+    const resposta = await reservar(app, ana.id, {
+      recursoId: lab.id,
+      participantes: 20,
+      inicio: INICIO,
+      fim: FIM,
+    });
+
+    expect(resposta.statusCode).toBe(422);
+    expect(resposta.json().erro.violacoes).toEqual([
+      {
+        rn: 'RN04',
+        nome: 'Indisponibilidade',
+        mensagem: 'Este Recurso está indisponível neste Intervalo: Troca do ar-condicionado.',
+        campo: 'intervalo',
+      },
+    ]);
+    expect(await banco.reserva.count()).toBe(0);
+  });
+
+  it('RN04 · Indisponibilidade sem fim cobre qualquer data futura: Docente pede 29/12 → 422', async () => {
+    const app = await umaApp({ banco });
+    const { lab } = await cenario();
+    const bruno = await umUsuario(banco, 'Docente');
+    await umaIndisponibilidade(banco, {
+      recursoId: lab.id,
+      inicio: '2026-11-10T09:00:00-03:00',
+      fim: null,
+      motivo: 'Fora de uso',
+    });
+
+    const resposta = await reservar(app, bruno.id, {
+      recursoId: lab.id,
+      participantes: 20,
+      inicio: '2026-12-29T10:00:00-03:00',
+      fim: '2026-12-29T12:00:00-03:00',
+    });
+
+    expect(resposta.statusCode).toBe(422);
+    expect(resposta.json().erro.violacoes).toMatchObject([
+      { rn: 'RN04', mensagem: 'Este Recurso está indisponível neste Intervalo: Fora de uso.' },
+    ]);
+  });
+
+  it('RN04 · Indisponibilidade que só encosta, ou de outro Recurso, não impede → 201', async () => {
+    const app = await umaApp({ banco });
+    const { lab, ana } = await cenario();
+    const outro = await umEspaco(banco);
+    await umaIndisponibilidade(banco, {
+      recursoId: lab.id,
+      inicio: '2026-11-10T08:00:00-03:00',
+      fim: INICIO,
+    });
+    await umaIndisponibilidade(banco, { recursoId: outro.id, fim: null });
+
+    const resposta = await reservar(app, ana.id, {
+      recursoId: lab.id,
+      participantes: 20,
+      inicio: INICIO,
+      fim: FIM,
+    });
+
+    expect(resposta.statusCode).toBe(201);
+  });
+
+  it('RN01, RN04, RN05 e RN08 · a RN04 vem junto das outras violações numa resposta só', async () => {
+    const app = await umaApp({ banco });
+    const { lab, ana } = await cenario();
+    await umaReserva(banco, {
+      recursoId: lab.id,
+      inicio: '2026-11-10T08:00:00-03:00',
+      fim: '2026-11-10T09:00:00-03:00',
+    });
+    await umaIndisponibilidade(banco, {
+      recursoId: lab.id,
+      inicio: '2026-11-10T08:00:00-03:00',
+      fim: null,
+    });
+
+    const resposta = await reservar(app, ana.id, {
+      recursoId: lab.id,
+      participantes: 41,
+      inicio: '2026-11-10T08:30:00-03:00',
+      fim: '2026-11-10T10:00:00-03:00',
+    });
+
+    expect(resposta.statusCode).toBe(422);
+    expect(resposta.json().erro.violacoes.map(({ rn }: { rn: string }) => rn)).toEqual([
+      'RN01',
+      'RN04',
+      'RN05',
+      'RN08',
+    ]);
+    expect(await banco.reserva.count()).toBe(1);
   });
 
   it('RN06 · Aluno por 2h30 → 422; Docente no mesmo Intervalo → 201', async () => {
@@ -602,5 +708,37 @@ comBanco('US08 · Reservar', () => {
     const recusada = respostas.find(({ statusCode }) => statusCode === 422);
     expect(recusada?.json().erro.violacoes).toMatchObject([{ rn: 'RN07' }]);
     expect(await banco.reserva.count({ where: { usuarioId: ana.id } })).toBe(3);
+  });
+
+  it('RNF11 · RN04: Indisponibilidade e Reserva simultâneas no mesmo período → a Reserva é recusada pela RN04 ou cancelada pelo sistema, nunca fica Confirmada', async () => {
+    const app = await umaApp({ banco });
+    const carlos = await umUsuario(banco, 'Gestor');
+    const lab = await umEspaco(banco, { gestorId: carlos.id, horarios: SEG_A_SEX_7H_23H });
+    const ana = await umUsuario(banco, 'Aluno');
+
+    const [indisponibilidade, reserva] = await Promise.all([
+      app.inject({
+        method: 'POST',
+        url: `/api/recursos/${lab.id}/indisponibilidades`,
+        cookies: sessaoDe(app, carlos.id),
+        payload: { inicio: INICIO, fim: FIM, motivo: 'Troca do ar-condicionado' },
+      }),
+      reservar(app, ana.id, { recursoId: lab.id, inicio: INICIO, fim: FIM, participantes: 20 }),
+    ]);
+
+    expect(indisponibilidade.statusCode).toBe(201);
+    // Sob o advisory lock, uma das duas vem antes; os dois desfechos valem, Confirmada nunca.
+    const desfecho =
+      reserva.statusCode === 201
+        ? 'criada e cancelada pelo sistema'
+        : reserva
+            .json()
+            .erro.violacoes.map(({ rn }: { rn: string }) => rn)
+            .join();
+    const reservas = await banco.reserva.findMany({ select: { status: true } });
+    expect([
+      ['RN04', []],
+      ['criada e cancelada pelo sistema', ['Cancelada']],
+    ]).toContainEqual([desfecho, reservas.map(({ status }) => status)]);
   });
 });
