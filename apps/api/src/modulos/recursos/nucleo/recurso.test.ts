@@ -23,9 +23,9 @@ describe('RN13 · Gestor do Recurso', () => {
     });
   });
 
-  it('RN13 · Carlos cadastrou o P-123, Dora tenta editar → recusado', () => {
+  it('RN13 · Carlos cadastrou o P-123, Dora tenta editar → proibida (403), como as outras regras de dono', () => {
     expect(decidirEdicao(projetor, { nome: 'Projetor Epson' }, dora)).toEqual({
-      tipo: 'recusada',
+      tipo: 'proibida',
       violacoes: [
         {
           rn: 'RN13',
