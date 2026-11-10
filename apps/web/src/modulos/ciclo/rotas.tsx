@@ -1,17 +1,10 @@
 import type { RouteObject } from 'react-router';
-import { EmConstrucao } from '../../comum/EmConstrucao';
 import { EmUso } from './EmUso';
+import { FilaDePedidos } from './FilaDePedidos';
 
 export const rotasCiclo: RouteObject[] = [
-  {
-    path: 'gestao/pedidos',
-    element: (
-      <EmConstrucao
-        titulo="Pedidos"
-        descricao="Fila de Pedidos dos Recursos restritos. Chega no Incremento 3."
-      />
-    ),
-  },
+  // US11: só o Gestor vê a fila dos Pedidos dos seus Recursos e decide; a API recusa os outros.
+  { path: 'gestao/pedidos', Component: FilaDePedidos },
   // US14: só o Gestor vê os seus Equipamentos Em uso e registra a Devolução; a API recusa os outros.
   { path: 'gestao/em-uso', Component: EmUso },
 ];
