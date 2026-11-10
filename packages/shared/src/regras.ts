@@ -15,6 +15,7 @@ export const REGRAS = {
   RN01: { nome: 'Sem Conflito' },
   RN02: { nome: 'Intervalo válido' },
   RN03: { nome: 'Dentro do Horário de funcionamento' },
+  RN04: { nome: 'Indisponibilidade' },
   RN05: { nome: 'Antecedência' },
   RN06: { nome: 'Duração máxima' },
   RN07: { nome: 'Cota' },
