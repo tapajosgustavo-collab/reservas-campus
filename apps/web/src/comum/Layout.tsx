@@ -12,8 +12,9 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import type { Perfil } from '@reservas/shared';
+import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router';
-import { BarraDoRelogio } from '../modulos/ciclo';
+import { BarraDoRelogio, SinoDeNotificacoes } from '../modulos/ciclo';
 import { Entrar, useSair, useSessao } from '../modulos/conduta';
 import { Versao } from './Versao';
 
@@ -29,6 +30,7 @@ const MENU: { para: string; rotulo: string; perfis?: Perfil[] }[] = [
 
 export function Layout() {
   const [menuAberto, { toggle, close }] = useDisclosure();
+  const [avisoDeNotificacao, setAvisoDeNotificacao] = useState<string | null>(null);
   const { pathname } = useLocation();
   const sessao = useSessao();
   const sair = useSair();
@@ -67,11 +69,15 @@ export function Layout() {
               <Text size="sm" visibleFrom="sm">
                 {usuario.nome} ({usuario.perfil})
               </Text>
+              <SinoDeNotificacoes key={usuario.id} aoChegarNova={setAvisoDeNotificacao} />
               <Button
                 variant="default"
                 size="xs"
                 loading={sair.isPending}
-                onClick={() => sair.mutate()}
+                onClick={() => {
+                  setAvisoDeNotificacao(null);
+                  sair.mutate();
+                }}
               >
                 Sair
               </Button>
@@ -115,6 +121,18 @@ export function Layout() {
         ) : usuario ? (
           <>
             <BarraDoRelogio />
+            {avisoDeNotificacao && (
+              <Alert
+                color="blue"
+                role="status"
+                title="Nova Notificação"
+                withCloseButton
+                onClose={() => setAvisoDeNotificacao(null)}
+                mb="md"
+              >
+                {avisoDeNotificacao}
+              </Alert>
+            )}
             <Outlet />
           </>
         ) : (
