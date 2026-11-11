@@ -1,27 +1,11 @@
-import {
-  violacao,
-  type RecusarPedido,
-  type Status,
-  type TipoNotificacao,
-  type Violacao,
-} from '@reservas/shared';
+import { violacao, type RecusarPedido, type Status, type Violacao } from '@reservas/shared';
 import { horaEmSaoPaulo, intervaloEmSaoPaulo } from '../../../comum/instante';
 import type { StatusMudou } from '../../reservas';
+import type { NotificacaoEmitida } from './notificacao';
+
+export type { NotificacaoEmitida } from './notificacao';
 
 const MINUTO = 60_000;
-
-/** US16: uma Notificação pronta para gravar, com a `mensagem` montada pelo núcleo. */
-export interface NotificacaoEmitida {
-  evento: 'NotificacaoEmitida';
-  notificacao: {
-    destinatarioId: number;
-    tipo: TipoNotificacao;
-    mensagem: string;
-    em: Date;
-    reservaId?: number;
-    suspensaoId?: number;
-  };
-}
 
 /** O que a regra precisa saber do Pedido e do Recurso dele para decidir. */
 export interface ReservaDoPedido {
@@ -145,6 +129,7 @@ export function decidirRecusa(
   if (violacoes.length > 0) return { tipo: 'recusada', violacoes };
 
   const motivo = justificativa.trim();
+  const motivoComPonto = motivo.endsWith('.') ? motivo : `${motivo}.`;
   const intervalo = intervaloEmSaoPaulo(reserva.inicio, reserva.fim);
   return {
     tipo: 'aceita',
@@ -165,7 +150,7 @@ export function decidirRecusa(
         notificacao: {
           destinatarioId: reserva.usuarioId,
           tipo: 'Recusa',
-          mensagem: `Seu Pedido de ${reserva.recurso.nome} (${intervalo}) foi recusado: ${motivo}`,
+          mensagem: `Seu Pedido de ${reserva.recurso.nome} (${intervalo}) foi recusado: ${motivoComPonto}`,
           em: agora,
           reservaId: reserva.id,
         },

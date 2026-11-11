@@ -1,6 +1,6 @@
 import type { Transacao } from '../../../comum/banco';
 import type { Notificacao } from '../../../generated/prisma/client';
-import type { NotificacaoEmitida } from '../nucleo/pedido';
+import type { NotificacaoEmitida } from '../nucleo/notificacao';
 
 /**
  * Grava um efeito do M4 (só ele grava em `notificacao`). Os outros módulos que emitem uma

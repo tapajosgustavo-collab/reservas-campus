@@ -2,4 +2,4 @@
 export { executar } from './casca/efeitos';
 export { registrarRotasDoCiclo } from './casca/rotas';
 export { sincronizar } from './casca/sincronizar';
-export type { NotificacaoEmitida } from './nucleo/pedido';
+export type { NotificacaoEmitida } from './nucleo/notificacao';
