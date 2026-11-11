@@ -26,20 +26,30 @@ test('fluxo de Check-in avançando o relógio da demo (US12, RN14, RNF02, RNF07,
   const { agora } = (await sessao.json()) as { agora: string };
   const { inicio, fim } = proximoIntervaloReservavel(agora);
 
-  // Um Espaço por projeto, para os dois nunca disputarem o mesmo Intervalo (RN01).
-  const nomeDoRecurso = isMobile ? 'Laboratório de Informática 2' : 'Sala 102';
-  const busca = await page.request.get('/api/recursos', { params: { q: nomeDoRecurso } });
-  expect(busca.ok()).toBe(true);
-  const recursos = (await busca.json()) as { id: number; nome: string }[];
-  const recurso = recursos.find(({ nome }) => nome === nomeDoRecurso);
-  expect(recurso, `o seed não tem o Recurso "${nomeDoRecurso}"`).toBeDefined();
+  // O Espaço sai da busca (US06): livre no Intervalo, sem Conflito nem Indisponibilidade, e não
+  // restrito (RN10), para nascer Confirmada, e com lugar para os participantes (RN08). Assim as
+  // cenas que o seed ganha a cada incremento não quebram o teste.
+  const participantes = 5;
+  const busca = await page.request.get('/api/recursos', {
+    params: {
+      tipo: 'Espaco',
+      capacidadeMin: participantes,
+      inicio: inicio.toISOString(),
+      fim: fim.toISOString(),
+    },
+  });
+  expect(busca.ok(), await busca.text()).toBe(true);
+  const livres = (await busca.json()) as { id: number; nome: string; restrito: boolean }[];
+  const recurso = livres.find(({ restrito }) => !restrito);
+  if (!recurso) throw new Error('A busca não achou nenhum Espaço comum livre no Intervalo.');
+  const nomeDoRecurso = recurso.nome;
 
   const criada = await page.request.post('/api/reservas', {
     data: {
-      recursoId: recurso?.id,
+      recursoId: recurso.id,
       inicio: inicio.toISOString(),
       fim: fim.toISOString(),
-      participantes: 5,
+      participantes,
     },
   });
   expect(criada.status(), await criada.text()).toBe(201);
@@ -53,8 +63,9 @@ test('fluxo de Check-in avançando o relógio da demo (US12, RN14, RNF02, RNF07,
   await expect(page.getByRole('heading', { level: 2, name: 'Minhas reservas' })).toBeVisible();
 
   const { data, hora: horaDoInicio } = emSaoPaulo(inicio);
+  const nomeNaRegex = nomeDoRecurso.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const linha = page.getByRole('row', {
-    name: new RegExp(`${nomeDoRecurso}.*${data}, das ${horaDoInicio} às ${emSaoPaulo(fim).hora}`),
+    name: new RegExp(`${nomeNaRegex}.*${data}, das ${horaDoInicio} às ${emSaoPaulo(fim).hora}`),
   });
   await expect(linha).toContainText('Confirmada');
   const botaoDeCheckIn = linha.getByRole('button', {
