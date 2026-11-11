@@ -62,7 +62,14 @@ export function DetalheDaReserva() {
           )}
 
           <Title order={3}>Histórico</Title>
-          <Table.ScrollContainer minWidth={520} type="native">
+          {/* RNF13: no celular o quadro rola sem nada focável dentro; com foco, rola pelo teclado. */}
+          <Table.ScrollContainer
+            minWidth={520}
+            type="native"
+            tabIndex={0}
+            role="region"
+            aria-label="Histórico da Reserva"
+          >
             <Table striped>
               <Table.Thead>
                 <Table.Tr>
