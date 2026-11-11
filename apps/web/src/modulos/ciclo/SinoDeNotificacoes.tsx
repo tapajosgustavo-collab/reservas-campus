@@ -36,6 +36,11 @@ export function SinoDeNotificacoes({ aoChegarNova }: { aoChegarNova: (mensagem: 
   const marcarTodas = useMarcarTodasNotificacoesLidas();
   const vistasRef = useRef<Set<number> | null>(null);
 
+  const fechar = () => {
+    setAberta(false);
+    setPagina(1);
+  };
+
   const itensDaPrimeira = primeiraPagina.data?.itens;
   useEffect(() => {
     if (!itensDaPrimeira) return;
@@ -68,7 +73,7 @@ export function SinoDeNotificacoes({ aoChegarNova }: { aoChegarNova: (mensagem: 
         )}
       </Button>
 
-      <Modal opened={aberta} onClose={() => setAberta(false)} title="Notificações">
+      <Modal opened={aberta} onClose={fechar} title="Notificações">
         <Stack gap="sm">
           {naoLidas > 0 && (
             <Group justify="flex-end">
@@ -126,7 +131,7 @@ export function SinoDeNotificacoes({ aoChegarNova }: { aoChegarNova: (mensagem: 
                           component={Link}
                           to={`/reservas/${item.reservaId}`}
                           size="xs"
-                          onClick={() => setAberta(false)}
+                          onClick={fechar}
                         >
                           Ver Reserva
                         </Anchor>

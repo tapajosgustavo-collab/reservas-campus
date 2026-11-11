@@ -15,12 +15,14 @@ export interface AmbienteDePolling {
   janela: AlvoDeEventos;
   agendarIntervalo?: (fn: () => void, ms: number) => ReturnType<typeof setInterval>;
   cancelarIntervalo?: (id: ReturnType<typeof setInterval>) => void;
+  obterAgora?: () => number;
 }
 
 /**
  * US16: polling de 30 s só com a aba visível, pausando o `setInterval` quando
  * `document.visibilityState === 'hidden'` e buscando imediatamente (reiniciando o ciclo de 30 s)
- * ao voltar a visibilidade ou o foco da janela.
+ * ao voltar a visibilidade ou o foco da janela. Ignora o foco redundante se acabou de buscar
+ * (quando visibilitychange e focus disparam quase juntos).
  */
 export function iniciarPollingVisivel(
   buscar: () => void,
@@ -31,9 +33,11 @@ export function iniciarPollingVisivel(
     janela,
     agendarIntervalo = (fn, ms) => setInterval(fn, ms),
     cancelarIntervalo = (id) => clearInterval(id),
+    obterAgora = () => Date.now(),
   } = ambiente;
 
   let timer: ReturnType<typeof setInterval> | null = null;
+  let ultimaBusca = 0;
 
   function pararTimer() {
     if (timer !== null) {
@@ -46,25 +50,34 @@ export function iniciarPollingVisivel(
     pararTimer();
     if (documento.visibilityState !== 'hidden') {
       timer = agendarIntervalo(() => {
-        if (documento.visibilityState !== 'hidden') buscar();
-        else pararTimer();
+        if (documento.visibilityState !== 'hidden') {
+          ultimaBusca = obterAgora();
+          buscar();
+        } else {
+          pararTimer();
+        }
       }, INTERVALO_DE_POLLING_MS);
     }
+  }
+
+  function executarBusca() {
+    ultimaBusca = obterAgora();
+    buscar();
+    iniciarTimerSeVisivel();
   }
 
   function aoMudarVisibilidade() {
     if (documento.visibilityState === 'hidden') {
       pararTimer();
     } else {
-      buscar();
-      iniciarTimerSeVisivel();
+      executarBusca();
     }
   }
 
   function aoFocar() {
     if (documento.visibilityState !== 'hidden') {
-      buscar();
-      iniciarTimerSeVisivel();
+      if (obterAgora() - ultimaBusca < 1000) return;
+      executarBusca();
     }
   }
 
