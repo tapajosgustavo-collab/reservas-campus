@@ -1,5 +1,6 @@
 import { violacao, type Status, type Violacao } from '@reservas/shared';
-import { horaEmSaoPaulo } from '../../../comum/instante';
+import { horaEmSaoPaulo, intervaloEmSaoPaulo } from '../../../comum/instante';
+import type { NotificacaoEmitida } from '../../ciclo';
 import type { ReservasCanceladasPeloSistema } from '../../reservas';
 import type { Quem, RecursoCadastrado } from './recurso';
 
@@ -13,13 +14,14 @@ export interface PedidoDeIndisponibilidade {
 /** O que a regra precisa saber de cada Reserva do Recurso que toca o período. */
 export interface ReservaNoPeriodo {
   id: number;
+  usuarioId: number;
   inicio: Date;
   fim: Date;
   status: Status;
 }
 
 export interface FatosDaIndisponibilidade {
-  recurso: RecursoCadastrado;
+  recurso: RecursoCadastrado & { nome: string };
   reservas: ReservaNoPeriodo[];
 }
 
@@ -31,7 +33,9 @@ export interface IndisponibilidadeCriada {
 export type Decisao =
   | {
       tipo: 'aceita';
-      efeitos: [IndisponibilidadeCriada] | [IndisponibilidadeCriada, ReservasCanceladasPeloSistema];
+      efeitos:
+        | [IndisponibilidadeCriada]
+        | [IndisponibilidadeCriada, ReservasCanceladasPeloSistema, ...NotificacaoEmitida[]];
     }
   | { tipo: 'recusada'; violacoes: Violacao[] }
   | { tipo: 'proibida'; violacoes: Violacao[] };
@@ -93,20 +97,34 @@ export function decidirIndisponibilidade(
     evento: 'IndisponibilidadeCriada',
     indisponibilidade: { ...pedido, recursoId: recurso.id, criadaEm: agora },
   };
-  const atingidas = reservas
-    .filter((reserva) => CANCELAVEIS.includes(reserva.status) && noPeriodo(pedido, reserva))
-    .map(({ id, status }) => ({ id, de: status }));
+  const atingidas = reservas.filter(
+    (reserva) => CANCELAVEIS.includes(reserva.status) && noPeriodo(pedido, reserva),
+  );
   if (atingidas.length === 0) return { tipo: 'aceita', efeitos: [criada] };
+  const causa = `o Recurso ficou indisponível (${pedido.motivo}).`;
+  const notificacoes: NotificacaoEmitida[] = atingidas.map((reserva) => ({
+    evento: 'NotificacaoEmitida',
+    notificacao: {
+      destinatarioId: reserva.usuarioId,
+      tipo: 'CancelamentoPeloSistema',
+      mensagem:
+        `Sua Reserva de ${recurso.nome} (${intervaloEmSaoPaulo(reserva.inicio, reserva.fim)}) ` +
+        `foi cancelada pelo sistema: ${causa}`,
+      em: agora,
+      reservaId: reserva.id,
+    },
+  }));
   return {
     tipo: 'aceita',
     efeitos: [
       criada,
       {
         evento: 'ReservasCanceladasPeloSistema',
-        reservas: atingidas,
+        reservas: atingidas.map(({ id, status }) => ({ id, de: status })),
         em: agora,
-        observacao: `Cancelamento pelo sistema: o Recurso ficou indisponível (${pedido.motivo}).`,
+        observacao: `Cancelamento pelo sistema: ${causa}`,
       },
+      ...notificacoes,
     ],
   };
 }

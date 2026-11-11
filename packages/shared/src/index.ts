@@ -103,3 +103,15 @@ export {
   type CriarIndisponibilidade,
   type IndisponibilidadeCriada,
 } from './indisponibilidades';
+export {
+  esquemaBuscarNotificacoes,
+  esquemaIdDaNotificacao,
+  esquemaNotificacao,
+  esquemaPaginaDeNotificacoes,
+  esquemaTipoNotificacao,
+  NOTIFICACOES_POR_PAGINA,
+  type BuscarNotificacoes,
+  type Notificacao,
+  type PaginaDeNotificacoes,
+  type TipoNotificacao,
+} from './notificacoes';

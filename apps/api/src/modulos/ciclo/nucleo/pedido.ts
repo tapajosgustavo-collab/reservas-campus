@@ -1,15 +1,20 @@
 import { violacao, type RecusarPedido, type Status, type Violacao } from '@reservas/shared';
-import { horaEmSaoPaulo } from '../../../comum/instante';
+import { horaEmSaoPaulo, intervaloEmSaoPaulo } from '../../../comum/instante';
 import type { StatusMudou } from '../../reservas';
+import type { NotificacaoEmitida } from './notificacao';
+
+export type { NotificacaoEmitida } from './notificacao';
 
 const MINUTO = 60_000;
 
 /** O que a regra precisa saber do Pedido e do Recurso dele para decidir. */
 export interface ReservaDoPedido {
   id: number;
+  usuarioId: number;
   status: Status;
   inicio: Date;
-  recurso: { gestorId: number };
+  fim: Date;
+  recurso: { nome: string; gestorId: number };
 }
 
 export interface FatosDoPedido {
@@ -18,7 +23,7 @@ export interface FatosDoPedido {
 }
 
 export type Decisao =
-  | { tipo: 'aceita'; efeitos: [StatusMudou] }
+  | { tipo: 'aceita'; efeitos: [StatusMudou, NotificacaoEmitida] }
   | { tipo: 'recusada'; violacoes: Violacao[] }
   | { tipo: 'proibida'; violacoes: Violacao[] };
 
@@ -74,6 +79,7 @@ export function decidirAprovacao(fatos: FatosDoPedido, quem: { id: number }, ago
   const violacoes = naoDecidivel(fatos, agora);
   if (violacoes.length > 0) return { tipo: 'recusada', violacoes };
 
+  const intervalo = intervaloEmSaoPaulo(reserva.inicio, reserva.fim);
   return {
     tipo: 'aceita',
     efeitos: [
@@ -81,6 +87,16 @@ export function decidirAprovacao(fatos: FatosDoPedido, quem: { id: number }, ago
         evento: 'StatusMudou',
         reservaId: reserva.id,
         transicao: { de: 'Pendente', para: 'Confirmada', em: agora, porId: quem.id },
+      },
+      {
+        evento: 'NotificacaoEmitida',
+        notificacao: {
+          destinatarioId: reserva.usuarioId,
+          tipo: 'Aprovacao',
+          mensagem: `Seu Pedido de ${reserva.recurso.nome} (${intervalo}) foi aprovado.`,
+          em: agora,
+          reservaId: reserva.id,
+        },
       },
     ],
   };
@@ -112,6 +128,9 @@ export function decidirRecusa(
   const violacoes = [...naoDecidivel(fatos, agora), ...semJustificativa(justificativa)];
   if (violacoes.length > 0) return { tipo: 'recusada', violacoes };
 
+  const motivo = justificativa.trim();
+  const motivoComPonto = motivo.endsWith('.') ? motivo : `${motivo}.`;
+  const intervalo = intervaloEmSaoPaulo(reserva.inicio, reserva.fim);
   return {
     tipo: 'aceita',
     efeitos: [
@@ -123,7 +142,17 @@ export function decidirRecusa(
           para: 'Recusada',
           em: agora,
           porId: quem.id,
-          observacao: justificativa.trim(),
+          observacao: motivo,
+        },
+      },
+      {
+        evento: 'NotificacaoEmitida',
+        notificacao: {
+          destinatarioId: reserva.usuarioId,
+          tipo: 'Recusa',
+          mensagem: `Seu Pedido de ${reserva.recurso.nome} (${intervalo}) foi recusado: ${motivoComPonto}`,
+          em: agora,
+          reservaId: reserva.id,
         },
       },
     ],

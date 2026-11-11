@@ -19,6 +19,7 @@ import type { Prisma } from '../../../generated/prisma/client';
 import { agendaPara } from '../nucleo/agenda';
 import { decidirIndisponibilidade } from '../nucleo/indisponibilidade';
 import { decidirCadastro, decidirEdicao, type Efeito } from '../nucleo/recurso';
+import { executar as executarEmCiclo } from '../../ciclo';
 import { executar as executarEmReservas, violacoesDoIntervalo } from '../../reservas';
 import { executar } from './efeitos';
 
@@ -165,8 +166,8 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
     },
     async (request, reply) => {
       const quem = await exigirPerfil(request, 'Gestor');
-      const { id, gestor } = await buscarRecurso(request, request.params.id);
-      const recurso = { id, gestorId: gestor.id };
+      const { id, nome, gestor } = await buscarRecurso(request, request.params.id);
+      const recurso = { id, nome, gestorId: gestor.id };
       const pedido = {
         inicio: new Date(request.body.inicio),
         fim: request.body.fim === null ? null : new Date(request.body.fim),
@@ -181,13 +182,13 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
           fim: { gt: pedido.inicio },
           ...(pedido.fim && { inicio: { lt: pedido.fim } }),
         },
-        select: { id: true, inicio: true, fim: true, status: true },
+        select: { id: true, usuarioId: true, inicio: true, fim: true, status: true },
       });
       const decisao = decidirIndisponibilidade({ recurso, reservas }, pedido, quem, request.agora);
       if (decisao.tipo === 'proibida') throw proibidoPelaRegra(decisao.violacoes);
       if (decisao.tipo === 'recusada') throw regraViolada(decisao.violacoes);
 
-      const [criada, canceladas] = decisao.efeitos;
+      const [criada, canceladas, ...notificacoes] = decisao.efeitos;
       const indisponibilidade = await executar(request.tx, criada);
       registrar(request, criada.evento, { indisponibilidadeId: indisponibilidade.id });
       // Só o M3 grava em `reserva` e `transicao`: todas as Reservas num efeito só.
@@ -195,6 +196,15 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
         await executarEmReservas(request.tx, canceladas);
         registrar(request, canceladas.evento, {
           reservaIds: canceladas.reservas.map((reserva) => reserva.id),
+        });
+      }
+      // Só o M4 grava em `notificacao`.
+      for (const emitida of notificacoes) {
+        const notificacao = await executarEmCiclo(request.tx, emitida);
+        registrar(request, emitida.evento, {
+          notificacaoId: notificacao.id,
+          destinatarioId: notificacao.destinatarioId,
+          reservaId: notificacao.reservaId,
         });
       }
       reply.status(201);
