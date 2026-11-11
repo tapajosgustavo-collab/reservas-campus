@@ -6,7 +6,10 @@ import {
   rotuloDoSino,
 } from './notificacoes';
 
-function criarAmbienteFalso(visibilidadeInicial: 'visible' | 'hidden' = 'visible') {
+function criarAmbienteFalso(
+  visibilidadeInicial: 'visible' | 'hidden' = 'visible',
+  obterAgora?: () => number,
+) {
   const ouvintesDoc = new Map<string, Set<() => void>>();
   const ouvintesJanela = new Map<string, Set<() => void>>();
   let proximoId = 1;
@@ -45,6 +48,7 @@ function criarAmbienteFalso(visibilidadeInicial: 'visible' | 'hidden' = 'visible
       cancelarIntervalo(id: ReturnType<typeof setInterval>) {
         intervalos.delete(id as unknown as number);
       },
+      obterAgora,
     },
     get intervalosAtivos() {
       return [...intervalos.values()];
@@ -117,6 +121,30 @@ describe('US16 · Polling de 30 s por visibilidade e foco', () => {
     expect(cenario.intervalosAtivos).toHaveLength(1);
 
     cenario.dispararTick();
+    expect(buscas).toBe(2);
+
+    parar();
+  });
+
+  it('ignora o evento de focus se acabou de buscar pela mudança de visibilidade (evita busca dupla)', () => {
+    let agora = 1000;
+    const cenario = criarAmbienteFalso('hidden', () => agora);
+    let buscas = 0;
+    const parar = iniciarPollingVisivel(() => {
+      buscas += 1;
+    }, cenario.ambiente);
+
+    cenario.mudarVisibilidade('visible');
+    expect(buscas).toBe(1);
+
+    // Navegador dispara focus quase junto (100 ms depois)
+    agora += 100;
+    cenario.focarJanela();
+    expect(buscas).toBe(1);
+
+    // 2 segundos depois, Usuário volta o foco à janela e busca normalmente
+    agora += 2000;
+    cenario.focarJanela();
     expect(buscas).toBe(2);
 
     parar();
