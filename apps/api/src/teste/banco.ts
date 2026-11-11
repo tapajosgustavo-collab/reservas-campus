@@ -131,3 +131,21 @@ export function umaIndisponibilidade(banco: Banco, dados: DadosDaIndisponibilida
     },
   });
 }
+
+type DadosDaNotificacao = Omit<Partial<Prisma.NotificacaoUncheckedCreateInput>, 'em' | 'lidaEm'> & {
+  destinatarioId: number;
+  em?: string;
+  lidaEm?: string | null;
+};
+
+export function umaNotificacao(banco: Banco, dados: DadosDaNotificacao) {
+  return banco.notificacao.create({
+    data: {
+      tipo: 'Aprovacao',
+      mensagem: `Notificação ${proximo()}`,
+      ...dados,
+      em: new Date(dados.em ?? INTERVALO_PADRAO.inicio),
+      lidaEm: dados.lidaEm ? new Date(dados.lidaEm) : null,
+    },
+  });
+}
