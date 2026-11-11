@@ -18,15 +18,22 @@ const doBruno: Ocupacao = {
 
 describe('RN22 · Visão do Gestor responsável na agenda', () => {
   it('RN22 · a primeira célula da Reserva diz quem reservou e o Status', () => {
-    expect(reservaNaCelula(terca, 10 * 60, [doBruno])).toEqual({
+    expect(reservaNaCelula(terca, 10 * 60, doBruno)).toEqual({
       primeira: true,
       texto: 'Bruno · Em uso',
       descricao: 'Reserva de Bruno, Em uso, Finalidade: Estudo',
+      endereco: '/reservas/50',
+    });
+  });
+
+  it('RN22 · toda célula da Reserva leva ao detalhe, que mostra a Finalidade', () => {
+    expect(reservaNaCelula(terca, 10 * 60 + 30, doBruno)).toMatchObject({
+      endereco: '/reservas/50',
     });
   });
 
   it('RN22 · as células seguintes da mesma Reserva não repetem o texto', () => {
-    expect(reservaNaCelula(terca, 10 * 60 + 30, [doBruno])).toMatchObject({ primeira: false });
+    expect(reservaNaCelula(terca, 10 * 60 + 30, doBruno)).toMatchObject({ primeira: false });
   });
 
   it('RN22 · duas Reservas seguidas: a segunda também começa com o texto', () => {
@@ -40,26 +47,33 @@ describe('RN22 · Visão do Gestor responsável na agenda', () => {
       finalidade: null,
     };
 
-    expect(reservaNaCelula(terca, 11 * 60, [doBruno, daAna])).toEqual({
+    expect(reservaNaCelula(terca, 11 * 60, daAna)).toEqual({
       primeira: true,
       texto: 'Ana · Pendente',
       descricao: 'Reserva de Ana, Pendente, sem Finalidade',
+      endereco: '/reservas/51',
     });
+  });
+
+  it('RN22 · a Reserva que começa no meio da meia hora mostra o texto nessa célula', () => {
+    const dasDezEQuinze: Ocupacao = { ...doBruno, inicio: '2026-11-10T10:15:00-03:00' };
+
+    expect(reservaNaCelula(terca, 10 * 60, dasDezEQuinze)).toMatchObject({ primeira: true });
   });
 
   it('RN22 · a Reserva que começa antes da abertura mostra o texto na primeira célula do dia', () => {
     const cedo: Ocupacao = { ...doBruno, inicio: '2026-11-10T06:00:00-03:00' };
 
-    expect(reservaNaCelula(terca, 7 * 60, [cedo])).toMatchObject({ primeira: true });
+    expect(reservaNaCelula(terca, 7 * 60, cedo)).toMatchObject({ primeira: true });
   });
 
-  it('RN22 · sem o nome (quem não é o Gestor responsável), a célula não diz nada', () => {
+  it('RN22 · sem o nome (quem não é o Gestor responsável), a célula não diz nada nem leva a lugar algum', () => {
     const soOcupado: Ocupacao = { inicio: doBruno.inicio, fim: doBruno.fim };
 
-    expect(reservaNaCelula(terca, 10 * 60, [soOcupado])).toBeNull();
+    expect(reservaNaCelula(terca, 10 * 60, soOcupado)).toBeNull();
   });
 
-  it('célula livre não tem Reserva', () => {
-    expect(reservaNaCelula(terca, 9 * 60, [doBruno])).toBeNull();
+  it('célula sem Ocupação não tem Reserva', () => {
+    expect(reservaNaCelula(terca, 9 * 60, undefined)).toBeNull();
   });
 });

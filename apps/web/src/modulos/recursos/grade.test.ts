@@ -1,6 +1,7 @@
 import type { Ocupacao } from '@reservas/shared';
 import { describe, expect, it } from 'vitest';
 import {
+  celulaDaGrade,
   diasDaGrade,
   estadoDaCelula,
   intervaloDoArraste,
@@ -90,6 +91,17 @@ describe('US07 · Grade semanal da agenda', () => {
     const cedo = { inicio: '2026-11-10T07:00:00-03:00', fim: '2026-11-10T08:00:00-03:00' };
 
     expect(estadoDaCelula(terca, 7 * 60, [cedo], agora)).toBe('ocupado');
+  });
+
+  it('a célula traz o estado e a Ocupação que a ocupa, para a tela não procurar de novo', () => {
+    expect(celulaDaGrade(terca, 10 * 60, [dasDezAoMeioDia], agora)).toEqual({
+      estado: 'ocupado',
+      ocupacao: dasDezAoMeioDia,
+    });
+    expect(celulaDaGrade(terca, 9 * 60, [dasDezAoMeioDia], agora)).toEqual({
+      estado: 'livre',
+      ocupacao: undefined,
+    });
   });
 
   it('clique num horário livre → 1h', () => {
