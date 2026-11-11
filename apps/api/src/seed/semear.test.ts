@@ -229,6 +229,75 @@ comBanco('RNF10 · Seed', () => {
     expect(encosta.json().status).toBe('Confirmada');
   });
 
+  it('cena 1 (RN04): a Dora cria a "Dedetização" na Sala de estudos 3 em D+1 → 1 Reserva cancelada, a da Bia', async () => {
+    const { app, entrarComo, get, idDoRecurso } = await demoNoT0();
+    const recursoId = await idDoRecurso('Sala de estudos 3');
+    const agendaDaBia = () =>
+      get('bia.demo@unifesp.br', `/api/recursos/${recursoId}/agenda`).then(
+        ({ ocupacoes }) => ocupacoes,
+      );
+
+    expect(await agendaDaBia()).toMatchObject([
+      {
+        inicio: '2026-11-11T10:00:00-03:00',
+        fim: '2026-11-11T12:00:00-03:00',
+        minha: true,
+        status: 'Confirmada',
+      },
+    ]);
+
+    const resposta = await app.inject({
+      method: 'POST',
+      url: `/api/recursos/${recursoId}/indisponibilidades`,
+      cookies: await entrarComo('dora.demo@unifesp.br'),
+      payload: {
+        inicio: '2026-11-11T00:00:00-03:00',
+        fim: '2026-11-12T00:00:00-03:00',
+        motivo: 'Dedetização',
+      },
+    });
+
+    expect(resposta.statusCode).toBe(201);
+    expect(resposta.json().reservasCanceladas).toBe(1);
+    expect(await agendaDaBia()).toEqual([]);
+  });
+
+  it('cena 1: o P-124 está Extraviado, sem fim, e a Sala 102 em manutenção do T0 a D+2', async () => {
+    const { get, idDoRecurso } = await demoNoT0();
+    const indisponibilidadesDe = async (nome: string) =>
+      (await get('ana.demo@unifesp.br', `/api/recursos/${await idDoRecurso(nome)}/agenda`))
+        .indisponibilidades;
+
+    expect(await indisponibilidadesDe('Projetor Epson P-124')).toEqual([
+      { inicio: '2026-11-07T08:00:00-03:00', fim: null, motivo: 'Extraviado' },
+    ]);
+    expect(await indisponibilidadesDe('Sala 102')).toEqual([
+      {
+        inicio: '2026-11-10T08:00:00-03:00',
+        fim: '2026-11-12T08:00:00-03:00',
+        motivo: 'Manutenção do ar-condicionado',
+      },
+    ]);
+    expect(await indisponibilidadesDe('Sala 101')).toEqual([]);
+  });
+
+  it('cena 2 (US06): a Ana busca Espaço para 30 pessoas em D 10h–12h; a Sala 101 e a Sala 102 não aparecem', async () => {
+    const { get } = await demoNoT0();
+    const busca = new URLSearchParams({
+      tipo: 'Espaco',
+      capacidadeMin: '30',
+      inicio: '2026-11-10T10:00:00-03:00',
+      fim: '2026-11-10T12:00:00-03:00',
+    });
+
+    const recursos = await get('ana.demo@unifesp.br', `/api/recursos?${busca}`);
+
+    expect(recursos.map(({ nome }: { nome: string }) => nome)).toEqual([
+      'Auditório',
+      'Laboratório de Informática 2',
+    ]);
+  });
+
   it('a Bia tem o Notebook N-01 em D, 9h–11h, Confirmada (a cena 6 da RN23)', async () => {
     const { get, idDoRecurso } = await demoNoT0();
 
