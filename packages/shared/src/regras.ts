@@ -27,12 +27,16 @@ export const REGRAS = {
   RN14: { nome: 'Janela de Check-in' },
   RN16: { nome: 'Cancelamento' },
   RN17: { nome: 'Devolução atrasada' },
+  RN21: { nome: 'Série tudo-ou-nada' },
   RN22: { nome: 'Agenda sem nomes' },
 } as const satisfies Record<`RN${number}`, Regra>;
 
 export type IdRegra = keyof typeof REGRAS;
 
-/** A violação de uma RN do catálogo, com o nome dela, como o núcleo devolve. */
-export function violacao(rn: IdRegra, mensagem: string, campo?: string): Violacao {
-  return { rn, nome: REGRAS[rn].nome, mensagem, ...(campo && { campo }) };
+/**
+ * A violação de uma RN do catálogo, com o nome dela, como o núcleo devolve. `data` só na Série: a
+ * Ocorrência que viola a regra.
+ */
+export function violacao(rn: IdRegra, mensagem: string, campo?: string, data?: string): Violacao {
+  return { rn, nome: REGRAS[rn].nome, mensagem, ...(campo && { campo }), ...(data && { data }) };
 }

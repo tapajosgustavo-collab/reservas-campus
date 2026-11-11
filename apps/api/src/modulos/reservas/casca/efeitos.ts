@@ -1,18 +1,23 @@
 import type { Transacao } from '../../../comum/banco';
-import type { Reserva } from '../../../generated/prisma/client';
+import type { Reserva, Serie } from '../../../generated/prisma/client';
 import type { Efeito, ReservasCanceladasPeloSistema } from '../nucleo/reservar';
+import type { SerieCriada } from '../nucleo/serie';
 
 /**
- * Grava um efeito do M3 (só ele grava em `reserva` e `transicao`) e devolve a Reserva, ou quantas
- * foram canceladas pelo sistema. Os outros módulos que decidem uma mudança de Status (o Check-in do
- * M4, a Indisponibilidade do M2) gravam por aqui.
+ * Grava um efeito do M3 (só ele grava em `serie`, `reserva` e `transicao`) e devolve a Reserva, a
+ * Série com as Ocorrências, ou quantas foram canceladas pelo sistema. Os outros módulos que decidem
+ * uma mudança de Status (o Check-in do M4, a Indisponibilidade do M2) gravam por aqui.
  */
 export function executar(tx: Transacao, efeito: ReservasCanceladasPeloSistema): Promise<number>;
+export function executar(
+  tx: Transacao,
+  efeito: SerieCriada,
+): Promise<Serie & { reservas: Reserva[] }>;
 export function executar(tx: Transacao, efeito: Efeito): Promise<Reserva>;
 export async function executar(
   tx: Transacao,
-  efeito: Efeito | ReservasCanceladasPeloSistema,
-): Promise<Reserva | number> {
+  efeito: Efeito | ReservasCanceladasPeloSistema | SerieCriada,
+): Promise<Reserva | number | (Serie & { reservas: Reserva[] })> {
   switch (efeito.evento) {
     case 'ReservasCanceladasPeloSistema': {
       // Duas idas ao banco para todas as Reservas, e não duas por Reserva.
@@ -32,6 +37,19 @@ export async function executar(
       });
       return count;
     }
+    case 'SerieCriada':
+      return tx.serie.create({
+        data: {
+          ...efeito.serie,
+          reservas: {
+            create: efeito.ocorrencias.map(({ reserva, transicao }) => ({
+              ...reserva,
+              transicoes: { create: transicao },
+            })),
+          },
+        },
+        include: { reservas: { orderBy: { inicio: 'asc' } } },
+      });
     case 'ReservaCriada':
       return tx.reserva.create({
         data: { ...efeito.reserva, transicoes: { create: efeito.transicao } },

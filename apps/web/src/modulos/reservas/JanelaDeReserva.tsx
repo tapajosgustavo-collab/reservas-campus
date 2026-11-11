@@ -1,23 +1,36 @@
 import {
   Alert,
   Button,
+  Checkbox,
   Group,
   List,
   Modal,
   NumberInput,
   Select,
+  SimpleGrid,
   Stack,
+  Switch,
   Text,
   Textarea,
   TextInput,
 } from '@mantine/core';
-import type { Reserva, TipoRecurso } from '@reservas/shared';
+import { datasDaSerie, POLITICA, type Reserva, type TipoRecurso } from '@reservas/shared';
 import { useState, type FormEvent } from 'react';
 import { ErroDaApi } from '../../comum/api';
 import { opcoesDeMeiaHora } from '../../comum/minutos';
 import { linhaDaViolacao } from '../../comum/violacoes';
-import { avisoDoPedido, corpoDaReserva, tituloDasViolacoes } from './pedido';
-import { useCriarReserva } from './reservas';
+import { useSessao } from '../conduta';
+import {
+  avisoDoPedido,
+  corpoDaReserva,
+  corpoDaSerie,
+  diaEMes,
+  linhaDaViolacaoNaSerie,
+  resumoDaCriada,
+  resumoDaSerie,
+  tituloDasViolacoes,
+} from './pedido';
+import { useCriarReserva, useCriarSerie } from './reservas';
 
 const OPCOES_DE_INICIO = opcoesDeMeiaHora(0, 24 * 60 - 30);
 const OPCOES_DE_FIM = opcoesDeMeiaHora(30, 24 * 60);
@@ -39,12 +52,18 @@ interface IntervaloInicial {
   fim: number;
 }
 
+/** O que a agenda destaca e conta depois de criar: a Reserva, ou a primeira Ocorrência da Série. */
+export interface Criada {
+  reserva: Reserva;
+  resumo: string;
+}
+
 interface PropsDoFormulario {
   recurso: RecursoDaJanela;
   intervalo: IntervaloInicial;
   aoFechar: () => void;
   /** `data` é o dia da Reserva, `YYYY-MM-DD`: a agenda vai para a semana dele. */
-  aoCriar: (reserva: Reserva, data: string) => void;
+  aoCriar: (criada: Criada, data: string) => void;
 }
 
 function Erro({ erro }: { erro: Error }) {
@@ -60,7 +79,9 @@ function Erro({ erro }: { erro: Error }) {
     <Alert color="red" role="alert" title={tituloDasViolacoes(violacoes.length)}>
       <List size="sm">
         {violacoes.map((violacao) => (
-          <List.Item key={violacao.rn}>{linhaDaViolacao(violacao)}</List.Item>
+          <List.Item key={`${violacao.data ?? ''} ${violacao.rn} ${violacao.mensagem}`}>
+            {linhaDaViolacaoNaSerie(violacao, linhaDaViolacao(violacao))}
+          </List.Item>
         ))}
       </List>
     </Alert>
@@ -69,13 +90,22 @@ function Erro({ erro }: { erro: Error }) {
 
 /** A tela não checa RN: quem recusa é a API, e o quadro mostra todas as regras de uma vez. */
 function Formulario({ recurso, intervalo, aoFechar, aoCriar }: PropsDoFormulario) {
-  const criar = useCriarReserva();
+  const criarReserva = useCriarReserva();
+  const criarSerie = useCriarSerie();
+  const docente = useSessao().data?.usuario.perfil === 'Docente';
+  const [repetir, setRepetir] = useState(false);
+  const [ate, setAte] = useState('');
+  const [desmarcadas, setDesmarcadas] = useState<string[]>([]);
   const [data, setData] = useState(intervalo.data);
   const [inicio, setInicio] = useState(intervalo.inicio);
   const [fim, setFim] = useState(intervalo.fim);
   const [participantes, setParticipantes] = useState<number | string>('');
   const [finalidade, setFinalidade] = useState('');
   const espaco = recurso.tipo === 'Espaco';
+  const serie = docente && repetir;
+  const criar = serie ? criarSerie : criarReserva;
+  // RN21: a tela mostra as datas antes; quem recusa uma Série longa demais é a API.
+  const datas = serie && data && ate ? datasDaSerie(data, ate, POLITICA.semanasMaximasDaSerie) : [];
 
   const violacoes = criar.error instanceof ErroDaApi ? criar.error.violacoes : [];
   const intervaloEmErro = violacoes.some(({ campo }) => campo === 'intervalo');
@@ -84,10 +114,19 @@ function Formulario({ recurso, intervalo, aoFechar, aoCriar }: PropsDoFormulario
   function enviar(evento: FormEvent) {
     evento.preventDefault();
     const pessoas = typeof participantes === 'number' ? participantes : undefined;
-    criar.mutate(
-      corpoDaReserva(recurso.id, { data, inicio, fim, participantes: pessoas, finalidade }),
-      { onSuccess: (reserva) => aoCriar(reserva, data) },
-    );
+    const formulario = { data, inicio, fim, participantes: pessoas, finalidade };
+    if (serie) {
+      // Só as desmarcadas que ainda são datas da Série: mudar a Data ou o Até não as arrasta.
+      const excluidas = desmarcadas.filter((desmarcada) => datas.includes(desmarcada));
+      criarSerie.mutate(corpoDaSerie(recurso.id, formulario, ate, excluidas), {
+        onSuccess: ({ reservas }) =>
+          aoCriar({ reserva: reservas[0]!, resumo: resumoDaSerie(reservas) }, data),
+      });
+      return;
+    }
+    criarReserva.mutate(corpoDaReserva(recurso.id, formulario), {
+      onSuccess: (reserva) => aoCriar({ reserva, resumo: resumoDaCriada(reserva) }, data),
+    });
   }
 
   return (
@@ -140,6 +179,41 @@ function Formulario({ recurso, intervalo, aoFechar, aoCriar }: PropsDoFormulario
           value={finalidade}
           onChange={(evento) => setFinalidade(evento.currentTarget.value)}
         />
+        {docente && (
+          <Switch
+            label="Repetir toda semana (Série)"
+            checked={repetir}
+            onChange={(evento) => setRepetir(evento.currentTarget.checked)}
+          />
+        )}
+        {serie && (
+          <>
+            <TextInput
+              label="Até"
+              description={`A Série cobre no máximo ${POLITICA.semanasMaximasDaSerie} semanas.`}
+              type="date"
+              required
+              min={data}
+              value={ate}
+              onChange={(evento) => setAte(evento.currentTarget.value)}
+              error={violacoes.some(({ campo }) => campo === 'ate')}
+            />
+            {datas.length > 0 && (
+              <Checkbox.Group
+                label="Datas da Série"
+                description="Desmarque feriados e recessos: essas datas não viram Ocorrência."
+                value={datas.filter((d) => !desmarcadas.includes(d))}
+                onChange={(marcadas) => setDesmarcadas(datas.filter((d) => !marcadas.includes(d)))}
+              >
+                <SimpleGrid cols={{ base: 3, xs: 4 }} mt="xs" spacing="xs">
+                  {datas.map((d) => (
+                    <Checkbox key={d} value={d} label={diaEMes(d)} />
+                  ))}
+                </SimpleGrid>
+              </Checkbox.Group>
+            )}
+          </>
+        )}
         {recurso.restrito && (
           <Alert color="orange" variant="light">
             {avisoDoPedido(recurso.gestor.nome, { data, inicio })}
@@ -151,7 +225,7 @@ function Formulario({ recurso, intervalo, aoFechar, aoCriar }: PropsDoFormulario
             Cancelar
           </Button>
           <Button type="submit" loading={criar.isPending}>
-            {recurso.restrito ? 'Enviar pedido' : 'Reservar'}
+            {serie ? 'Criar Série' : recurso.restrito ? 'Enviar pedido' : 'Reservar'}
           </Button>
         </Group>
       </Stack>

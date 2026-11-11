@@ -18,10 +18,10 @@ export interface Quem {
 }
 
 /** O Gestor não cria Reservas: a rota só deixa passar Aluno e Docente. */
-type QuemReserva = Quem & { perfil: PerfilQueReserva };
+export type QuemReserva = Quem & { perfil: PerfilQueReserva };
 
 /** As RNs do Intervalo marcam Início e Fim juntos na tela. */
-const CAMPO_DO_INTERVALO = 'intervalo';
+export const CAMPO_DO_INTERVALO = 'intervalo';
 const CAMPO_DE_PARTICIPANTES = 'participantes';
 
 const NOME_DO_TIPO: Record<TipoRecurso, string> = { Espaco: 'Espaço', Equipamento: 'Equipamento' };
@@ -137,7 +137,7 @@ function noDia({ inicio, fim }: Intervalo) {
 }
 
 /** RN02. */
-function intervaloValido(pedido: Intervalo): Violacao[] {
+export function intervaloValido(pedido: Intervalo): Violacao[] {
   const dia = noDia(pedido);
   if (dia && dia.de % MEIA_HORA === 0 && dia.ate % MEIA_HORA === 0) return [];
   return [
@@ -150,7 +150,7 @@ function intervaloValido(pedido: Intervalo): Violacao[] {
 }
 
 /** RN03. Um Intervalo sem dia (RN02) não tem Horário de funcionamento para conferir. */
-function dentroDoHorario(pedido: Intervalo, horarios: Horario[]): Violacao[] {
+export function dentroDoHorario(pedido: Intervalo, horarios: Horario[]): Violacao[] {
   const dia = noDia(pedido);
   if (!dia) return [];
   const faixa = horarios.find(({ diaSemana }) => diaSemana === dia.diaSemana);
@@ -167,7 +167,7 @@ function dentroDoHorario(pedido: Intervalo, horarios: Horario[]): Violacao[] {
 }
 
 /** RN01: uma violação só, com todos os horários ocupados e sem dizer quem (RN22). */
-function semConflito(pedido: Intervalo, reservas: ReservaDoRecurso[]): Violacao[] {
+export function semConflito(pedido: Intervalo, reservas: ReservaDoRecurso[]): Violacao[] {
   if (pedido.fim <= pedido.inicio) return [];
   const conflitos = reservas.filter((reserva) => ehAtiva(reserva) && seSobrepoem(pedido, reserva));
   if (conflitos.length === 0) return [];
@@ -179,7 +179,7 @@ function semConflito(pedido: Intervalo, reservas: ReservaDoRecurso[]): Violacao[
  * RN04: uma violação só, com o motivo de cada Indisponibilidade (a agenda já mostra o motivo a
  * todos). Sem fim, a Indisponibilidade cobre tudo dali em diante.
  */
-function semIndisponibilidade(
+export function semIndisponibilidade(
   pedido: Intervalo,
   indisponibilidades: IndisponibilidadeDoRecurso[],
 ): Violacao[] {
@@ -211,30 +211,39 @@ export function violacoesDoIntervalo(intervalo: Intervalo, fatos: FatosDoInterva
 }
 
 /**
- * RN05. A Antecedência mínima também recusa início já passado. Em Recurso restrito vale a mínima
- * em Recurso restrito; a máxima é a do Perfil nos dois casos.
+ * RN05: a Antecedência mínima, que também recusa início já passado. Em Recurso restrito vale a
+ * mínima em Recurso restrito. A Série confere só esta em cada Ocorrência (RN21).
  */
-function dentroDaAntecedencia(
+export function dentroDaAntecedenciaMinima(
   { inicio }: Intervalo,
-  { perfil }: QuemReserva,
   { restrito }: FatosDaReserva['recurso'],
-  { antecedenciaMinimaMin, antecedenciaMinimaRestritoMin, antecedenciaMaximaDias }: Politica,
+  { antecedenciaMinimaMin, antecedenciaMinimaRestritoMin }: Politica,
   agora: Date,
 ): Violacao[] {
-  const antecedencia = inicio.getTime() - agora.getTime();
   const minima = restrito ? antecedenciaMinimaRestritoMin : antecedenciaMinimaMin;
-  if (antecedencia < minima * MINUTO) {
-    const onde = restrito ? 'Em Recurso restrito, o início' : 'O início';
-    return [
-      violacao(
-        'RN05',
-        `${onde} precisa ser pelo menos ${minima / 60}h depois de agora.`,
-        CAMPO_DO_INTERVALO,
-      ),
-    ];
-  }
-  const dias = antecedenciaMaximaDias[perfil];
-  if (antecedencia <= dias * DIA) return [];
+  if (inicio.getTime() - agora.getTime() >= minima * MINUTO) return [];
+  const onde = restrito ? 'Em Recurso restrito, o início' : 'O início';
+  return [
+    violacao(
+      'RN05',
+      `${onde} precisa ser pelo menos ${minima / 60}h depois de agora.`,
+      CAMPO_DO_INTERVALO,
+    ),
+  ];
+}
+
+/** RN05: a Antecedência máxima é a do Perfil, em Recurso restrito ou não. */
+function dentroDaAntecedencia(
+  pedido: Intervalo,
+  { perfil }: QuemReserva,
+  recurso: FatosDaReserva['recurso'],
+  politica: Politica,
+  agora: Date,
+): Violacao[] {
+  const minima = dentroDaAntecedenciaMinima(pedido, recurso, politica, agora);
+  if (minima.length > 0) return minima;
+  const dias = politica.antecedenciaMaximaDias[perfil];
+  if (pedido.inicio.getTime() - agora.getTime() <= dias * DIA) return [];
   return [
     violacao(
       'RN05',
@@ -248,7 +257,7 @@ function dentroDaAntecedencia(
  * RN07: a Cota conta as Reservas ativas, e as Ocorrências de uma mesma Série contam como uma só
  * (RN21). A chave separa Série e Reserva, porque os ids delas vêm de sequências diferentes.
  */
-function dentroDaCota(
+export function dentroDaCota(
   ativas: ReservaNaCota[],
   { perfil }: QuemReserva,
   { cota }: Politica,
@@ -267,7 +276,7 @@ function dentroDaCota(
 }
 
 /** RN06. Um Intervalo sem dia (RN02) não tem duração para conferir. */
-function dentroDaDuracao(
+export function dentroDaDuracao(
   pedido: Intervalo,
   { perfil }: QuemReserva,
   { tipo }: FatosDaReserva['recurso'],
@@ -287,7 +296,7 @@ function dentroDaDuracao(
 }
 
 /** RN08. Só Espaço tem Capacidade, e quem reserva informa os participantes. */
-function dentroDaCapacidade(
+export function dentroDaCapacidade(
   { participantes }: PedidoDeReserva,
   { capacidade }: FatosDaReserva['recurso'],
 ): Violacao[] {

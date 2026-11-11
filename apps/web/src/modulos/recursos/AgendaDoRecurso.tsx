@@ -18,7 +18,7 @@ import { addDays, format, parseISO } from 'date-fns';
 import { useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { useSessao } from '../conduta';
-import { JanelaDeReserva, reservaCobre, resumoDaCriada, semanaDe } from '../reservas';
+import { JanelaDeReserva, reservaCobre, semanaDe, type Criada } from '../reservas';
 import { periodoDaIndisponibilidade } from './indisponibilidade';
 import { ROTULO_DO_TIPO } from './FormularioDoRecurso';
 import {
@@ -287,16 +287,16 @@ export function AgendaDoRecurso() {
   const usuario = useSessao().data?.usuario;
   const ehGestor = usuario?.perfil === 'Gestor';
   const [intervalo, setIntervalo] = useState<IntervaloEscolhido | null>(null);
-  const [criada, setCriada] = useState<Reserva | null>(null);
+  const [criada, setCriada] = useState<Criada | null>(null);
   const recarregarAgenda = useRecarregarAgenda(id);
 
   function irPara(semana: string | null) {
     setParametros(semana ? { semana } : {});
   }
 
-  function aoCriar(reserva: Reserva, data: string) {
+  function aoCriar(nova: Criada, data: string) {
     setIntervalo(null);
-    setCriada(reserva);
+    setCriada(nova);
     void recarregarAgenda();
     irPara(semanaDe(data));
   }
@@ -355,12 +355,12 @@ export function AgendaDoRecurso() {
 
       {criada && (
         <Alert color="green" role="status" withCloseButton onClose={() => setCriada(null)}>
-          {resumoDaCriada(criada)}
+          {criada.resumo}
         </Alert>
       )}
 
       <Legenda />
-      <Grade agenda={agenda.data} destacada={criada} aoEscolher={setIntervalo} />
+      <Grade agenda={agenda.data} destacada={criada?.reserva ?? null} aoEscolher={setIntervalo} />
       {ehGestor ? (
         <JanelaDoGestor aberta={intervalo !== null} aoFechar={() => setIntervalo(null)} />
       ) : (
