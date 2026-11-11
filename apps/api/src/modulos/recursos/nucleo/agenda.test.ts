@@ -25,6 +25,7 @@ const agora = new Date('2026-11-10T08:00:00-03:00');
 function doBruno(dados: Partial<ReservaNaAgenda> = {}): ReservaNaAgenda {
   return {
     id: 50,
+    usuarioId: bruno.id,
     usuario: { id: bruno.id, nome: 'Bruno' },
     inicio: new Date('2026-11-10T10:00:00-03:00'),
     fim: new Date('2026-11-10T12:00:00-03:00'),

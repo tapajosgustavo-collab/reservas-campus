@@ -319,19 +319,24 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
       const recurso = await buscarRecurso(request, request.params.id);
       const semana = request.query.semana ?? segundaDaSemana(request.agora);
       const { inicio, fim } = limitesDaSemana(semana);
-      // Todas as Reservas que tocam a semana: quem escolhe as ativas é o núcleo.
-      const reservas = await request.tx.reserva.findMany({
+      // Todas as Reservas que tocam a semana: quem escolhe as ativas é o núcleo. Quem reservou e
+      // a Finalidade só são lidos para o Gestor responsável, o único que os vê (RN22).
+      const consulta = {
         where: { recursoId: recurso.id, inicio: { lt: fim }, fim: { gt: inicio } },
-        select: {
-          id: true,
-          usuario: { select: { id: true, nome: true } },
-          inicio: true,
-          fim: true,
-          status: true,
-          finalidade: true,
-        },
         orderBy: [{ inicio: 'asc' }, { id: 'asc' }],
-      });
+      } satisfies Prisma.ReservaFindManyArgs;
+      const colunas = { id: true, usuarioId: true, inicio: true, fim: true, status: true } as const;
+      const reservas =
+        quem.id === recurso.gestor.id
+          ? await request.tx.reserva.findMany({
+              ...consulta,
+              select: {
+                ...colunas,
+                usuario: { select: { id: true, nome: true } },
+                finalidade: true,
+              },
+            })
+          : await request.tx.reserva.findMany({ ...consulta, select: colunas });
       // As Indisponibilidades que tocam a semana, inclusive as sem fim que começaram antes.
       const indisponibilidades = await request.tx.indisponibilidade.findMany({
         where: {

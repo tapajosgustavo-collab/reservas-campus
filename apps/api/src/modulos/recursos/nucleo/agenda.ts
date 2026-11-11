@@ -7,14 +7,18 @@ export interface UsuarioDaReserva {
   nome: string;
 }
 
-/** O que a agenda precisa saber de cada Reserva do Recurso na semana. */
+/**
+ * O que a agenda precisa saber de cada Reserva do Recurso na semana. `usuario` e `finalidade` só
+ * vêm quando quem vê é o Gestor responsável: a casca não os lê para mais ninguém (RN22).
+ */
 export interface ReservaNaAgenda {
   id: number;
-  usuario: UsuarioDaReserva;
+  usuarioId: number;
   inicio: Date;
   fim: Date;
   status: Status;
-  finalidade: string | null;
+  usuario?: UsuarioDaReserva;
+  finalidade?: string | null;
 }
 
 export interface IndisponibilidadeNaAgenda {
@@ -63,9 +67,9 @@ export function agendaPara(quem: Quem, { reservas, ...fatos }: FatosDaAgenda): A
     ...fatos,
     ocupacoes: reservas
       .filter(ehAtiva)
-      .map(({ id, usuario, inicio, fim, status, finalidade }): OcupacaoNaAgenda => {
+      .map(({ id, usuarioId, inicio, fim, status, usuario, finalidade }): OcupacaoNaAgenda => {
         if (ehGestorResponsavel) return { inicio, fim, reservaId: id, status, usuario, finalidade };
-        if (usuario.id === quem.id) return { inicio, fim, minha: true, reservaId: id, status };
+        if (usuarioId === quem.id) return { inicio, fim, minha: true, reservaId: id, status };
         return { inicio, fim };
       }),
   };
