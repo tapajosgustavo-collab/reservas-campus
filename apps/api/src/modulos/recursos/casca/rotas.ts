@@ -138,7 +138,7 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
       });
       if (!recurso) throw naoEncontrado(id);
       const decisao = decidirEdicao(recurso, request.body, quem);
-      if (decisao.tipo === 'recusada') throw proibidoPelaRegra(decisao.violacoes);
+      if (decisao.tipo === 'proibida') throw proibidoPelaRegra(decisao.violacoes);
       if (recurso.tipo === 'Equipamento' && request.body.capacidade !== undefined) {
         throw new ErroApi('entrada_invalida', 'Equipamento não tem Capacidade.');
       }
