@@ -98,7 +98,12 @@ comBanco('US13 · Cancelar', () => {
   it('a dona também cancela uma Reserva Pendente → 200 Cancelada, sem Penalidade', async () => {
     const app = await umaAppAs('09:30');
     const ana = await umUsuario(banco);
-    const reserva = await umaReserva(banco, { usuarioId: ana.id, status: 'Pendente' });
+    const reserva = await umaReserva(banco, {
+      usuarioId: ana.id,
+      status: 'Pendente',
+      inicio: '2026-11-10T14:00:00-03:00',
+      fim: '2026-11-10T16:00:00-03:00',
+    });
 
     const resposta = await cancelar(app, ana.id, reserva.id);
 

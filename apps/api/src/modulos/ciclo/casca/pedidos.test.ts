@@ -295,7 +295,7 @@ comBanco('US11 · Decidir Pedidos', () => {
       {
         rn: 'RN12',
         nome: 'Expiração',
-        mensagem: 'O Prazo de decisão deste Pedido terminou às 12:00: ele expirou.',
+        mensagem: 'Este Pedido já expirou.',
       },
     ]);
   });

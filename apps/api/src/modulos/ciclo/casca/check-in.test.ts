@@ -124,7 +124,7 @@ comBanco('US12 · Fazer Check-in', () => {
       {
         rn: 'RN14',
         nome: 'Janela de Check-in',
-        mensagem: 'Reserva Pendente não aceita Check-in: ela ainda aguarda a decisão do Gestor.',
+        mensagem: 'Esta Reserva já foi encerrada e não aceita mais Check-in.',
       },
     ]);
   });

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import type { Banco } from '../../../comum/banco';
+import { RelogioFixo, type Relogio } from '../../../comum/relogio';
 import { sessaoDe, umaApp } from '../../../teste/app';
 import {
   bancoDeTeste,
@@ -29,13 +30,13 @@ function noIntervalo({ inicio, fim }: { inicio: string; fim: string }) {
   return new URLSearchParams({ inicio, fim }).toString();
 }
 
-async function buscar(query: string, usuarioId?: number) {
-  const app = await umaApp({ banco });
+async function buscar(query: string, usuarioId?: number, relogio?: Relogio) {
+  const app = await umaApp({ banco, ...(relogio ? { relogio } : {}) });
   const ana = usuarioId ?? (await umUsuario(banco, 'Aluno', { nome: 'Ana' })).id;
   const resposta = await app.inject({
     method: 'GET',
     url: `/api/recursos?${query}`,
-    cookies: sessaoDe(app, ana),
+    cookies: sessaoDe(app, ana, relogio?.agora()),
   });
   return resposta;
 }
@@ -128,7 +129,8 @@ comBanco('US06 · Buscar Recurso livre', () => {
     const lab = await umEspaco(banco, { nome: 'Laboratório', horarios: DIAS_UTEIS });
     await umaReserva(banco, { recursoId: lab.id, status: 'Pendente', ...terca('10:00', '12:00') });
 
-    const resposta = await buscar(noIntervalo(terca('10:00', '12:00')));
+    const relogio = new RelogioFixo(new Date('2026-11-10T07:00:00-03:00'));
+    const resposta = await buscar(noIntervalo(terca('10:00', '12:00')), undefined, relogio);
 
     expect(resposta.statusCode).toBe(200);
     expect(resposta.json()).toEqual([]);

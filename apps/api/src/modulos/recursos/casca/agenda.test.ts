@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import type { Banco } from '../../../comum/banco';
+import { RelogioFixo } from '../../../comum/relogio';
 import { sessaoDe, umaApp } from '../../../teste/app';
 import {
   bancoDeTeste,
@@ -74,7 +75,8 @@ comBanco('US07 · Agenda do Recurso', () => {
   });
 
   it('RN22 · Bruno vê a própria Reserva com minha, reservaId e status', async () => {
-    const app = await umaApp({ banco });
+    const relogio = new RelogioFixo(new Date('2026-11-10T07:00:00-03:00'));
+    const app = await umaApp({ banco, relogio });
     const { lab, bruno } = await cenario();
     const reserva = await umaReserva(banco, {
       usuarioId: bruno.id,
@@ -85,7 +87,7 @@ comBanco('US07 · Agenda do Recurso', () => {
     const resposta = await app.inject({
       method: 'GET',
       url: `/api/recursos/${lab.id}/agenda?semana=2026-11-09`,
-      cookies: sessaoDe(app, bruno.id),
+      cookies: sessaoDe(app, bruno.id, relogio.agora()),
     });
 
     expect(resposta.json().ocupacoes).toEqual([
@@ -100,7 +102,8 @@ comBanco('US07 · Agenda do Recurso', () => {
   });
 
   it('RN22 · Carlos, Gestor responsável, vê quem reservou, o Status e a Finalidade', async () => {
-    const app = await umaApp({ banco });
+    const relogio = new RelogioFixo(new Date('2026-11-10T07:00:00-03:00'));
+    const app = await umaApp({ banco, relogio });
     const { carlos, lab, bruno } = await cenario();
     const reserva = await umaReserva(banco, {
       usuarioId: bruno.id,
@@ -112,7 +115,7 @@ comBanco('US07 · Agenda do Recurso', () => {
     const resposta = await app.inject({
       method: 'GET',
       url: `/api/recursos/${lab.id}/agenda?semana=2026-11-09`,
-      cookies: sessaoDe(app, carlos.id),
+      cookies: sessaoDe(app, carlos.id, relogio.agora()),
     });
 
     expect(resposta.json().ocupacoes).toEqual([
