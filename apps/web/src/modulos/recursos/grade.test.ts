@@ -112,6 +112,10 @@ describe('US07 · Grade semanal da agenda', () => {
     expect(intervaloDoClique(terca, 22 * 60 + 30, [], agora)).toMatchObject({ fim: 23 * 60 });
   });
 
+  it('RN01 · clique numa célula que deixou de ser livre → nenhum Intervalo', () => {
+    expect(intervaloDoClique(terca, 10 * 60, [dasDezAoMeioDia], agora)).toBeNull();
+  });
+
   it('RN04 · célula dentro de uma Indisponibilidade é Indisponível, mesmo sem fim', () => {
     const pintura = {
       inicio: '2026-11-10T14:00:00-03:00',
@@ -156,15 +160,41 @@ describe('US07 · Grade semanal da agenda', () => {
     });
   });
 
-  it('arrastar também não atravessa Sua reserva nem o Passado', () => {
+  it('arrastar não atravessa Sua reserva', () => {
     const minha: Ocupacao = { ...dasDezAoMeioDia, minha: true, reservaId: 1, status: 'Confirmada' };
 
     expect(intervaloDoArraste(terca, 13 * 60, 9 * 60, [minha], agora)).toMatchObject({
       inicio: 12 * 60,
     });
+  });
+
+  it('arrastar não entra no Passado', () => {
     expect(intervaloDoArraste(terca, 9 * 60, 7 * 60, [], agora)).toMatchObject({
       inicio: 8 * 60,
     });
+  });
+
+  it('arrastar não passa do fechamento: das 22h em direção às 23h30, num dia que fecha às 23h', () => {
+    expect(intervaloDoArraste(terca, 22 * 60, 23 * 60 + 30, [], agora)).toEqual({
+      data: '2026-11-10',
+      inicio: 22 * 60,
+      fim: 23 * 60,
+    });
+  });
+
+  it('RN04 · arrastar para antes de uma Indisponibilidade sem fim', () => {
+    const foraDeUso = { inicio: '2026-11-10T20:00:00-03:00', fim: null, motivo: 'Fora de uso' };
+
+    expect(intervaloDoArraste(terca, 18 * 60, 22 * 60, [], agora, [foraDeUso])).toEqual({
+      data: '2026-11-10',
+      inicio: 18 * 60,
+      fim: 20 * 60,
+    });
+  });
+
+  it('RN01 · início que deixou de ser livre (a agenda recarregou no meio do arraste) → nenhum Intervalo', () => {
+    expect(intervaloDoArraste(terca, 10 * 60, 13 * 60, [dasDezAoMeioDia], agora)).toBeNull();
+    expect(intervaloDoArraste(terca, 7 * 60, 9 * 60, [], agora)).toBeNull();
   });
 
   it('RN04 · arrastar não entra na Indisponibilidade nem a atravessa, nas duas direções', () => {
