@@ -31,3 +31,18 @@ export async function conferirAcessibilidade(page: Page) {
     `Violações de acessibilidade encontradas:\n${JSON.stringify(graves, null, 2)}`,
   ).toEqual([]);
 }
+
+/** RN05: o primeiro Intervalo de 30 minutos que a Antecedência mínima aceita a partir do `agora`. */
+export function proximoIntervaloReservavel(_agora: string): { inicio: Date; fim: Date } {
+  throw new Error('não implementado');
+}
+
+/** RN14: o instante em que a janela do Check-in abre. */
+export function janelaDoCheckIn(_inicio: Date): Date {
+  throw new Error('não implementado');
+}
+
+/** RNF08: o instante em São Paulo, como a barra do relógio e Minhas reservas mostram. */
+export function emSaoPaulo(_instante: Date): { campo: string; data: string; hora: string } {
+  throw new Error('não implementado');
+}
