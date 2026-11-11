@@ -5,6 +5,7 @@ import type { Quem } from './recurso';
 
 const ana = { id: 1, perfil: 'Aluno' } as const;
 const bruno = { id: 2, perfil: 'Aluno' } as const;
+const carlos = { id: 3, perfil: 'Gestor' } as const;
 
 const lab: Recurso = {
   id: 10,
@@ -14,20 +15,22 @@ const lab: Recurso = {
   capacidade: 30,
   patrimonio: null,
   restrito: false,
-  gestor: { id: 3, nome: 'Carlos' },
+  gestor: { id: carlos.id, nome: 'Carlos' },
   horarios: [{ diaSemana: 2, abre: 7 * 60, fecha: 23 * 60 }],
 };
 
 const agora = new Date('2026-11-10T08:00:00-03:00');
 
-/** Reserva do Bruno no Laboratório 3, terça 10/11, 10h–12h. */
+/** Reserva do Bruno no Laboratório 3, terça 10/11, 10h–12h, para estudar. */
 function doBruno(dados: Partial<ReservaNaAgenda> = {}): ReservaNaAgenda {
   return {
     id: 50,
     usuarioId: bruno.id,
+    usuario: { id: bruno.id, nome: 'Bruno' },
     inicio: new Date('2026-11-10T10:00:00-03:00'),
     fim: new Date('2026-11-10T12:00:00-03:00'),
     status: 'Confirmada',
+    finalidade: 'Estudo para a prova',
     ...dados,
   };
 }
@@ -76,6 +79,39 @@ describe('RN22 · Agenda sem nomes', () => {
         fim: new Date('2026-11-10T12:00:00-03:00'),
       },
     ]);
+  });
+
+  it('RN22 · Carlos, Gestor responsável, vê reservaId, status, quem reservou e a Finalidade', () => {
+    expect(agenda([doBruno()], carlos).ocupacoes).toEqual([
+      {
+        inicio: new Date('2026-11-10T10:00:00-03:00'),
+        fim: new Date('2026-11-10T12:00:00-03:00'),
+        reservaId: 50,
+        status: 'Confirmada',
+        usuario: { id: bruno.id, nome: 'Bruno' },
+        finalidade: 'Estudo para a prova',
+      },
+    ]);
+  });
+
+  it('RN22 · Carlos vê o Pedido Pendente do Bruno com o Status, sem marcar como dele', () => {
+    const [ocupacao] = agenda([doBruno({ status: 'Pendente' })], carlos).ocupacoes;
+
+    expect(ocupacao).toMatchObject({ status: 'Pendente', usuario: { nome: 'Bruno' } });
+    expect(ocupacao).not.toHaveProperty('minha');
+  });
+
+  it('RN22 · Reserva sem Finalidade: Carlos vê finalidade null', () => {
+    expect(agenda([doBruno({ finalidade: null })], carlos).ocupacoes).toEqual([
+      expect.objectContaining({ usuario: { id: bruno.id, nome: 'Bruno' }, finalidade: null }),
+    ]);
+  });
+
+  it('RN22 · Bruno, dono, não recebe o próprio nome nem a Finalidade na agenda', () => {
+    const [ocupacao] = agenda([doBruno()], bruno).ocupacoes;
+
+    expect(ocupacao).not.toHaveProperty('usuario');
+    expect(ocupacao).not.toHaveProperty('finalidade');
   });
 });
 

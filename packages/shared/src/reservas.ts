@@ -78,7 +78,7 @@ export const esquemaPaginaDeReservas = z.object({
 
 export type PaginaDeReservas = z.infer<typeof esquemaPaginaDeReservas>;
 
-const esquemaPessoa = z.object({ id: z.number().int(), nome: z.string() });
+export const esquemaPessoa = z.object({ id: z.number().int(), nome: z.string() });
 
 export const esquemaTransicao = z.object({
   de: esquemaStatus.nullable().describe('Vazio na primeira transição'),

@@ -138,7 +138,7 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
       });
       if (!recurso) throw naoEncontrado(id);
       const decisao = decidirEdicao(recurso, request.body, quem);
-      if (decisao.tipo === 'recusada') throw proibidoPelaRegra(decisao.violacoes);
+      if (decisao.tipo === 'proibida') throw proibidoPelaRegra(decisao.violacoes);
       if (recurso.tipo === 'Equipamento' && request.body.capacidade !== undefined) {
         throw new ErroApi('entrada_invalida', 'Equipamento não tem Capacidade.');
       }
@@ -306,7 +306,8 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
     '/api/recursos/:id/agenda',
     {
       schema: {
-        summary: 'Agenda da semana do Recurso; de quem não é o dono, só o Intervalo (RN22)',
+        summary:
+          'Agenda da semana do Recurso; só o dono e o Gestor responsável veem além do Intervalo (RN22)',
         tags: ['recursos'],
         params: esquemaIdDoRecurso,
         querystring: esquemaBuscarAgenda,
@@ -318,12 +319,24 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
       const recurso = await buscarRecurso(request, request.params.id);
       const semana = request.query.semana ?? segundaDaSemana(request.agora);
       const { inicio, fim } = limitesDaSemana(semana);
-      // Todas as Reservas que tocam a semana: quem escolhe as ativas é o núcleo.
-      const reservas = await request.tx.reserva.findMany({
+      // Todas as Reservas que tocam a semana: quem escolhe as ativas é o núcleo. Quem reservou e
+      // a Finalidade só são lidos para o Gestor responsável, o único que os vê (RN22).
+      const consulta = {
         where: { recursoId: recurso.id, inicio: { lt: fim }, fim: { gt: inicio } },
-        select: { id: true, usuarioId: true, inicio: true, fim: true, status: true },
         orderBy: [{ inicio: 'asc' }, { id: 'asc' }],
-      });
+      } satisfies Prisma.ReservaFindManyArgs;
+      const colunas = { id: true, usuarioId: true, inicio: true, fim: true, status: true } as const;
+      const reservas =
+        quem.id === recurso.gestor.id
+          ? await request.tx.reserva.findMany({
+              ...consulta,
+              select: {
+                ...colunas,
+                usuario: { select: { id: true, nome: true } },
+                finalidade: true,
+              },
+            })
+          : await request.tx.reserva.findMany({ ...consulta, select: colunas });
       // As Indisponibilidades que tocam a semana, inclusive as sem fim que começaram antes.
       const indisponibilidades = await request.tx.indisponibilidade.findMany({
         where: {

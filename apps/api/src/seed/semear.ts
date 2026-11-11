@@ -86,6 +86,31 @@ const RESERVAS: {
     ate: 3,
     criadaNoDia: -1,
   },
+  // D+1, 10h–12h: a Reserva que a "Dedetização" da Dora cancela ao vivo (RN04, cena 1).
+  {
+    quem: 'bia.demo@unifesp.br',
+    recurso: 'Sala de estudos 3',
+    dias: 1,
+    das: 2,
+    ate: 4,
+    criadaNoDia: -1,
+  },
+];
+
+/**
+ * As Indisponibilidades do #18 (§3), de T0 + `dias` até T0 + `ateDias`, ou sem fim com
+ * `ateDias: null`. Cada uma foi criada pelo Gestor no próprio início.
+ */
+const INDISPONIBILIDADES: {
+  recurso: string;
+  dias: number;
+  ateDias: number | null;
+  motivo: string;
+}[] = [
+  // Do T0 a D+2: tira a Sala 102 da busca da Ana (cena 2).
+  { recurso: 'Sala 102', dias: 0, ateDias: 2, motivo: 'Manutenção do ar-condicionado' },
+  // Desde D−3, sem fim: o Recurso tirado de uso da cena 1.
+  { recurso: 'Projetor Epson P-124', dias: -3, ateDias: null, motivo: 'Extraviado' },
 ];
 
 const MEIA_HORA = 30 * 60_000;
@@ -155,6 +180,20 @@ export async function semear(banco: Banco, agora: Date): Promise<'semeado' | 'ig
           criadaEm,
         },
         transicao: { de: null, para: 'Confirmada', em: criadaEm, porId: usuarioId },
+      });
+    }
+
+    for (const { recurso, dias, ateDias, motivo } of INDISPONIBILIDADES) {
+      const inicio = noT0(t0, dias);
+      await recursos.executar(tx, {
+        evento: 'IndisponibilidadeCriada',
+        indisponibilidade: {
+          recursoId: idDoRecurso(recurso),
+          inicio,
+          fim: ateDias === null ? null : noT0(t0, ateDias),
+          motivo,
+          criadaEm: inicio,
+        },
       });
     }
     return 'semeado';

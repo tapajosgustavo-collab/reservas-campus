@@ -53,7 +53,7 @@ export function linhasDaGrade(dias: DiaDaGrade[]): number[] {
 }
 
 /** O instante de `minuto` do dia `data` em São Paulo (1440 = 0h do dia seguinte). */
-function instanteDe(data: string, minuto: number): number {
+export function instanteDe(data: string, minuto: number): number {
   const [ano, mes, dia] = data.split('-').map(Number);
   return new TZDate(ano!, mes! - 1, dia!, 0, minuto, FUSO).getTime();
 }
@@ -71,11 +71,53 @@ function indisponivelNa(
   );
 }
 
+/** A Ocupação que toca a meia hora que começa em `minuto`, se houver. */
+function ocupacaoNa(dia: DiaDaGrade, minuto: number, ocupacoes: Ocupacao[]) {
+  const inicio = instanteDe(dia.data, minuto);
+  const fim = instanteDe(dia.data, minuto + MEIA_HORA);
+  return ocupacoes.find((o) => Date.parse(o.inicio) < fim && Date.parse(o.fim) > inicio);
+}
+
+/** Uma célula da grade: o estado e a Ocupação que a ocupa, achada uma vez só. */
+export interface CelulaDaGrade {
+  estado: EstadoDaCelula;
+  ocupacao: Ocupacao | undefined;
+}
+
 /**
  * O que a célula de meia hora mostra. A Reserva (inclusive a Em uso dentro de uma Indisponibilidade,
  * RN04) e a Indisponibilidade aparecem mesmo no passado; o resto do que já começou é Passado, pelo
  * `agora` da API. Sem pré-bloqueio por Política: quem explica é a RN.
  */
+export function celulaDaGrade(
+  dia: DiaDaGrade,
+  minuto: number,
+  ocupacoes: Ocupacao[],
+  agora: Date,
+  indisponibilidades: IndisponibilidadeNaAgenda[] = [],
+): CelulaDaGrade {
+  if (minuto < dia.abre || minuto + MEIA_HORA > dia.fecha) {
+    return { estado: 'fechado', ocupacao: undefined };
+  }
+  const ocupacao = ocupacaoNa(dia, minuto, ocupacoes);
+  return { estado: estadoCom(dia, minuto, ocupacao, agora, indisponibilidades), ocupacao };
+}
+
+function estadoCom(
+  dia: DiaDaGrade,
+  minuto: number,
+  ocupacao: Ocupacao | undefined,
+  agora: Date,
+  indisponibilidades: IndisponibilidadeNaAgenda[],
+): EstadoDaCelula {
+  if (ocupacao?.minha)
+    return ocupacao.status === 'Pendente' ? 'minha-pendente' : 'minha-confirmada';
+  if (ocupacao) return 'ocupado';
+  if (indisponivelNa(dia, minuto, indisponibilidades)) return 'indisponivel';
+  return instanteDe(dia.data, minuto) < agora.getTime() ? 'passado' : 'livre';
+}
+
+/** Só o estado da célula; veja `celulaDaGrade`. */
 export function estadoDaCelula(
   dia: DiaDaGrade,
   minuto: number,
@@ -83,44 +125,42 @@ export function estadoDaCelula(
   agora: Date,
   indisponibilidades: IndisponibilidadeNaAgenda[] = [],
 ): EstadoDaCelula {
-  if (minuto < dia.abre || minuto + MEIA_HORA > dia.fecha) return 'fechado';
-  const inicio = instanteDe(dia.data, minuto);
-  const fim = instanteDe(dia.data, minuto + MEIA_HORA);
-  const ocupacao = ocupacoes.find((o) => Date.parse(o.inicio) < fim && Date.parse(o.fim) > inicio);
-  if (ocupacao?.minha)
-    return ocupacao.status === 'Pendente' ? 'minha-pendente' : 'minha-confirmada';
-  if (ocupacao) return 'ocupado';
-  if (indisponivelNa(dia, minuto, indisponibilidades)) return 'indisponivel';
-  return inicio < agora.getTime() ? 'passado' : 'livre';
+  return celulaDaGrade(dia, minuto, ocupacoes, agora, indisponibilidades).estado;
 }
 
-/** Clique num horário livre: 1h, ou 30 min se a meia hora seguinte não estiver livre. */
+/**
+ * Clique num horário livre: 1h, ou 30 min se a meia hora seguinte não estiver livre. É um arraste
+ * de uma meia hora para a seguinte, pela mesma regra; `null` se a célula não estiver livre.
+ */
 export function intervaloDoClique(
   dia: DiaDaGrade,
   minuto: number,
   ocupacoes: Ocupacao[],
   agora: Date,
   indisponibilidades: IndisponibilidadeNaAgenda[] = [],
-): IntervaloEscolhido {
-  const seguinte = estadoDaCelula(dia, minuto + MEIA_HORA, ocupacoes, agora, indisponibilidades);
-  const seguinteLivre = seguinte === 'livre';
-  return { data: dia.data, inicio: minuto, fim: minuto + (seguinteLivre ? 2 : 1) * MEIA_HORA };
+): IntervaloEscolhido | null {
+  return intervaloDoArraste(dia, minuto, minuto + MEIA_HORA, ocupacoes, agora, indisponibilidades);
 }
 
 /**
- * Arrastar de uma célula a outra do mesmo dia: o Intervalo vai de `de` na direção de `ate`, em
- * qualquer direção, e para na última célula antes de uma bloqueada, sem atravessá-la.
+ * Arrastar de uma célula livre a outra do mesmo dia: o Intervalo vai de `de` na direção de `ate`,
+ * em qualquer direção, e para na última célula livre antes da primeira que não é livre (Reserva,
+ * Sua reserva, Indisponível, Fechado ou Passado), sem atravessá-la. A tela pinta só esse trecho.
+ * `null` se a própria célula de início não estiver livre (a agenda recarregou no meio do arraste).
  */
 export function intervaloDoArraste(
   dia: DiaDaGrade,
   de: number,
   ate: number,
+  ocupacoes: Ocupacao[],
+  agora: Date,
   indisponibilidades: IndisponibilidadeNaAgenda[] = [],
-): IntervaloEscolhido {
-  // Bloqueada é a célula Indisponível (RN04). As ocupadas por Reserva entram aqui no #95.
-  const bloqueada = (minuto: number) => indisponivelNa(dia, minuto, indisponibilidades);
+): IntervaloEscolhido | null {
+  const livre = (minuto: number) =>
+    estadoDaCelula(dia, minuto, ocupacoes, agora, indisponibilidades) === 'livre';
+  if (!livre(de)) return null;
   const passo = ate >= de ? MEIA_HORA : -MEIA_HORA;
   let ultima = de;
-  while (ultima !== ate && !bloqueada(ultima + passo)) ultima += passo;
+  while (ultima !== ate && livre(ultima + passo)) ultima += passo;
   return { data: dia.data, inicio: Math.min(de, ultima), fim: Math.max(de, ultima) + MEIA_HORA };
 }

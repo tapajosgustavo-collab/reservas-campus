@@ -22,8 +22,8 @@ import { JanelaDeReserva, reservaCobre, semanaDe, type Criada } from '../reserva
 import { periodoDaIndisponibilidade } from './indisponibilidade';
 import { ROTULO_DO_TIPO } from './FormularioDoRecurso';
 import {
+  celulaDaGrade,
   diasDaGrade,
-  estadoDaCelula,
   intervaloDoArraste,
   intervaloDoClique,
   linhasDaGrade,
@@ -34,6 +34,7 @@ import {
 } from './grade';
 import { DIAS_DA_SEMANA, rotuloDoMinuto } from './horario';
 import { useAgenda, useRecarregarAgenda } from './recursos';
+import { reservaNaCelula } from './visaoDoGestor';
 
 const ROTULO_DO_ESTADO: Record<EstadoDaCelula, string> = {
   livre: 'Livre',
@@ -134,6 +135,8 @@ interface Arraste {
   dia: DiaDaGrade;
   de: number;
   ate: number;
+  /** O que o soltar escolhe e a tela pinta, calculado com a agenda de quando o ponteiro passou. */
+  trecho: IntervaloEscolhido;
 }
 
 function Grade({
@@ -161,7 +164,9 @@ function Grade({
   function aoApertar(evento: PointerEvent, dia: DiaDaGrade, minuto: number) {
     if (evento.pointerType === 'touch' || evento.button !== 0) return;
     evento.preventDefault();
-    mudarArraste({ dia, de: minuto, ate: minuto });
+    const trecho = trechoDoArraste(dia, minuto, minuto);
+    if (!trecho) return;
+    mudarArraste({ dia, de: minuto, ate: minuto, trecho });
     // Soltar em qualquer lugar termina o arraste; numa célula só, quem trata é o clique. Se o
     // navegador cancelar o ponteiro (menu de contexto, troca de janela), o arraste é descartado.
     const fimDoArraste = new AbortController();
@@ -171,9 +176,7 @@ function Grade({
         fimDoArraste.abort();
         const fim = arrasteAtual.current;
         mudarArraste(null);
-        if (fim && fim.de !== fim.ate) {
-          aoEscolher(intervaloDoArraste(fim.dia, fim.de, fim.ate, agenda.indisponibilidades));
-        }
+        if (fim && fim.de !== fim.ate) aoEscolher(fim.trecho);
       },
       { signal: fimDoArraste.signal },
     );
@@ -187,16 +190,22 @@ function Grade({
     );
   }
 
+  // Com a agenda deste render: se ela recarregou e o início deixou de ser livre, o arraste acaba.
   function aoPassar(dia: DiaDaGrade, minuto: number) {
     const atual = arrasteAtual.current;
-    if (atual?.dia.data === dia.data) mudarArraste({ ...atual, ate: minuto });
+    if (atual?.dia.data !== dia.data) return;
+    const trecho = trechoDoArraste(dia, atual.de, minuto);
+    mudarArraste(trecho && { ...atual, ate: minuto, trecho });
   }
 
+  function trechoDoArraste(dia: DiaDaGrade, de: number, ate: number) {
+    return intervaloDoArraste(dia, de, ate, agenda.ocupacoes, agora, agenda.indisponibilidades);
+  }
+
+  // Pinta só o que o soltar vai escolher: o mesmo trecho guardado no arraste.
   function escolhida(dia: DiaDaGrade, minuto: number) {
-    if (arraste?.dia.data !== dia.data) return false;
-    return (
-      minuto >= Math.min(arraste.de, arraste.ate) && minuto <= Math.max(arraste.de, arraste.ate)
-    );
+    const trecho = arraste?.trecho;
+    return trecho?.data === dia.data && minuto >= trecho.inicio && minuto < trecho.fim;
   }
 
   if (dias.length === 0) {
@@ -223,14 +232,17 @@ function Grade({
                 {rotuloDoMinuto(minuto)}
               </Table.Th>
               {dias.map((dia) => {
-                const estado = estadoDaCelula(
+                const { estado, ocupacao } = celulaDaGrade(
                   dia,
                   minuto,
                   agenda.ocupacoes,
                   agora,
                   agenda.indisponibilidades,
                 );
-                const rotulo = `${rotuloDoDia(dia)}, ${rotuloDoMinuto(minuto)}: ${ROTULO_DO_ESTADO[estado]}`;
+                // Só o Gestor responsável recebe o nome da API (RN22); para os outros, é null.
+                const reserva =
+                  estado === 'ocupado' ? reservaNaCelula(dia, minuto, ocupacao) : null;
+                const rotulo = `${rotuloDoDia(dia)}, ${rotuloDoMinuto(minuto)}: ${ROTULO_DO_ESTADO[estado]}${reserva ? `, ${reserva.descricao}` : ''}`;
                 return (
                   <Table.Td
                     key={dia.data}
@@ -238,6 +250,7 @@ function Grade({
                     // Contém o VisuallyHidden (absoluto) no quadro que rola: sem isso, a página rola no celular.
                     pos="relative"
                     h={28}
+                    title={reserva?.descricao}
                     style={{
                       ...(escolhida(dia, minuto) ? ESTILO_ESCOLHIDO : ESTILO_DO_ESTADO[estado]),
                       ...(destacada &&
@@ -253,18 +266,48 @@ function Grade({
                         aria-label={rotulo}
                         onPointerDown={(evento) => aoApertar(evento, dia, minuto)}
                         onPointerEnter={() => aoPassar(dia, minuto)}
-                        onClick={() =>
-                          aoEscolher(
-                            intervaloDoClique(
-                              dia,
-                              minuto,
-                              agenda.ocupacoes,
-                              agora,
-                              agenda.indisponibilidades,
-                            ),
-                          )
-                        }
+                        onClick={() => {
+                          const intervalo = intervaloDoClique(
+                            dia,
+                            minuto,
+                            agenda.ocupacoes,
+                            agora,
+                            agenda.indisponibilidades,
+                          );
+                          if (intervalo) aoEscolher(intervalo);
+                        }}
                       />
+                    ) : reserva ? (
+                      // RN22: o Gestor responsável abre o detalhe, que mostra a Finalidade (no toque
+                      // não há `title`). Uma parada de Tab por Reserva; mouse e toque valem em
+                      // qualquer célula dela.
+                      <UnstyledButton
+                        component={Link}
+                        to={reserva.endereco}
+                        w="100%"
+                        h="100%"
+                        display="block"
+                        aria-label={rotulo}
+                        tabIndex={reserva.primeira ? 0 : -1}
+                      >
+                        {reserva.primeira && (
+                          // Absoluto e em até duas linhas (nome, depois Status): não alarga a
+                          // coluna nem a grade no celular.
+                          <Text
+                            aria-hidden
+                            size="xs"
+                            lineClamp={2}
+                            pos="absolute"
+                            inset={0}
+                            px={4}
+                            lh="14px"
+                            c="dark.9"
+                            style={{ wordBreak: 'break-word' }}
+                          >
+                            {reserva.texto}
+                          </Text>
+                        )}
+                      </UnstyledButton>
                     ) : (
                       <VisuallyHidden>{rotulo}</VisuallyHidden>
                     )}
@@ -279,7 +322,7 @@ function Grade({
   );
 }
 
-/** US07: a semana do Recurso em meia hora, sem dizer quem reservou (RN22). */
+/** US07: a semana do Recurso em meia hora. Só o Gestor responsável vê quem reservou (RN22). */
 export function AgendaDoRecurso() {
   const id = Number(useParams().id);
   const [parametros, setParametros] = useSearchParams();
@@ -311,11 +354,12 @@ export function AgendaDoRecurso() {
   }
 
   const { semana, recurso, indisponibilidades } = agenda.data;
+  const ehGestorResponsavel = usuario?.id === recurso.gestor.id;
   return (
     <Stack gap="md">
       <Group justify="space-between" align="flex-start">
         <Cabecalho recurso={recurso} />
-        {usuario?.id === recurso.gestor.id && (
+        {ehGestorResponsavel && (
           <Button
             component={Link}
             to={`/gestao/recursos/${recurso.id}/indisponibilidade`}
@@ -360,6 +404,12 @@ export function AgendaDoRecurso() {
       )}
 
       <Legenda />
+      {ehGestorResponsavel && (
+        <Text size="sm" c="dimmed">
+          Como Gestor responsável, você vê em cada Reserva quem reservou e o Status. Toque ou clique
+          numa Reserva para ver o detalhe e a Finalidade.
+        </Text>
+      )}
       <Grade agenda={agenda.data} destacada={criada?.reserva ?? null} aoEscolher={setIntervalo} />
       {ehGestor ? (
         <JanelaDoGestor aberta={intervalo !== null} aoFechar={() => setIntervalo(null)} />
