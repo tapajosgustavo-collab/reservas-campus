@@ -3,6 +3,7 @@ import { decidirAprovacao, decidirRecusa, type FatosDoPedido } from './pedido';
 
 const CARLOS = { id: 3 };
 const DORA = { id: 4 };
+const ANA = { id: 7 };
 
 /** Em São Paulo. A Reserva padrão é na quarta, 11/11/2026, das 14h às 16h. */
 const em = (diaHora: string) => new Date(`2026-11-${diaHora}:00-03:00`);
@@ -15,16 +16,18 @@ const fatos = (
 ): FatosDoPedido => ({
   reserva: {
     id: 42,
+    usuarioId: ANA.id,
     status: 'Pendente',
     inicio: em('11T14:00'),
+    fim: em('11T16:00'),
     ...reserva,
-    recurso: { gestorId: CARLOS.id },
+    recurso: { nome: 'Laboratório de Química', gestorId: CARLOS.id },
   },
   politica: POLITICA,
 });
 
 describe('US11 · Decidir Pedidos', () => {
-  it('o Gestor responsável aprova o Pedido Pendente → Confirmada, com a transição feita por ele', () => {
+  it('o Gestor responsável aprova o Pedido Pendente → Confirmada, com a transição feita por ele e Notificação ao solicitante (US16)', () => {
     expect(decidirAprovacao(fatos(), CARLOS, em('10T09:00'))).toEqual({
       tipo: 'aceita',
       efeitos: [
@@ -33,11 +36,22 @@ describe('US11 · Decidir Pedidos', () => {
           reservaId: 42,
           transicao: { de: 'Pendente', para: 'Confirmada', em: em('10T09:00'), porId: CARLOS.id },
         },
+        {
+          evento: 'NotificacaoEmitida',
+          notificacao: {
+            destinatarioId: ANA.id,
+            tipo: 'Aprovacao',
+            mensagem:
+              'Seu Pedido de Laboratório de Química (11/11/2026, das 14:00 às 16:00) foi aprovado.',
+            em: em('10T09:00'),
+            reservaId: 42,
+          },
+        },
       ],
     });
   });
 
-  it('o Gestor responsável recusa o Pedido com justificativa → Recusada, com a justificativa na transição', () => {
+  it('o Gestor responsável recusa o Pedido com justificativa → Recusada, com a justificativa na transição e na Notificação (US16)', () => {
     const recusa = { justificativa: '  Laboratório reservado para a banca de TCC.  ' };
     expect(decidirRecusa(fatos(), recusa, CARLOS, em('10T09:00'))).toEqual({
       tipo: 'aceita',
@@ -51,6 +65,17 @@ describe('US11 · Decidir Pedidos', () => {
             em: em('10T09:00'),
             porId: CARLOS.id,
             observacao: 'Laboratório reservado para a banca de TCC.',
+          },
+        },
+        {
+          evento: 'NotificacaoEmitida',
+          notificacao: {
+            destinatarioId: ANA.id,
+            tipo: 'Recusa',
+            mensagem:
+              'Seu Pedido de Laboratório de Química (11/11/2026, das 14:00 às 16:00) foi recusado: Laboratório reservado para a banca de TCC.',
+            em: em('10T09:00'),
+            reservaId: 42,
           },
         },
       ],

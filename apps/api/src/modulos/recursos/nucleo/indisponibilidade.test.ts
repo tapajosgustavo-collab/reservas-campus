@@ -8,9 +8,10 @@ import {
 
 const carlos = { id: 3, perfil: 'Gestor' } as const;
 const dora = { id: 4, perfil: 'Gestor' } as const;
+const bia = { id: 8 } as const;
 
 /** A Sala 102, cadastrada pelo Carlos. */
-const sala102 = { id: 10, gestorId: carlos.id } as const;
+const sala102 = { id: 10, nome: 'Sala 102', gestorId: carlos.id } as const;
 
 const agora = new Date('2026-11-10T08:00:00-03:00');
 
@@ -27,6 +28,7 @@ const CAUSA = 'Cancelamento pelo sistema: o Recurso ficou indisponível (Troca d
 function daBia(dados: Partial<ReservaNoPeriodo> = {}): ReservaNoPeriodo {
   return {
     id: 50,
+    usuarioId: bia.id,
     inicio: new Date('2026-11-11T10:00:00-03:00'),
     fim: new Date('2026-11-11T12:00:00-03:00'),
     status: 'Confirmada',
@@ -49,6 +51,21 @@ const canceladas = (...reservas: { id: number; de: Status }[]) => ({
   reservas,
   em: agora,
   observacao: CAUSA,
+});
+
+const notificada = (
+  reservaId = 50,
+  intervalo = '11/11/2026, das 10:00 às 12:00',
+  destinatarioId: number = bia.id,
+) => ({
+  evento: 'NotificacaoEmitida',
+  notificacao: {
+    destinatarioId,
+    tipo: 'CancelamentoPeloSistema',
+    mensagem: `Sua Reserva de Sala 102 (${intervalo}) foi cancelada pelo sistema: o Recurso ficou indisponível (Troca do ar-condicionado).`,
+    em: agora,
+    reservaId,
+  },
 });
 
 describe('RN13 · Gestor do Recurso', () => {
@@ -100,17 +117,17 @@ describe('RN04 · Indisponibilidade', () => {
     expect(decidir([])).toEqual({ tipo: 'aceita', efeitos: [criada()] });
   });
 
-  it('RN04 · Reserva Confirmada da Bia no período → Cancelamento pelo sistema com a causa, sem Penalidade', () => {
+  it('RN04 · Reserva Confirmada da Bia no período → Cancelamento pelo sistema com a causa e Notificação, sem Penalidade (US16)', () => {
     expect(decidir([daBia()])).toEqual({
       tipo: 'aceita',
-      efeitos: [criada(), canceladas({ id: 50, de: 'Confirmada' })],
+      efeitos: [criada(), canceladas({ id: 50, de: 'Confirmada' }), notificada()],
     });
   });
 
-  it('RN04 · Reserva Pendente no período → Cancelamento pelo sistema', () => {
+  it('RN04 · Reserva Pendente no período → Cancelamento pelo sistema e Notificação', () => {
     expect(decidir([daBia({ status: 'Pendente' })])).toEqual({
       tipo: 'aceita',
-      efeitos: [criada(), canceladas({ id: 50, de: 'Pendente' })],
+      efeitos: [criada(), canceladas({ id: 50, de: 'Pendente' }), notificada()],
     });
   });
 
@@ -150,7 +167,11 @@ describe('RN04 · Indisponibilidade', () => {
     });
     expect(decidir([atravessa])).toEqual({
       tipo: 'aceita',
-      efeitos: [criada(), canceladas({ id: 50, de: 'Confirmada' })],
+      efeitos: [
+        criada(),
+        canceladas({ id: 50, de: 'Confirmada' }),
+        notificada(50, '12/11/2026, das 17:00 às 19:00'),
+      ],
     });
   });
 
@@ -166,6 +187,8 @@ describe('RN04 · Indisponibilidade', () => {
       efeitos: [
         criada(semFim),
         canceladas({ id: 50, de: 'Confirmada' }, { id: 70, de: 'Confirmada' }),
+        notificada(50, '11/11/2026, das 10:00 às 12:00'),
+        notificada(70, '01/03/2027, das 10:00 às 12:00'),
       ],
     });
   });
