@@ -134,6 +134,8 @@ interface Arraste {
   dia: DiaDaGrade;
   de: number;
   ate: number;
+  /** O que o soltar escolhe e a tela pinta, calculado com a agenda de quando o ponteiro passou. */
+  trecho: IntervaloEscolhido;
 }
 
 function Grade({
@@ -161,7 +163,9 @@ function Grade({
   function aoApertar(evento: PointerEvent, dia: DiaDaGrade, minuto: number) {
     if (evento.pointerType === 'touch' || evento.button !== 0) return;
     evento.preventDefault();
-    mudarArraste({ dia, de: minuto, ate: minuto });
+    const trecho = trechoDoArraste(dia, minuto, minuto);
+    if (!trecho) return;
+    mudarArraste({ dia, de: minuto, ate: minuto, trecho });
     // Soltar em qualquer lugar termina o arraste; numa célula só, quem trata é o clique. Se o
     // navegador cancelar o ponteiro (menu de contexto, troca de janela), o arraste é descartado.
     const fimDoArraste = new AbortController();
@@ -171,9 +175,7 @@ function Grade({
         fimDoArraste.abort();
         const fim = arrasteAtual.current;
         mudarArraste(null);
-        if (fim && fim.de !== fim.ate) {
-          aoEscolher(intervaloDoArraste(fim.dia, fim.de, fim.ate, agenda.indisponibilidades));
-        }
+        if (fim && fim.de !== fim.ate) aoEscolher(fim.trecho);
       },
       { signal: fimDoArraste.signal },
     );
@@ -187,16 +189,22 @@ function Grade({
     );
   }
 
+  // Com a agenda deste render: se ela recarregou e o início deixou de ser livre, o arraste acaba.
   function aoPassar(dia: DiaDaGrade, minuto: number) {
     const atual = arrasteAtual.current;
-    if (atual?.dia.data === dia.data) mudarArraste({ ...atual, ate: minuto });
+    if (atual?.dia.data !== dia.data) return;
+    const trecho = trechoDoArraste(dia, atual.de, minuto);
+    mudarArraste(trecho && { ...atual, ate: minuto, trecho });
   }
 
+  function trechoDoArraste(dia: DiaDaGrade, de: number, ate: number) {
+    return intervaloDoArraste(dia, de, ate, agenda.ocupacoes, agora, agenda.indisponibilidades);
+  }
+
+  // Pinta só o que o soltar vai escolher: o mesmo trecho guardado no arraste.
   function escolhida(dia: DiaDaGrade, minuto: number) {
-    if (arraste?.dia.data !== dia.data) return false;
-    return (
-      minuto >= Math.min(arraste.de, arraste.ate) && minuto <= Math.max(arraste.de, arraste.ate)
-    );
+    const trecho = arraste?.trecho;
+    return trecho?.data === dia.data && minuto >= trecho.inicio && minuto < trecho.fim;
   }
 
   if (dias.length === 0) {
@@ -253,17 +261,16 @@ function Grade({
                         aria-label={rotulo}
                         onPointerDown={(evento) => aoApertar(evento, dia, minuto)}
                         onPointerEnter={() => aoPassar(dia, minuto)}
-                        onClick={() =>
-                          aoEscolher(
-                            intervaloDoClique(
-                              dia,
-                              minuto,
-                              agenda.ocupacoes,
-                              agora,
-                              agenda.indisponibilidades,
-                            ),
-                          )
-                        }
+                        onClick={() => {
+                          const intervalo = intervaloDoClique(
+                            dia,
+                            minuto,
+                            agenda.ocupacoes,
+                            agora,
+                            agenda.indisponibilidades,
+                          );
+                          if (intervalo) aoEscolher(intervalo);
+                        }}
                       />
                     ) : (
                       <VisuallyHidden>{rotulo}</VisuallyHidden>
