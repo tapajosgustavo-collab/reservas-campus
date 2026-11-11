@@ -15,7 +15,7 @@ Contexto único: `CONTEXT.md` na raiz e ADRs em `docs/adr/`. Os requisitos ficam
 Valem para todo código do backend. O porquê está em `docs/adr/0001-nucleo-funcional-casca-imperativa.md`.
 
 - **Núcleo puro.** As regras de negócio ficam em `apps/api/src/modulos/<modulo>/nucleo/`, sem Prisma, Fastify, `Date.now()`, `new Date()` sem argumento, ids aleatórios nem `console`. O `agora` e o `quem` (Usuário da sessão) chegam por parâmetro.
-- **Decisão como valor.** O núcleo devolve `aceita { efeitos }` ou `recusada { violacoes }` (422), com todas as RNs violadas, e não lança exceção. A regra de dono (403) volta `proibida { violacoes }`. A casca carrega os fatos, chama o núcleo e executa os efeitos na transação da requisição.
+- **Decisão como valor.** O núcleo devolve `aceita { efeitos }` ou `recusada { violacoes }` (422), com todas as RNs violadas, e não lança exceção. Quando o comando tem regra de dono, a decisão volta `proibida { violacoes }` (403). A casca carrega os fatos, chama o núcleo e executa os efeitos na transação da requisição.
 - **Nada de interface de repositório.** A casca usa o Prisma direto; a única porta é o `Relogio`.
 - **Fronteira dos módulos.** Um módulo só importa outro pelo `index.ts` dele, e só o módulo dono grava nas suas tabelas.
 - **Toda RN no núcleo**, com teste unitário que tem o id dela no nome (`RN07_...`). O Zod só valida a forma da entrada.
