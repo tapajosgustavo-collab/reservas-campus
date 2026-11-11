@@ -27,7 +27,8 @@ export interface Aceita {
   efeitos: Efeito[];
 }
 
-export type Decisao = Aceita | { tipo: 'recusada'; violacoes: Violacao[] };
+/** A RN13 é regra de dono: volta `proibida` (403), como nos outros módulos (ADR 0001). */
+export type Decisao = Aceita | { tipo: 'proibida'; violacoes: Violacao[] };
 
 /**
  * US04: cadastrar um Recurso. RN13: quem cadastra é o Gestor responsável. Não há RN que recuse:
@@ -53,7 +54,7 @@ export function decidirEdicao(
     };
   }
   return {
-    tipo: 'recusada',
+    tipo: 'proibida',
     violacoes: [violacao('RN13', 'Só o Gestor responsável por este Recurso pode editá-lo.')],
   };
 }
