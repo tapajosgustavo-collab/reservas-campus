@@ -1,15 +1,20 @@
 import {
+  esquemaBuscarNotificacoes,
   esquemaCancelamento,
   esquemaDevolucao,
   esquemaEmUso,
   esquemaFila,
+  esquemaIdDaNotificacao,
   esquemaIdDaReserva,
+  esquemaPaginaDeNotificacoes,
   esquemaRecusa,
   esquemaReserva,
+  NOTIFICACOES_POR_PAGINA,
   POLITICA,
 } from '@reservas/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { z } from 'zod';
 import type { Transacao } from '../../../comum/banco';
 import { ErroApi, proibidoPelaRegra, regraViolada } from '../../../comum/erros';
 import { paraIsoSaoPaulo } from '../../../comum/instante';
@@ -25,6 +30,7 @@ import {
   type Decisao as DecisaoDoPedido,
   type FatosDoPedido,
 } from '../nucleo/pedido';
+import { executar } from './efeitos';
 
 /** Os instantes da Reserva em ISO com o deslocamento de São Paulo. */
 function paraResposta<T extends { inicio: Date; fim: Date; criadaEm: Date }>(reserva: T) {
@@ -40,19 +46,36 @@ function paraResposta<T extends { inicio: Date; fim: Date; criadaEm: Date }>(res
 async function fatosDoPedido(tx: Transacao, id: number): Promise<FatosDoPedido> {
   const reserva = await tx.reserva.findUnique({
     where: { id },
-    select: { id: true, status: true, inicio: true, recurso: { select: { gestorId: true } } },
+    select: {
+      id: true,
+      usuarioId: true,
+      status: true,
+      inicio: true,
+      fim: true,
+      recurso: { select: { nome: true, gestorId: true } },
+    },
   });
   if (!reserva) throw new ErroApi('nao_encontrado', `Reserva ${id} não encontrada.`);
   return { reserva, politica: POLITICA };
 }
 
-/** Responde 403 ou 422 pela decisão recusada, ou pede ao M3 que grave a mudança de Status. */
+/** Responde 403 ou 422 pela decisão recusada, ou grava a mudança de Status (M3) e a Notificação (M4). */
 async function executarDecisao(request: FastifyRequest, decisao: DecisaoDoPedido) {
   if (decisao.tipo === 'proibida') throw proibidoPelaRegra(decisao.violacoes);
   if (decisao.tipo === 'recusada') throw regraViolada(decisao.violacoes);
-  const [efeito] = decisao.efeitos;
-  const reserva = await executarEmReservas(request.tx, efeito);
-  request.log.info({ evento: efeito.evento, reservaId: reserva.id }, efeito.evento);
+  const [mudanca, emitida] = decisao.efeitos;
+  const reserva = await executarEmReservas(request.tx, mudanca);
+  request.log.info({ evento: mudanca.evento, reservaId: reserva.id }, mudanca.evento);
+  const notificacao = await executar(request.tx, emitida);
+  request.log.info(
+    {
+      evento: emitida.evento,
+      notificacaoId: notificacao.id,
+      destinatarioId: notificacao.destinatarioId,
+      reservaId: notificacao.reservaId,
+    },
+    emitida.evento,
+  );
   return reserva;
 }
 
@@ -267,6 +290,105 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
       const concluida = await executarEmReservas(tx, efeito);
       request.log.info({ evento: efeito.evento, reservaId: concluida.id }, efeito.evento);
       return paraResposta(concluida);
+    },
+  );
+
+  rotas.get(
+    '/api/notificacoes',
+    {
+      schema: {
+        summary: 'Notificações do Usuário da sessão, mais novas primeiro, 20 por página (US16)',
+        tags: ['ciclo'],
+        querystring: esquemaBuscarNotificacoes,
+        response: { 200: esquemaPaginaDeNotificacoes },
+      },
+    },
+    async (request) => {
+      const quem = await exigirSessao(request);
+      const { pagina } = request.query;
+      const { tx } = request;
+      const where = { destinatarioId: quem.id };
+      const [itens, total, naoLidas] = await Promise.all([
+        tx.notificacao.findMany({
+          where,
+          select: {
+            id: true,
+            tipo: true,
+            mensagem: true,
+            em: true,
+            lidaEm: true,
+            reservaId: true,
+          },
+          orderBy: [{ em: 'desc' }, { id: 'desc' }],
+          skip: (pagina - 1) * NOTIFICACOES_POR_PAGINA,
+          take: NOTIFICACOES_POR_PAGINA,
+        }),
+        tx.notificacao.count({ where }),
+        tx.notificacao.count({ where: { destinatarioId: quem.id, lidaEm: null } }),
+      ]);
+      return {
+        itens: itens.map(({ em, lidaEm, ...item }) => ({
+          ...item,
+          em: paraIsoSaoPaulo(em),
+          lidaEm: lidaEm ? paraIsoSaoPaulo(lidaEm) : null,
+        })),
+        total,
+        naoLidas,
+      };
+    },
+  );
+
+  rotas.post(
+    '/api/notificacoes/:id/leitura',
+    {
+      schema: {
+        summary: 'Marca uma Notificação do Usuário como lida (US16)',
+        tags: ['ciclo'],
+        params: esquemaIdDaNotificacao,
+        response: { 204: z.null().describe('Notificação marcada como lida') },
+      },
+    },
+    async (request, reply) => {
+      const quem = await exigirSessao(request);
+      const { params, tx, agora } = request;
+      const notificacao = await tx.notificacao.findUnique({
+        where: { id: params.id },
+        select: { id: true, destinatarioId: true, lidaEm: true },
+      });
+      if (!notificacao) {
+        throw new ErroApi('nao_encontrado', `Notificação ${params.id} não encontrada.`);
+      }
+      if (notificacao.destinatarioId !== quem.id) {
+        throw new ErroApi('proibido', 'Esta Notificação pertence a outro Usuário.');
+      }
+      if (notificacao.lidaEm === null) {
+        await tx.notificacao.update({
+          where: { id: notificacao.id },
+          data: { lidaEm: agora },
+        });
+      }
+      reply.status(204);
+      return null;
+    },
+  );
+
+  rotas.post(
+    '/api/notificacoes/leitura',
+    {
+      schema: {
+        summary: 'Marca todas as Notificações não lidas do Usuário como lidas (US16)',
+        tags: ['ciclo'],
+        response: { 204: z.null().describe('Notificações marcadas como lidas') },
+      },
+    },
+    async (request, reply) => {
+      const quem = await exigirSessao(request);
+      await request.tx.notificacao.updateMany({
+        where: { destinatarioId: quem.id, lidaEm: null },
+        data: { lidaEm: request.agora },
+      });
+      reply.status(204);
+      return null;
     },
   );
 }
