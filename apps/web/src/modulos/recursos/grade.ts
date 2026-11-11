@@ -53,7 +53,7 @@ export function linhasDaGrade(dias: DiaDaGrade[]): number[] {
 }
 
 /** O instante de `minuto` do dia `data` em São Paulo (1440 = 0h do dia seguinte). */
-function instanteDe(data: string, minuto: number): number {
+export function instanteDe(data: string, minuto: number): number {
   const [ano, mes, dia] = data.split('-').map(Number);
   return new TZDate(ano!, mes! - 1, dia!, 0, minuto, FUSO).getTime();
 }
@@ -71,11 +71,53 @@ function indisponivelNa(
   );
 }
 
+/** A Ocupação que toca a meia hora que começa em `minuto`, se houver. */
+function ocupacaoNa(dia: DiaDaGrade, minuto: number, ocupacoes: Ocupacao[]) {
+  const inicio = instanteDe(dia.data, minuto);
+  const fim = instanteDe(dia.data, minuto + MEIA_HORA);
+  return ocupacoes.find((o) => Date.parse(o.inicio) < fim && Date.parse(o.fim) > inicio);
+}
+
+/** Uma célula da grade: o estado e a Ocupação que a ocupa, achada uma vez só. */
+export interface CelulaDaGrade {
+  estado: EstadoDaCelula;
+  ocupacao: Ocupacao | undefined;
+}
+
 /**
  * O que a célula de meia hora mostra. A Reserva (inclusive a Em uso dentro de uma Indisponibilidade,
  * RN04) e a Indisponibilidade aparecem mesmo no passado; o resto do que já começou é Passado, pelo
  * `agora` da API. Sem pré-bloqueio por Política: quem explica é a RN.
  */
+export function celulaDaGrade(
+  dia: DiaDaGrade,
+  minuto: number,
+  ocupacoes: Ocupacao[],
+  agora: Date,
+  indisponibilidades: IndisponibilidadeNaAgenda[] = [],
+): CelulaDaGrade {
+  if (minuto < dia.abre || minuto + MEIA_HORA > dia.fecha) {
+    return { estado: 'fechado', ocupacao: undefined };
+  }
+  const ocupacao = ocupacaoNa(dia, minuto, ocupacoes);
+  return { estado: estadoCom(dia, minuto, ocupacao, agora, indisponibilidades), ocupacao };
+}
+
+function estadoCom(
+  dia: DiaDaGrade,
+  minuto: number,
+  ocupacao: Ocupacao | undefined,
+  agora: Date,
+  indisponibilidades: IndisponibilidadeNaAgenda[],
+): EstadoDaCelula {
+  if (ocupacao?.minha)
+    return ocupacao.status === 'Pendente' ? 'minha-pendente' : 'minha-confirmada';
+  if (ocupacao) return 'ocupado';
+  if (indisponivelNa(dia, minuto, indisponibilidades)) return 'indisponivel';
+  return instanteDe(dia.data, minuto) < agora.getTime() ? 'passado' : 'livre';
+}
+
+/** Só o estado da célula; veja `celulaDaGrade`. */
 export function estadoDaCelula(
   dia: DiaDaGrade,
   minuto: number,
@@ -83,15 +125,7 @@ export function estadoDaCelula(
   agora: Date,
   indisponibilidades: IndisponibilidadeNaAgenda[] = [],
 ): EstadoDaCelula {
-  if (minuto < dia.abre || minuto + MEIA_HORA > dia.fecha) return 'fechado';
-  const inicio = instanteDe(dia.data, minuto);
-  const fim = instanteDe(dia.data, minuto + MEIA_HORA);
-  const ocupacao = ocupacoes.find((o) => Date.parse(o.inicio) < fim && Date.parse(o.fim) > inicio);
-  if (ocupacao?.minha)
-    return ocupacao.status === 'Pendente' ? 'minha-pendente' : 'minha-confirmada';
-  if (ocupacao) return 'ocupado';
-  if (indisponivelNa(dia, minuto, indisponibilidades)) return 'indisponivel';
-  return inicio < agora.getTime() ? 'passado' : 'livre';
+  return celulaDaGrade(dia, minuto, ocupacoes, agora, indisponibilidades).estado;
 }
 
 /**

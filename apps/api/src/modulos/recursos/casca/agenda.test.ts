@@ -99,6 +99,51 @@ comBanco('US07 · Agenda do Recurso', () => {
     ]);
   });
 
+  it('RN22 · Carlos, Gestor responsável, vê quem reservou, o Status e a Finalidade', async () => {
+    const app = await umaApp({ banco });
+    const { carlos, lab, bruno } = await cenario();
+    const reserva = await umaReserva(banco, {
+      usuarioId: bruno.id,
+      recursoId: lab.id,
+      status: 'Pendente',
+      finalidade: 'Estudo',
+    });
+
+    const resposta = await app.inject({
+      method: 'GET',
+      url: `/api/recursos/${lab.id}/agenda?semana=2026-11-09`,
+      cookies: sessaoDe(app, carlos.id),
+    });
+
+    expect(resposta.json().ocupacoes).toEqual([
+      {
+        inicio: '2026-11-10T10:00:00-03:00',
+        fim: '2026-11-10T12:00:00-03:00',
+        reservaId: reserva.id,
+        status: 'Pendente',
+        usuario: { id: bruno.id, nome: 'Bruno' },
+        finalidade: 'Estudo',
+      },
+    ]);
+  });
+
+  it('RN22 · Dora, Gestora de outro Recurso, vê a Reserva do Bruno só com início e fim', async () => {
+    const app = await umaApp({ banco });
+    const { lab, bruno } = await cenario();
+    const dora = await umUsuario(banco, 'Gestor', { nome: 'Dora' });
+    await umaReserva(banco, { usuarioId: bruno.id, recursoId: lab.id, finalidade: 'Estudo' });
+
+    const resposta = await app.inject({
+      method: 'GET',
+      url: `/api/recursos/${lab.id}/agenda?semana=2026-11-09`,
+      cookies: sessaoDe(app, dora.id),
+    });
+
+    expect(resposta.json().ocupacoes).toEqual([
+      { inicio: '2026-11-10T10:00:00-03:00', fim: '2026-11-10T12:00:00-03:00' },
+    ]);
+  });
+
   it('só as Reservas ativas deste Recurso na semana pedida, por início', async () => {
     const app = await umaApp({ banco });
     const { lab, ana, bruno } = await cenario();

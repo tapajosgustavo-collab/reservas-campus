@@ -1,13 +1,24 @@
 import { STATUS_ATIVOS, type Recurso, type Status, type StatusAtivo } from '@reservas/shared';
 import type { Quem } from './recurso';
 
-/** O que a agenda precisa saber de cada Reserva do Recurso na semana. */
+/** Quem reservou: só o Gestor responsável pelo Recurso vê o nome (RN22). */
+export interface UsuarioDaReserva {
+  id: number;
+  nome: string;
+}
+
+/**
+ * O que a agenda precisa saber de cada Reserva do Recurso na semana. `usuario` e `finalidade` só
+ * vêm quando quem vê é o Gestor responsável: a casca não os lê para mais ninguém (RN22).
+ */
 export interface ReservaNaAgenda {
   id: number;
   usuarioId: number;
   inicio: Date;
   fim: Date;
   status: Status;
+  usuario?: UsuarioDaReserva;
+  finalidade?: string | null;
 }
 
 export interface IndisponibilidadeNaAgenda {
@@ -23,13 +34,18 @@ export interface FatosDaAgenda {
   reservas: ReservaNaAgenda[];
 }
 
-/** Qualquer Usuário vê só `inicio` e `fim`; o dono vê também `minha`, `reservaId` e `status`. */
+/**
+ * Qualquer Usuário vê só `inicio` e `fim`; o dono vê também `minha`, `reservaId` e `status`; o
+ * Gestor responsável vê `reservaId`, `status`, `usuario` e `finalidade` (RN22).
+ */
 export interface OcupacaoNaAgenda {
   inicio: Date;
   fim: Date;
   minha?: true;
   reservaId?: number;
   status?: StatusAtivo;
+  usuario?: UsuarioDaReserva;
+  finalidade?: string | null;
 }
 
 export interface AgendaDoRecurso extends Omit<FatosDaAgenda, 'reservas'> {
@@ -41,18 +57,20 @@ function ehAtiva(reserva: ReservaNaAgenda): reserva is ReservaNaAgenda & { statu
 }
 
 /**
- * US07: a agenda da semana de um Recurso como `quem` pode vê-la. Só as Reservas ativas ocupam, e
- * de quem não é o dono sai só o Intervalo, nem o Status (RN22).
+ * US07: a agenda da semana de um Recurso como `quem` pode vê-la. Só as Reservas ativas ocupam.
+ * RN22: o Gestor responsável vê quem reservou, o Status e a Finalidade; o dono vê a própria
+ * Reserva e o Status; dos outros sai só o Intervalo.
  */
 export function agendaPara(quem: Quem, { reservas, ...fatos }: FatosDaAgenda): AgendaDoRecurso {
+  const ehGestorResponsavel = quem.id === fatos.recurso.gestor.id;
   return {
     ...fatos,
     ocupacoes: reservas
       .filter(ehAtiva)
-      .map(({ id, usuarioId, inicio, fim, status }) =>
-        usuarioId === quem.id
-          ? { inicio, fim, minha: true, reservaId: id, status }
-          : { inicio, fim },
-      ),
+      .map(({ id, usuarioId, inicio, fim, status, usuario, finalidade }): OcupacaoNaAgenda => {
+        if (ehGestorResponsavel) return { inicio, fim, reservaId: id, status, usuario, finalidade };
+        if (usuarioId === quem.id) return { inicio, fim, minha: true, reservaId: id, status };
+        return { inicio, fim };
+      }),
   };
 }
