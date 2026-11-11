@@ -1,5 +1,11 @@
 import { TZDate } from '@date-fns/tz';
-import { POLITICA, type CriarReserva, type Reserva } from '@reservas/shared';
+import {
+  POLITICA,
+  type CriarReserva,
+  type CriarSerie,
+  type Reserva,
+  type Violacao,
+} from '@reservas/shared';
 import { format, formatISO, parseISO, startOfWeek } from 'date-fns';
 import { janelaDoCheckIn } from '../ciclo';
 
@@ -35,6 +41,27 @@ export function corpoDaReserva(
     ...(participantes !== undefined && { participantes }),
     ...(texto && { finalidade: texto }),
   };
+}
+
+/** US09: a Série repete o Intervalo da primeira Ocorrência até `ate`, sem as datas desmarcadas. */
+export function corpoDaSerie(
+  recursoId: number,
+  formulario: FormularioDaReserva,
+  ate: string,
+  datasExcluidas: string[],
+): CriarSerie {
+  return { ...corpoDaReserva(recursoId, formulario), ate, datasExcluidas };
+}
+
+/** `2026-11-17` → `17/11`. */
+export function diaEMes(data: string) {
+  const [, mes, dia] = data.split('-');
+  return `${dia}/${mes}`;
+}
+
+/** Na Série, cada violação de uma Ocorrência vem com a data dela (RN21). */
+export function linhaDaViolacaoNaSerie(violacao: Violacao, linha: string) {
+  return violacao.data ? `${diaEMes(violacao.data)} · ${linha}` : linha;
 }
 
 export function tituloDasViolacoes(quantas: number) {
@@ -84,6 +111,20 @@ export function resumoDaCriada({
     `Reserva criada para ${dia}, ${intervalo}. ` +
     `Faça o Check-in das ${hora(abre)} às ${hora(fecha)}.`
   );
+}
+
+/** O que a agenda diz depois de criar a Série: quantas Ocorrências, de quando a quando. */
+export function resumoDaSerie(reservas: Pick<Reserva, 'inicio' | 'fim' | 'status'>[]) {
+  const primeira = reservas[0]!;
+  const ultima = reservas.at(-1)!;
+  const intervalo = `das ${hora(Date.parse(primeira.inicio))} às ${hora(Date.parse(primeira.fim))}`;
+  const quantas = reservas.length === 1 ? '1 Ocorrência' : `${reservas.length} Ocorrências`;
+  const periodo = `de ${format(emSaoPaulo(primeira.inicio), 'dd/MM')} a ${format(emSaoPaulo(ultima.inicio), 'dd/MM')}`;
+  const estado =
+    primeira.status === 'Pendente'
+      ? 'Elas ficam Pendentes até o Gestor decidir a Série.'
+      : 'Faça o Check-in de cada uma na hora.';
+  return `Série criada: ${quantas} ${periodo}, ${intervalo}. ${estado}`;
 }
 
 /** A célula de meia hora que começa em `minuto` do dia `data` está dentro da Reserva? */

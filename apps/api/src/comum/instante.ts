@@ -36,6 +36,12 @@ export function emSaoPaulo(instante: Date): NoCalendario {
   };
 }
 
+/** O instante de `minutos` desde 0h do dia `data` (`YYYY-MM-DD`) em São Paulo; 1440 = 0h do dia seguinte. */
+export function instanteEmSaoPaulo(data: string, minutos: number): Date {
+  const [ano, mes, dia] = data.split('-').map(Number);
+  return new Date(new TZDate(ano!, mes! - 1, dia!, 0, minutos, FUSO).getTime());
+}
+
 /** A segunda-feira (`YYYY-MM-DD`) da semana de `instante` em São Paulo. */
 export function segundaDaSemana(instante: Date): string {
   return format(startOfWeek(new TZDate(instante, FUSO), { weekStartsOn: 1 }), 'yyyy-MM-dd');

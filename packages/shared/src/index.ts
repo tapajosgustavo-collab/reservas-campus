@@ -80,6 +80,13 @@ export {
   type Transicao,
 } from './reservas';
 export {
+  datasDaSerie,
+  esquemaCriarSerie,
+  esquemaSerieCriada,
+  type CriarSerie,
+  type SerieCriada,
+} from './series';
+export {
   esquemaAgenda,
   esquemaBuscarAgenda,
   esquemaIndisponibilidadeNaAgenda,
