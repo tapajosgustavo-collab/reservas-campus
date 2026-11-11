@@ -123,6 +123,37 @@ describe('RN11 · Recusa justificada', () => {
       violacoes: [{ rn: 'RN12' }, { rn: 'RN11' }],
     });
   });
+
+  it('RN11 · a justificativa vai na Notificação ao solicitante, sempre com ponto final', () => {
+    const recusa = { justificativa: 'Laboratório reservado para manutenção' };
+    expect(decidirRecusa(fatos(), recusa, CARLOS, em('10T09:00'))).toEqual({
+      tipo: 'aceita',
+      efeitos: [
+        {
+          evento: 'StatusMudou',
+          reservaId: 42,
+          transicao: {
+            de: 'Pendente',
+            para: 'Recusada',
+            em: em('10T09:00'),
+            porId: CARLOS.id,
+            observacao: 'Laboratório reservado para manutenção',
+          },
+        },
+        {
+          evento: 'NotificacaoEmitida',
+          notificacao: {
+            destinatarioId: ANA.id,
+            tipo: 'Recusa',
+            mensagem:
+              'Seu Pedido de Laboratório de Química (11/11/2026, das 14:00 às 16:00) foi recusado: Laboratório reservado para manutenção.',
+            em: em('10T09:00'),
+            reservaId: 42,
+          },
+        },
+      ],
+    });
+  });
 });
 
 describe('RN12 · Expiração', () => {
