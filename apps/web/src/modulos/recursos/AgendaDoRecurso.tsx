@@ -22,8 +22,8 @@ import { JanelaDeReserva, reservaCobre, resumoDaCriada, semanaDe } from '../rese
 import { periodoDaIndisponibilidade } from './indisponibilidade';
 import { ROTULO_DO_TIPO } from './FormularioDoRecurso';
 import {
+  celulaDaGrade,
   diasDaGrade,
-  estadoDaCelula,
   intervaloDoArraste,
   intervaloDoClique,
   linhasDaGrade,
@@ -224,7 +224,7 @@ function Grade({
                 {rotuloDoMinuto(minuto)}
               </Table.Th>
               {dias.map((dia) => {
-                const estado = estadoDaCelula(
+                const { estado, ocupacao } = celulaDaGrade(
                   dia,
                   minuto,
                   agenda.ocupacoes,
@@ -233,7 +233,7 @@ function Grade({
                 );
                 // Só o Gestor responsável recebe o nome da API (RN22); para os outros, é null.
                 const reserva =
-                  estado === 'ocupado' ? reservaNaCelula(dia, minuto, agenda.ocupacoes) : null;
+                  estado === 'ocupado' ? reservaNaCelula(dia, minuto, ocupacao) : null;
                 const rotulo = `${rotuloDoDia(dia)}, ${rotuloDoMinuto(minuto)}: ${ROTULO_DO_ESTADO[estado]}${reserva ? `, ${reserva.descricao}` : ''}`;
                 return (
                   <Table.Td
@@ -270,25 +270,39 @@ function Grade({
                           )
                         }
                       />
+                    ) : reserva ? (
+                      // RN22: o Gestor responsável abre o detalhe, que mostra a Finalidade (no toque
+                      // não há `title`). Uma parada de Tab por Reserva; mouse e toque valem em
+                      // qualquer célula dela.
+                      <UnstyledButton
+                        component={Link}
+                        to={reserva.endereco}
+                        w="100%"
+                        h="100%"
+                        display="block"
+                        aria-label={rotulo}
+                        tabIndex={reserva.primeira ? 0 : -1}
+                      >
+                        {reserva.primeira && (
+                          // Absoluto e em até duas linhas (nome, depois Status): não alarga a
+                          // coluna nem a grade no celular.
+                          <Text
+                            aria-hidden
+                            size="xs"
+                            lineClamp={2}
+                            pos="absolute"
+                            inset={0}
+                            px={4}
+                            lh="14px"
+                            c="dark.9"
+                            style={{ wordBreak: 'break-word' }}
+                          >
+                            {reserva.texto}
+                          </Text>
+                        )}
+                      </UnstyledButton>
                     ) : (
                       <VisuallyHidden>{rotulo}</VisuallyHidden>
-                    )}
-                    {reserva?.primeira && (
-                      // Absoluto e em até duas linhas (nome, depois Status): não alarga a coluna nem
-                      // a grade no celular.
-                      <Text
-                        aria-hidden
-                        size="xs"
-                        lineClamp={2}
-                        pos="absolute"
-                        inset={0}
-                        px={4}
-                        lh="14px"
-                        c="dark.9"
-                        style={{ wordBreak: 'break-word' }}
-                      >
-                        {reserva.texto}
-                      </Text>
                     )}
                   </Table.Td>
                 );
@@ -333,11 +347,12 @@ export function AgendaDoRecurso() {
   }
 
   const { semana, recurso, indisponibilidades } = agenda.data;
+  const ehGestorResponsavel = usuario?.id === recurso.gestor.id;
   return (
     <Stack gap="md">
       <Group justify="space-between" align="flex-start">
         <Cabecalho recurso={recurso} />
-        {usuario?.id === recurso.gestor.id && (
+        {ehGestorResponsavel && (
           <Button
             component={Link}
             to={`/gestao/recursos/${recurso.id}/indisponibilidade`}
@@ -382,10 +397,10 @@ export function AgendaDoRecurso() {
       )}
 
       <Legenda />
-      {usuario?.id === recurso.gestor.id && (
+      {ehGestorResponsavel && (
         <Text size="sm" c="dimmed">
-          Como Gestor responsável, você vê em cada Reserva quem reservou e o Status. Passe o mouse
-          sobre a Reserva para ver a Finalidade.
+          Como Gestor responsável, você vê em cada Reserva quem reservou e o Status. Toque ou clique
+          numa Reserva para ver o detalhe e a Finalidade.
         </Text>
       )}
       <Grade agenda={agenda.data} destacada={criada} aoEscolher={setIntervalo} />
