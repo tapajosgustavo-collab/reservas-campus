@@ -199,10 +199,10 @@ export interface OpcoesDeCarga {
   log?: (mensagem: string) => void;
 }
 
-export async function autenticarUsuario(
-  urlDaApp: string,
-  email: UsuarioDaCarga,
-): Promise<{ cookie: string; perfil: PerfilQueReserva; agora: Date }> {
+/** A Gestora dos Espaços no seed: a fila de Pedidos (`GET /api/gestao/pedidos`) é medida com ela. */
+export const GESTOR_DA_CARGA = 'dora.demo@unifesp.br';
+
+async function abrirSessao(urlDaApp: string, email: string) {
   const resposta = await fetch(`${urlDaApp}/api/sessao`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -216,6 +216,14 @@ export async function autenticarUsuario(
     throw new Error('A API não devolveu o cookie de sessão.');
   }
   const cookie = cookies.map((c) => c.split(';')[0]).join('; ');
+  return { cookie, resposta };
+}
+
+export async function autenticarUsuario(
+  urlDaApp: string,
+  email: UsuarioDaCarga,
+): Promise<{ cookie: string; perfil: PerfilQueReserva; agora: Date }> {
+  const { cookie, resposta } = await abrirSessao(urlDaApp, email);
   const dados = (await resposta.json()) as {
     usuario: { perfil: PerfilQueReserva };
     agora: string;
@@ -225,6 +233,12 @@ export async function autenticarUsuario(
     perfil: dados.usuario.perfil,
     agora: new Date(dados.agora),
   };
+}
+
+/** A sessão do Gestor da carga: só o cookie importa, a fila não depende do `agora`. */
+export async function autenticarGestor(urlDaApp: string): Promise<string> {
+  const { cookie } = await abrirSessao(urlDaApp, GESTOR_DA_CARGA);
+  return cookie;
 }
 
 export async function obterSala101(urlDaApp: string, cookie: string): Promise<RecursoDaCarga> {
@@ -546,6 +560,27 @@ export async function medirCarga({
     duracaoSegundos,
   });
 
+  const cookieDora = await autenticarGestor(base);
+  log(
+    `Medindo a fila do Gestor (GET /api/gestao/pedidos) com ${conexoes} conexões por ${duracaoSegundos}s...`,
+  );
+  const fila = await medirRota({
+    url: `${base}/api/gestao/pedidos`,
+    cookie: cookieDora,
+    conexoes,
+    duracaoSegundos,
+  });
+
+  log(
+    `Medindo as Notificações (GET /api/notificacoes) com ${conexoes} conexões por ${duracaoSegundos}s...`,
+  );
+  const notificacoes = await medirRota({
+    url: `${base}/api/notificacoes`,
+    cookie: cookieAna,
+    conexoes,
+    duracaoSegundos,
+  });
+
   log(
     `Medindo criar Reserva (POST /api/reservas) com ${conexoes} conexões por ${duracaoSegundos}s...`,
   );
@@ -565,6 +600,18 @@ export async function medirCarga({
       rota: '/api/recursos/:id/agenda',
       metodo: 'GET',
       ...agenda,
+      limiteMs: META_P95_MS,
+    },
+    {
+      rota: '/api/gestao/pedidos',
+      metodo: 'GET',
+      ...fila,
+      limiteMs: META_P95_MS,
+    },
+    {
+      rota: '/api/notificacoes',
+      metodo: 'GET',
+      ...notificacoes,
       limiteMs: META_P95_MS,
     },
     {
