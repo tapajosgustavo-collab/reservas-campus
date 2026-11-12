@@ -349,7 +349,7 @@ comBanco('RNF10 · Seed', () => {
     ]);
   });
 
-  it('cena 5 (US11, RN12): na fila da Dora, o Pedido do Bruno no Laboratório 2, D 12h–14h, que expira às 10h', async () => {
+  it('cena 5 (US11, RN12): na fila da Dora, o Pedido do Bruno no Laboratório 2, D 12h–14h, para 20 pessoas, que expira às 10h', async () => {
     const { get } = await demoNoT0();
 
     const fila = await get('dora.demo@unifesp.br', '/api/gestao/pedidos');
@@ -359,6 +359,8 @@ comBanco('RNF10 · Seed', () => {
         inicio: '2026-11-10T12:00:00-03:00',
         fim: '2026-11-10T14:00:00-03:00',
         expiraEm: '2026-11-10T10:00:00-03:00',
+        participantes: 20,
+        finalidade: 'Monitoria de Cálculo',
         recurso: { nome: 'Laboratório de Informática 2', tipo: 'Espaco' },
         solicitante: { nome: 'Bruno Lima', perfil: 'Aluno' },
       },

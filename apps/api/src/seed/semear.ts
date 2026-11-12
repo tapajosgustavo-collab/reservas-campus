@@ -71,6 +71,9 @@ const RESERVAS: {
   das: number;
   ate: number;
   criadaNoDia: number;
+  /** Só no Pedido, que a fila do Gestor mostra com as pessoas e a Finalidade (cena 5). */
+  participantes?: number;
+  finalidade?: string;
 }[] = [
   // D−7, 10h–12h: a aba "Encerradas" com conteúdo. O Check-in às 9h55 chega no incremento 4, e com
   // ele o sincronizar a Conclui às 12h (RN18).
@@ -105,6 +108,8 @@ const RESERVAS: {
     das: 4,
     ate: 6,
     criadaNoDia: -2,
+    participantes: 20,
+    finalidade: 'Monitoria de Cálculo',
   },
 ];
 
@@ -179,7 +184,7 @@ export async function semear(banco: Banco, agora: Date): Promise<'semeado' | 'ig
       if (recurso.restrito) restritos.add(recurso.nome);
     }
 
-    for (const { quem, recurso, dias, das, ate, criadaNoDia } of RESERVAS) {
+    for (const { quem, recurso, dias, das, ate, criadaNoDia, ...detalhes } of RESERVAS) {
       const usuarioId = idDe.get(quem)!;
       const criadaEm = noT0(t0, criadaNoDia);
       const status = restritos.has(recurso) ? 'Pendente' : 'Confirmada';
@@ -190,6 +195,7 @@ export async function semear(banco: Banco, agora: Date): Promise<'semeado' | 'ig
           recursoId: idDoRecurso(recurso),
           inicio: noT0(t0, dias, das),
           fim: noT0(t0, dias, ate),
+          ...detalhes,
           status,
           criadaEm,
         },
