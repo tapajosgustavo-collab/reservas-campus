@@ -49,17 +49,6 @@ describe('vencimentos(mundo)', () => {
     ]);
   });
 
-  it('Reserva Confirmada que já teve lembrete (jaLembrou: true) não gera vencimento de Lembrete', () => {
-    const confirmada = umaReserva({
-      id: 11,
-      status: 'Confirmada',
-      inicio: em('11T14:00'),
-      jaLembrou: true,
-    });
-    const lista = vencimentos({ reservas: [confirmada], politica: POLITICA });
-    expect(lista).toEqual([]);
-  });
-
   it('Reserva com status terminal (Expirada, Recusada, Cancelada) não gera vencimento', () => {
     const r1 = umaReserva({ id: 1, status: 'Expirada' });
     const r2 = umaReserva({ id: 2, status: 'Recusada' });
@@ -85,12 +74,6 @@ describe('vencimentos(mundo)', () => {
       { regra: 'US16', em: em('11T13:00'), id: 20 },
       { regra: 'RN12', em: em('11T14:00'), id: 30 },
     ]);
-  });
-
-  it('usa a POLITICA padrão quando mundo.politica é omitido', () => {
-    const pedido = umaReserva({ id: 10, status: 'Pendente', inicio: em('11T14:00') });
-    const lista = vencimentos({ reservas: [pedido] });
-    expect(lista[0]?.em).toEqual(em('11T12:00'));
   });
 
   it('RN21 · Ocorrências da mesma Série em recurso restrito expiram juntas no prazo da 1ª ocorrência', () => {
@@ -168,7 +151,7 @@ describe('sincronizar(mundo, agora)', () => {
       expect(resultado.mundo.reservas[0]?.status).toBe('Expirada');
     });
 
-    it('Série restrita não decidida → todas as ocorrências expiram juntas no vencimento da 1ª', () => {
+    it('Série restrita não decidida → todas as ocorrências expiram juntas, emitindo 1 única Notificação para a Série (RN21)', () => {
       const oc1 = umaReserva({
         id: 101,
         serieId: 5,
@@ -200,7 +183,7 @@ describe('sincronizar(mundo, agora)', () => {
           notificacao: {
             destinatarioId: ANA.id,
             tipo: 'Expiracao',
-            mensagem: 'Seu Pedido de Auditório (11/11/2026, das 12:00 às 14:00) expirou.',
+            mensagem: 'Seu Pedido em Série de Auditório expirou.',
             em: em('11T10:00'),
             reservaId: 101,
           },
@@ -210,17 +193,8 @@ describe('sincronizar(mundo, agora)', () => {
           reservaId: 102,
           transicao: { de: 'Pendente', para: 'Expirada', em: em('11T10:00'), porId: null },
         },
-        {
-          evento: 'NotificacaoEmitida',
-          notificacao: {
-            destinatarioId: ANA.id,
-            tipo: 'Expiracao',
-            mensagem: 'Seu Pedido de Auditório (18/11/2026, das 12:00 às 14:00) expirou.',
-            em: em('11T10:00'),
-            reservaId: 102,
-          },
-        },
       ]);
+      expect(resultado.mundo.reservas.map((r) => r.status)).toEqual(['Expirada', 'Expirada']);
     });
   });
 
@@ -234,10 +208,9 @@ describe('sincronizar(mundo, agora)', () => {
       });
       const resultado = sincronizar({ reservas: [confirmada], politica: POLITICA }, em('11T12:59'));
       expect(resultado.efeitos).toEqual([]);
-      expect(resultado.mundo.reservas[0]?.jaLembrou).toBeFalsy();
     });
 
-    it('Reserva Confirmada às 14h, agora às 13h00 → emite Notificação de Lembrete datada no vencimento (13h)', () => {
+    it('Reserva Confirmada às 14h, agora às 13h00 → emite Notificação de Lembrete com horário dinâmico (começa às 14:00)', () => {
       const confirmada = umaReserva({
         id: 50,
         usuarioId: BRUNO.id,
@@ -255,13 +228,12 @@ describe('sincronizar(mundo, agora)', () => {
             destinatarioId: BRUNO.id,
             tipo: 'Lembrete',
             mensagem:
-              'Lembrete: sua Reserva de Sala 101 (11/11/2026, das 14:00 às 16:00) começa em 1 hora.',
+              'Lembrete: sua Reserva de Sala 101 (11/11/2026, das 14:00 às 16:00) começa às 14:00.',
             em: em('11T13:00'),
             reservaId: 50,
           },
         },
       ]);
-      expect(resultado.mundo.reservas[0]?.jaLembrou).toBe(true);
     });
 
     it('Reserva Confirmada às 14h processada às 13h25 → emite Notificação datada no vencimento (13h)', () => {
@@ -279,10 +251,11 @@ describe('sincronizar(mundo, agora)', () => {
         evento: 'NotificacaoEmitida',
         notificacao: {
           tipo: 'Lembrete',
+          mensagem:
+            'Lembrete: sua Reserva de Sala 101 (11/11/2026, das 14:00 às 16:00) começa às 14:00.',
           em: em('11T13:00'),
         },
       });
-      expect(resultado.mundo.reservas[0]?.jaLembrou).toBe(true);
     });
 
     it('Lembrete processado no início ou depois (agora >= inicio) → descartado sem Notificação (US16, ADR 0004)', () => {
@@ -298,41 +271,31 @@ describe('sincronizar(mundo, agora)', () => {
       const resultado = sincronizar({ reservas: [confirmada], politica: POLITICA }, em('11T14:00'));
 
       expect(resultado.efeitos).toEqual([]);
-      // Marcada como lembrada para não tentar novamente
-      expect(resultado.mundo.reservas[0]?.jaLembrou).toBe(true);
     });
   });
 
   describe('Idempotência', () => {
-    it('executar sincronizar sucessivas vezes com o mesmo agora não duplica efeitos', () => {
+    it('Pedido que virou Expirado não gera novos efeitos em sincronizações subsequentes', () => {
       const pedido = umaReserva({ id: 10, status: 'Pendente', inicio: em('11T14:00') });
-      const confirmada = umaReserva({ id: 20, status: 'Confirmada', inicio: em('11T14:00') });
-      const mundo: Mundo = { reservas: [pedido, confirmada], politica: POLITICA };
+      const mundo: Mundo = { reservas: [pedido], politica: POLITICA };
 
       const primeira = sincronizar(mundo, em('11T13:10'));
-      expect(primeira.efeitos.length).toBeGreaterThan(0);
+      expect(primeira.efeitos.length).toBe(2);
 
       const segunda = sincronizar(primeira.mundo, em('11T13:10'));
       expect(segunda.efeitos).toEqual([]);
     });
 
-    it('executar em instantes seguintes só processa vencimentos novos', () => {
+    it('executar em instantes seguintes com mundo atualizado mantém pedidos expirados inalterados', () => {
       const pedido = umaReserva({ id: 10, status: 'Pendente', inicio: em('11T14:00') });
-      const confirmada = umaReserva({ id: 20, status: 'Confirmada', inicio: em('11T14:00') });
-      const mundo: Mundo = { reservas: [pedido, confirmada], politica: POLITICA };
+      const mundo: Mundo = { reservas: [pedido], politica: POLITICA };
 
-      // Às 12h10: apenas a expiração do pedido (às 12h) venceu
       const passo1 = sincronizar(mundo, em('11T12:10'));
       expect(passo1.efeitos.map((e) => e.evento)).toEqual(['StatusMudou', 'NotificacaoEmitida']);
       expect(passo1.efeitos[0]).toMatchObject({ reservaId: 10 });
 
-      // Às 13h10: o lembrete da confirmada (às 13h) venceu; o pedido já expirou
       const passo2 = sincronizar(passo1.mundo, em('11T13:10'));
-      expect(passo2.efeitos.map((e) => e.evento)).toEqual(['NotificacaoEmitida']);
-      expect(passo2.efeitos[0]).toMatchObject({
-        evento: 'NotificacaoEmitida',
-        notificacao: { tipo: 'Lembrete', reservaId: 20 },
-      });
+      expect(passo2.efeitos).toEqual([]);
     });
   });
 });

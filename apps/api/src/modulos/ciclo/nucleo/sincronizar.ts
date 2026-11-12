@@ -1,7 +1,8 @@
-import { POLITICA, type Status } from '@reservas/shared';
-import { intervaloEmSaoPaulo } from '../../../comum/instante';
+import { type Status } from '@reservas/shared';
+import { horaEmSaoPaulo, intervaloEmSaoPaulo } from '../../../comum/instante';
 import type { StatusMudou } from '../../reservas';
 import type { NotificacaoEmitida } from './notificacao';
+import { prazoDeDecisao } from './pedido';
 
 const MINUTO = 60_000;
 
@@ -13,7 +14,6 @@ export interface ReservaDoCiclo {
   fim: Date;
   recurso: { nome: string };
   serieId?: number | null;
-  jaLembrou?: boolean;
 }
 
 export interface PoliticaDoCiclo {
@@ -23,7 +23,7 @@ export interface PoliticaDoCiclo {
 
 export interface Mundo {
   reservas: ReservaDoCiclo[];
-  politica?: Partial<PoliticaDoCiclo>;
+  politica: PoliticaDoCiclo;
 }
 
 export type RegraVencimento = 'RN12' | 'US16';
@@ -44,39 +44,29 @@ const PRIORIDADE_REGRA: Record<RegraVencimento, number> = {
   US16: 7,
 };
 
-const obterPolitica = (politica?: Partial<PoliticaDoCiclo>): PoliticaDoCiclo => ({
-  prazoDeDecisaoMin: politica?.prazoDeDecisaoMin ?? POLITICA.prazoDeDecisaoMin,
-  lembreteAntesDoInicioMin: politica?.lembreteAntesDoInicioMin ?? POLITICA.lembreteAntesDoInicioMin,
-});
+/** Mapeia o início da primeira ocorrência para séries com pedidos pendentes (RN21/RN12). */
+function primeiroInicioDasSeries(reservas: readonly ReservaDoCiclo[]): Map<number, number> {
+  const mapa = new Map<number, number>();
+  for (const r of reservas) {
+    if (r.status === 'Pendente' && r.serieId != null) {
+      const atual = mapa.get(r.serieId);
+      const inicioTempo = r.inicio.getTime();
+      if (atual === undefined || inicioTempo < atual) {
+        mapa.set(r.serieId, inicioTempo);
+      }
+    }
+  }
+  return mapa;
+}
 
 /**
  * ADR 0004: lista todos os vencimentos ainda não aplicados no mundo, em ordem cronológica
  * com desempate por prioridade de regra e id da Reserva.
  */
-export function vencimentos(
-  mundo: Mundo,
-  primeiroInicioPorSerie?: ReadonlyMap<number, number>,
-): Vencimento[] {
-  const { reservas, politica: politicaParcial } = mundo;
-  const politica = obterPolitica(politicaParcial);
+export function vencimentos(mundo: Mundo): Vencimento[] {
+  const { reservas, politica } = mundo;
   const lista: Vencimento[] = [];
-
-  // Mapeia o início da primeira ocorrência para séries com pedidos pendentes (RN21/RN12).
-  const primeiroInicio =
-    primeiroInicioPorSerie ??
-    (() => {
-      const mapa = new Map<number, number>();
-      for (const r of reservas) {
-        if (r.status === 'Pendente' && r.serieId != null) {
-          const atual = mapa.get(r.serieId);
-          const inicioTempo = r.inicio.getTime();
-          if (atual === undefined || inicioTempo < atual) {
-            mapa.set(r.serieId, inicioTempo);
-          }
-        }
-      }
-      return mapa;
-    })();
+  const primeiroInicio = primeiroInicioDasSeries(reservas);
 
   for (const reserva of reservas) {
     if (reserva.status === 'Pendente') {
@@ -85,7 +75,7 @@ export function vencimentos(
           ? primeiroInicio.get(reserva.serieId)!
           : reserva.inicio.getTime();
 
-      const em = new Date(referenciaInicio - politica.prazoDeDecisaoMin * MINUTO);
+      const em = prazoDeDecisao(new Date(referenciaInicio), politica);
       lista.push({
         em,
         regra: 'RN12',
@@ -93,15 +83,13 @@ export function vencimentos(
         reserva,
       });
     } else if (reserva.status === 'Confirmada') {
-      if (!reserva.jaLembrou) {
-        const em = new Date(reserva.inicio.getTime() - politica.lembreteAntesDoInicioMin * MINUTO);
-        lista.push({
-          em,
-          regra: 'US16',
-          tipo: 'Lembrete',
-          reserva,
-        });
-      }
+      const em = new Date(reserva.inicio.getTime() - politica.lembreteAntesDoInicioMin * MINUTO);
+      lista.push({
+        em,
+        regra: 'US16',
+        tipo: 'Lembrete',
+        reserva,
+      });
     }
   }
 
@@ -117,29 +105,17 @@ export function vencimentos(
 /**
  * Aplica, em ordem cronológica, todo vencimento com `em <= agora`.
  * Cada efeito leva a data do VENCIMENTO, não a do processamento (#12, ADR 0004).
- * Idempotente: rodar com o mesmo `agora` ou momento posterior não reaplica efeitos passados.
+ * Ordena os vencimentos uma única vez no início do ciclo.
  */
 export function sincronizar(mundo: Mundo, agora: Date): { mundo: Mundo; efeitos: EfeitoCiclo[] } {
   let reservasAtuais = [...mundo.reservas];
   const efeitos: EfeitoCiclo[] = [];
-  const politica = mundo.politica;
+  const seriesNotificadas = new Set<number>();
 
-  // Fixa o início da 1ª ocorrência de cada série pendente no início da sincronização (RN21/RN12).
-  const primeiroInicioPorSerie = new Map<number, number>();
-  for (const r of reservasAtuais) {
-    if (r.status === 'Pendente' && r.serieId != null) {
-      const atual = primeiroInicioPorSerie.get(r.serieId);
-      const inicioTempo = r.inicio.getTime();
-      if (atual === undefined || inicioTempo < atual) {
-        primeiroInicioPorSerie.set(r.serieId, inicioTempo);
-      }
-    }
-  }
+  const listaVencimentos = vencimentos(mundo);
 
-  for (;;) {
-    const proximos = vencimentos({ reservas: reservasAtuais, politica }, primeiroInicioPorSerie);
-    const vencimento = proximos[0];
-    if (!vencimento || vencimento.em.getTime() > agora.getTime()) break;
+  for (const vencimento of listaVencimentos) {
+    if (vencimento.em.getTime() > agora.getTime()) break;
 
     const { reserva, em, tipo } = vencimento;
 
@@ -148,19 +124,35 @@ export function sincronizar(mundo: Mundo, agora: Date): { mundo: Mundo; efeitos:
         reservasAtuais = reservasAtuais.map((r) =>
           r.id === reserva.id ? { ...r, status: 'Expirada' as const } : r,
         );
-        const intervalo = intervaloEmSaoPaulo(reserva.inicio, reserva.fim);
-        efeitos.push(
-          {
-            evento: 'StatusMudou',
-            reservaId: reserva.id,
-            transicao: {
-              de: 'Pendente',
-              para: 'Expirada',
-              em,
-              porId: null,
-            },
+        efeitos.push({
+          evento: 'StatusMudou',
+          reservaId: reserva.id,
+          transicao: {
+            de: 'Pendente',
+            para: 'Expirada',
+            em,
+            porId: null,
           },
-          {
+        });
+
+        // RN21: a Série é tratada como um item só; emite uma única Notificação para a Série.
+        if (reserva.serieId != null) {
+          if (!seriesNotificadas.has(reserva.serieId)) {
+            seriesNotificadas.add(reserva.serieId);
+            efeitos.push({
+              evento: 'NotificacaoEmitida',
+              notificacao: {
+                destinatarioId: reserva.usuarioId,
+                tipo: 'Expiracao',
+                mensagem: `Seu Pedido em Série de ${reserva.recurso.nome} expirou.`,
+                em,
+                reservaId: reserva.id,
+              },
+            });
+          }
+        } else {
+          const intervalo = intervaloEmSaoPaulo(reserva.inicio, reserva.fim);
+          efeitos.push({
             evento: 'NotificacaoEmitida',
             notificacao: {
               destinatarioId: reserva.usuarioId,
@@ -169,14 +161,11 @@ export function sincronizar(mundo: Mundo, agora: Date): { mundo: Mundo; efeitos:
               em,
               reservaId: reserva.id,
             },
-          },
-        );
+          });
+        }
         break;
       }
       case 'Lembrete': {
-        reservasAtuais = reservasAtuais.map((r) =>
-          r.id === reserva.id ? { ...r, jaLembrou: true } : r,
-        );
         // US16, ADR 0004: Lembrete processado depois ou exatamente no início da Reserva é descartado.
         if (agora.getTime() < reserva.inicio.getTime()) {
           const intervalo = intervaloEmSaoPaulo(reserva.inicio, reserva.fim);
@@ -185,7 +174,7 @@ export function sincronizar(mundo: Mundo, agora: Date): { mundo: Mundo; efeitos:
             notificacao: {
               destinatarioId: reserva.usuarioId,
               tipo: 'Lembrete',
-              mensagem: `Lembrete: sua Reserva de ${reserva.recurso.nome} (${intervalo}) começa em 1 hora.`,
+              mensagem: `Lembrete: sua Reserva de ${reserva.recurso.nome} (${intervalo}) começa às ${horaEmSaoPaulo(reserva.inicio)}.`,
               em,
               reservaId: reserva.id,
             },
