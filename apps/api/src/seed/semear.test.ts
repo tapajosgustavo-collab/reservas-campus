@@ -335,6 +335,77 @@ comBanco('RNF10 · Seed', () => {
     ]);
   });
 
+  it('RN10 · o Laboratório de Informática 2 e o Auditório são restritos; os outros Recursos, comuns', async () => {
+    const { get } = await demoNoT0();
+
+    const recursos: { nome: string; restrito: boolean }[] = await get(
+      'ana.demo@unifesp.br',
+      '/api/recursos',
+    );
+
+    expect(recursos.filter(({ restrito }) => restrito).map(({ nome }) => nome)).toEqual([
+      'Auditório',
+      'Laboratório de Informática 2',
+    ]);
+  });
+
+  it('cena 5 (US11, RN12): na fila da Dora, o Pedido do Bruno no Laboratório 2, D 12h–14h, para 20 pessoas, que expira às 10h', async () => {
+    const { get } = await demoNoT0();
+
+    const fila = await get('dora.demo@unifesp.br', '/api/gestao/pedidos');
+
+    expect(fila).toMatchObject([
+      {
+        inicio: '2026-11-10T12:00:00-03:00',
+        fim: '2026-11-10T14:00:00-03:00',
+        expiraEm: '2026-11-10T10:00:00-03:00',
+        participantes: 20,
+        finalidade: 'Monitoria de Cálculo',
+        recurso: { nome: 'Laboratório de Informática 2', tipo: 'Espaco' },
+        solicitante: { nome: 'Bruno Lima', perfil: 'Aluno' },
+      },
+    ]);
+    expect(await get('carlos.demo@unifesp.br', '/api/gestao/pedidos')).toEqual([]);
+  });
+
+  it('cena 5 (RN10): o Pedido do Bruno nasceu Pendente em D−2, pedido por ele', async () => {
+    const { get } = await demoNoT0();
+    const [pedido] = await get('dora.demo@unifesp.br', '/api/gestao/pedidos');
+
+    const detalhe = await get('bruno.demo@unifesp.br', `/api/reservas/${pedido.id}`);
+
+    expect(detalhe).toMatchObject({
+      status: 'Pendente',
+      historico: [
+        {
+          de: null,
+          para: 'Pendente',
+          em: '2026-11-08T08:00:00-03:00',
+          por: { nome: 'Bruno Lima' },
+        },
+      ],
+    });
+  });
+
+  it('cena 3 (RN10): a Ana pede o Laboratório 2 em D+1, 14h–16h → Pendente', async () => {
+    const { app, entrarComo, idDoRecurso } = await demoNoT0();
+
+    const resposta = await app.inject({
+      method: 'POST',
+      url: '/api/reservas',
+      cookies: await entrarComo('ana.demo@unifesp.br'),
+      payload: {
+        recursoId: await idDoRecurso('Laboratório de Informática 2'),
+        inicio: '2026-11-11T14:00:00-03:00',
+        fim: '2026-11-11T16:00:00-03:00',
+        participantes: 10,
+      },
+    });
+
+    expect(resposta.statusCode).toBe(201);
+    expect(resposta.json().status).toBe('Pendente');
+  });
+
   it('o T0 é o agora arredondado para a próxima meia hora (#18)', async () => {
     const { get, idDoRecurso } = await demoNoT0(new Date('2026-11-10T08:10:00-03:00'));
 
