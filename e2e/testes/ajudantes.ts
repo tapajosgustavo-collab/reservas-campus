@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page } from '@playwright/test';
+import { POLITICA } from '@reservas/shared';
 
 /**
  * RNF07: a página não rola na horizontal. Só a grade da agenda e a tabela da fila do Gestor
@@ -30,4 +31,44 @@ export async function conferirAcessibilidade(page: Page) {
     graves,
     `Violações de acessibilidade encontradas:\n${JSON.stringify(graves, null, 2)}`,
   ).toEqual([]);
+}
+
+const MINUTO = 60_000;
+const MEIA_HORA = 30 * MINUTO;
+
+/**
+ * RN05: o primeiro Intervalo de 30 minutos que a Antecedência mínima aceita a partir do `agora`.
+ * São Paulo fica a um número inteiro de horas do UTC, então a meia hora do UTC é a de lá.
+ */
+export function proximoIntervaloReservavel(agora: string): { inicio: Date; fim: Date } {
+  const minimo = Date.parse(agora) + POLITICA.antecedenciaMinimaMin * MINUTO;
+  const inicio = Math.ceil(minimo / MEIA_HORA) * MEIA_HORA;
+  return { inicio: new Date(inicio), fim: new Date(inicio + MEIA_HORA) };
+}
+
+/** RN14: o instante em que a janela do Check-in abre. */
+export function janelaDoCheckIn(inicio: Date): Date {
+  return new Date(inicio.getTime() - POLITICA.checkInAntesDoInicioMin * MINUTO);
+}
+
+const PARTES_EM_SAO_PAULO = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Sao_Paulo',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+/**
+ * RNF08: o instante em São Paulo, como a tela mostra: `campo` é o valor do "Ir para data e hora"
+ * da barra do relógio, e `data` e `hora` montam o rótulo de Minhas reservas.
+ */
+export function emSaoPaulo(instante: Date): { campo: string; data: string; hora: string } {
+  const parte = (tipo: Intl.DateTimeFormatPartTypes) =>
+    PARTES_EM_SAO_PAULO.formatToParts(instante).find((p) => p.type === tipo)?.value ?? '';
+  const [ano, mes, dia] = [parte('year'), parte('month'), parte('day')];
+  const hora = `${parte('hour')}:${parte('minute')}`;
+  return { campo: `${ano}-${mes}-${dia}T${hora}`, data: `${dia}/${mes}/${ano}`, hora };
 }
