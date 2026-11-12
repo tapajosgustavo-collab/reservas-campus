@@ -29,6 +29,9 @@ export const tema = createTheme({
       8: '#1b6e2d',
       9: '#1b6e2d',
     }),
+    // O fundo do item ativo do menu com o mouse em cima (variante light, hover) é blue[2]. O
+    // #a5d8ff padrão dá 4.02:1 com o texto blue[9]; #c3e3fd dá 4.56:1.
+    blue: comTonsAcessiveis(DEFAULT_THEME.colors.blue, { 2: '#c3e3fd' }),
     yellow: comTonsAcessiveis(DEFAULT_THEME.colors.yellow, {
       6: '#8a5200',
       7: '#8a5200',
