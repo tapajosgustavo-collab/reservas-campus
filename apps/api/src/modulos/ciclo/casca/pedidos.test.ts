@@ -284,7 +284,7 @@ comBanco('US11 · Decidir Pedidos', () => {
     expect(resposta.json().erro.codigo).toBe('entrada_invalida');
   });
 
-  it('RN12 · Aprovação no Prazo de decisão (2h antes do início) → 422 citando a regra', async () => {
+  it('RN12 · Aprovação de Pedido expirado no Prazo de decisão → 422 citando a regra', async () => {
     const app = await umaAppAs('11T12:00');
     const { carlos, pedido } = await umPedido();
 
