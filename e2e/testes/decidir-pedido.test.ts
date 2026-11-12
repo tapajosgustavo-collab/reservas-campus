@@ -99,7 +99,7 @@ test('fluxo de decidir Pedido: o Aluno pede, a Dora aprova na fila e o Aluno é 
   await entrarComo(page, 'Dora Alves');
   await abrirNoMenu(page, isMobile, 'Pedidos');
   await expect(page.getByRole('heading', { level: 2, name: 'Pedidos' })).toBeVisible();
-  const linha = page.getByRole('row', { name: new RegExp(finalidade.replace(/[()]/g, '\\$&')) });
+  const linha = page.getByRole('row').filter({ hasText: finalidade });
   await expect(linha).toContainText('Auditório');
   await expect(linha).toContainText(aluno);
   await expect(linha).toContainText('80/150');
