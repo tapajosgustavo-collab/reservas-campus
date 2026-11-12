@@ -147,7 +147,7 @@ comBanco('sincronizar (casca e integração)', () => {
       expect.objectContaining({
         tipo: 'Lembrete',
         mensagem:
-          'Lembrete: sua Reserva de Sala 101 (11/11/2026, das 14:00 às 16:00) começa em 1 hora.',
+          'Lembrete: sua Reserva de Sala 101 (11/11/2026, das 14:00 às 16:00) começa às 14:00.',
         em: '2026-11-11T13:00:00-03:00',
         reservaId: confirmada.id,
       }),
@@ -188,6 +188,91 @@ comBanco('sincronizar (casca e integração)', () => {
     });
     // O lembrete foi descartado porque a reserva já começou
     expect(notifs.json().itens).toHaveLength(0);
+  });
+
+  it('US16 · Reserva Confirmada que já começou não entra na consulta e sincronizar devolve 0 em requisições seguidas', async () => {
+    const relogio = new RelogioFixo(as('11T14:30'));
+    const carlos = await umUsuario(banco, 'Gestor', { nome: 'Carlos' });
+    const ana = await umUsuario(banco, 'Aluno', { nome: 'Ana' });
+    const sala = await umEspaco(banco, { gestorId: carlos.id, nome: 'Sala 102' });
+
+    // Reserva das 14h às 16h; o relógio já está às 14h30 (já começou)
+    await umaReserva(banco, {
+      usuarioId: ana.id,
+      recursoId: sala.id,
+      ...QUARTA_14H,
+      status: 'Confirmada',
+    });
+
+    // Primeira requisição: devolve 0 e não grava notificação
+    const aplicados1 = await banco.$transaction((tx) => sincronizar(tx, relogio.agora()));
+    expect(aplicados1).toBe(0);
+
+    // Segunda requisição: continua devolvendo 0
+    const aplicados2 = await banco.$transaction((tx) => sincronizar(tx, relogio.agora()));
+    expect(aplicados2).toBe(0);
+
+    const notificacoes = await banco.notificacao.findMany({ where: { destinatarioId: ana.id } });
+    expect(notificacoes).toHaveLength(0);
+  });
+
+  it('RN21 · Série em recurso restrito expira todas as ocorrências e grava apenas 1 Notificação', async () => {
+    const relogio = new RelogioFixo(as('11T10:00'));
+    const carlos = await umUsuario(banco, 'Gestor', { nome: 'Carlos' });
+    const ana = await umUsuario(banco, 'Docente', { nome: 'Ana' });
+    const auditorio = await umEspaco(banco, {
+      gestorId: carlos.id,
+      nome: 'Auditório Principal',
+      restrito: true,
+    });
+
+    const serie = await banco.serie.create({
+      data: {
+        usuarioId: ana.id,
+        recursoId: auditorio.id,
+        criadaEm: as('10T08:00'),
+      },
+    });
+
+    // Semana 1: 11/11 das 12h às 14h (prazo de decisão: 10h00)
+    const oc1 = await umaReserva(banco, {
+      usuarioId: ana.id,
+      recursoId: auditorio.id,
+      inicio: '2026-11-11T12:00:00-03:00',
+      fim: '2026-11-11T14:00:00-03:00',
+      status: 'Pendente',
+      serieId: serie.id,
+    });
+
+    // Semana 2: 18/11 das 12h às 14h
+    const oc2 = await umaReserva(banco, {
+      usuarioId: ana.id,
+      recursoId: auditorio.id,
+      inicio: '2026-11-18T12:00:00-03:00',
+      fim: '2026-11-18T14:00:00-03:00',
+      status: 'Pendente',
+      serieId: serie.id,
+    });
+
+    // Sincroniza às 10h00 (momento do prazo de decisão da 1ª ocorrência)
+    const aplicados = await banco.$transaction((tx) => sincronizar(tx, relogio.agora()));
+    // 2 StatusMudou + 1 NotificacaoEmitida = 3 efeitos
+    expect(aplicados).toBe(3);
+
+    const oc1Db = await banco.reserva.findUniqueOrThrow({ where: { id: oc1.id } });
+    const oc2Db = await banco.reserva.findUniqueOrThrow({ where: { id: oc2.id } });
+    expect(oc1Db.status).toBe('Expirada');
+    expect(oc2Db.status).toBe('Expirada');
+
+    const notificacoes = await banco.notificacao.findMany({ where: { destinatarioId: ana.id } });
+    expect(notificacoes).toEqual([
+      expect.objectContaining({
+        tipo: 'Expiracao',
+        mensagem: 'Seu Pedido em Série de Auditório Principal expirou.',
+        em: as('11T10:00'),
+        reservaId: oc1.id,
+      }),
+    ]);
   });
 
   it('função sincronizar(tx, agora) devolve a quantidade de efeitos gravados e é idempotente', async () => {
