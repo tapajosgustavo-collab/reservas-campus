@@ -5,6 +5,9 @@ export default defineConfig({
   testDir: './testes',
   forbidOnly: !!process.env.CI,
   retries: 1,
+  // Um teste por vez: o banco e o relógio da demo são um só para todos, e o E2E de Check-in avança
+  // o relógio (que não volta). Em paralelo, um projeto podia pular a janela do Check-in do outro.
+  workers: 1,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: process.env.URL_DA_APP || 'http://localhost:3000',

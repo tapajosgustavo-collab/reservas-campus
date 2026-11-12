@@ -30,10 +30,14 @@ test('fluxo de reservar com verificação de conflito e acessibilidade (US07, RN
   // RNF13: acessibilidade na agenda do Recurso
   await conferirAcessibilidade(page);
 
-  // 3. Abrir a janela de criação de Reserva clicando num horário livre (12:00)
-  // Computador usa Terça 10/11 e celular usa Quarta 11/11 para não colidirem no mesmo banco.
-  const rotuloCelula = isMobile ? 'Quarta 11/11, 12:00: Livre' : 'Terça 10/11, 12:00: Livre';
-  const celulaLivre = page.getByRole('button', { name: rotuloCelula });
+  // 3. Abrir a janela de criação de Reserva clicando num horário livre (12:00).
+  // O relógio da demo é um só e não volta (o E2E de Check-in o avança), então a Reserva fica numa
+  // quinta (computador) ou sexta (celular) longe do T0: a Antecedência mínima (RN05) continua
+  // valendo mesmo depois de umas horas de relógio. Dias diferentes para não colidirem no banco.
+  const dia = isMobile
+    ? { rotulo: 'Sexta 13/11', campo: '2026-11-13', exibida: '13/11/2026' }
+    : { rotulo: 'Quinta 12/11', campo: '2026-11-12', exibida: '12/11/2026' };
+  const celulaLivre = page.getByRole('button', { name: `${dia.rotulo}, 12:00: Livre` });
   await expect(celulaLivre).toBeVisible();
   await celulaLivre.click();
 
@@ -49,19 +53,39 @@ test('fluxo de reservar com verificação de conflito e acessibilidade (US07, RN
     await expect(modal.getByRole('button', { name: 'Reservar' })).toBeInViewport();
   }
 
-  // Tenta reservar em cima do horário do Bruno na terça 10/11 (10:00 às 12:00) para ver o Conflito (RN01):
+  // 4. Reservar das 12h às 14h
   const campoData = modal.getByLabel('Data');
-  await campoData.fill('2026-11-10');
-
   const selectInicio = modal.getByLabel('Início');
-  await selectInicio.click();
-  await page.getByRole('option', { name: '10:00', exact: true }).click();
-
   const selectFim = modal.getByLabel('Fim');
-  await selectFim.click();
+  await campoData.fill(dia.campo);
+
+  await selectInicio.click();
   await page.getByRole('option', { name: '12:00', exact: true }).click();
 
+  await selectFim.click();
+  await page.getByRole('option', { name: '14:00', exact: true }).click();
+
   // RN08: Espaço pede Participantes (a Sala 101 comporta 40)
+  await modal.getByLabel('Participantes').fill('10');
+  await modal.getByLabel('Finalidade').fill('Grupo de estudos de Engenharia de Software');
+  await modal.getByRole('button', { name: 'Reservar' }).click();
+
+  // A janela fecha com o sucesso da criação e o alerta verde aparece na agenda
+  await expect(modal).not.toBeVisible();
+  await conferirAcessibilidade(page);
+
+  // Tenta reservar das 13h às 15h, em cima da Reserva que acabou de criar, para ver o Conflito
+  // (RN01). Ela é a única coisa no Intervalo, então só a RN01 pode recusar.
+  await page.getByRole('button', { name: `${dia.rotulo}, 14:00: Livre` }).click();
+  await expect(modal).toBeVisible();
+  await campoData.fill(dia.campo);
+
+  await selectInicio.click();
+  await page.getByRole('option', { name: '13:00', exact: true }).click();
+
+  await selectFim.click();
+  await page.getByRole('option', { name: '15:00', exact: true }).click();
+
   await modal.getByLabel('Participantes').fill('10');
   await modal.getByRole('button', { name: 'Reservar' }).click();
 
@@ -72,24 +96,8 @@ test('fluxo de reservar com verificação de conflito e acessibilidade (US07, RN
   await expect(alerta).toContainText(/Conflito/i);
   await conferirAcessibilidade(page);
 
-  // 4. Reservar das 12h às 14h
-  const dataReserva = isMobile ? '2026-11-11' : '2026-11-10';
-  const dataExibida = isMobile ? '11/11/2026' : '10/11/2026';
-  await campoData.fill(dataReserva);
-
-  await selectInicio.click();
-  await page.getByRole('option', { name: '12:00', exact: true }).click();
-
-  await selectFim.click();
-  await page.getByRole('option', { name: '14:00', exact: true }).click();
-
-  await modal.getByLabel('Participantes').fill('10');
-  await modal.getByLabel('Finalidade').fill('Grupo de estudos de Engenharia de Software');
-  await modal.getByRole('button', { name: 'Reservar' }).click();
-
-  // A janela fecha com o sucesso da criação e o alerta verde aparece na agenda
+  await modal.getByRole('button', { name: 'Cancelar' }).click();
   await expect(modal).not.toBeVisible();
-  await conferirAcessibilidade(page);
 
   // 5. Ver a nova Reserva em Minhas reservas
   await page.goto('/reservas');
@@ -104,7 +112,7 @@ test('fluxo de reservar com verificação de conflito e acessibilidade (US07, RN
 
   // Confere que a Reserva da Sala 101 das 12h às 14h aparece na lista de Ativas como Confirmada:
   const linhaDaReserva = page.getByRole('row', {
-    name: new RegExp(`Sala 101.*${dataExibida}, das 12:00 às 14:00`, 'i'),
+    name: new RegExp(`Sala 101.*${dia.exibida}, das 12:00 às 14:00`, 'i'),
   });
   await expect(linhaDaReserva).toBeVisible();
   await expect(linhaDaReserva).toContainText('Confirmada');

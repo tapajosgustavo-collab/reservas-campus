@@ -25,19 +25,19 @@ function segASex(abre: number, fecha: number) {
 }
 
 // Os nove Recursos do #18 (§3): a Dora é a Gestora responsável pelos Espaços e o Carlos, pelos
-// Equipamentos (RN13).
+// Equipamentos (RN13). O Laboratório 2 e o Auditório são restritos (RN10).
 const RECURSOS: { gestor: Email; recurso: CadastrarRecurso }[] = [
   ...(
     [
-      ['Sala 101', 'Bloco A', 40, segASex(7, 23)],
-      ['Sala 102', 'Bloco A', 40, segASex(7, 23)],
-      ['Sala de estudos 3', 'Biblioteca', 6, segASex(8, 22)],
-      ['Laboratório de Informática 2', 'Bloco B', 30, segASex(7, 23)],
-      ['Auditório', 'Bloco Central', 150, segASex(8, 22)],
+      ['Sala 101', 'Bloco A', 40, segASex(7, 23), false],
+      ['Sala 102', 'Bloco A', 40, segASex(7, 23), false],
+      ['Sala de estudos 3', 'Biblioteca', 6, segASex(8, 22), false],
+      ['Laboratório de Informática 2', 'Bloco B', 30, segASex(7, 23), true],
+      ['Auditório', 'Bloco Central', 150, segASex(8, 22), true],
     ] as const
-  ).map(([nome, local, capacidade, horarios]) => ({
+  ).map(([nome, local, capacidade, horarios, restrito]) => ({
     gestor: 'dora.demo@unifesp.br' as const,
-    recurso: { tipo: 'Espaco' as const, nome, local, capacidade, horarios },
+    recurso: { tipo: 'Espaco' as const, nome, local, capacidade, horarios, restrito },
   })),
   ...(
     [
@@ -60,8 +60,9 @@ const RECURSOS: { gestor: Email; recurso: CadastrarRecurso }[] = [
 
 /**
  * As Reservas das cenas (#18, §4), em T0 + `dias` e horas: na demo T0 é D (terça) às 08:00, então
- * `{ dias: 0, das: 2, ate: 4 }` é D das 10h às 12h. Cada uma foi criada pelo dono, Confirmada, no
- * dia `criadaNoDia` à hora do T0. Cresce por incremento, nos tickets "cenas da demo no seed".
+ * `{ dias: 0, das: 2, ate: 4 }` é D das 10h às 12h. Cada uma foi criada pelo dono no dia
+ * `criadaNoDia` à hora do T0: Confirmada no Recurso comum e Pendente no restrito (RN10), como o
+ * `reservar` faria. Cresce por incremento, nos tickets "cenas da demo no seed".
  */
 const RESERVAS: {
   quem: Email;
@@ -70,6 +71,9 @@ const RESERVAS: {
   das: number;
   ate: number;
   criadaNoDia: number;
+  /** Só no Pedido, que a fila do Gestor mostra com as pessoas e a Finalidade (cena 5). */
+  participantes?: number;
+  finalidade?: string;
 }[] = [
   // D−7, 10h–12h: a aba "Encerradas" com conteúdo. O Check-in às 9h55 chega no incremento 4, e com
   // ele o sincronizar a Conclui às 12h (RN18).
@@ -94,6 +98,18 @@ const RESERVAS: {
     das: 2,
     ate: 4,
     criadaNoDia: -1,
+  },
+  // D, 12h–14h, pedida em D−2: o Pedido na fila da Dora (cena 5) que expira às 10h, no Prazo de
+  // decisão (RN12, cena 7).
+  {
+    quem: 'bruno.demo@unifesp.br',
+    recurso: 'Laboratório de Informática 2',
+    dias: 0,
+    das: 4,
+    ate: 6,
+    criadaNoDia: -2,
+    participantes: 20,
+    finalidade: 'Monitoria de Cálculo',
   },
 ];
 
@@ -158,17 +174,20 @@ export async function semear(banco: Banco, agora: Date): Promise<'semeado' | 'ig
       if (id === undefined) throw new Error(`O seed não tem o Recurso "${nome}".`);
       return id;
     };
+    const restritos = new Set<string>();
     for (const { gestor, recurso } of RECURSOS) {
       const id = await recursos.executar(tx, {
         evento: 'RecursoCadastrado',
         recurso: { ...recurso, gestorId: idDe.get(gestor)! },
       });
       idsDosRecursos.set(recurso.nome, id);
+      if (recurso.restrito) restritos.add(recurso.nome);
     }
 
-    for (const { quem, recurso, dias, das, ate, criadaNoDia } of RESERVAS) {
+    for (const { quem, recurso, dias, das, ate, criadaNoDia, ...detalhes } of RESERVAS) {
       const usuarioId = idDe.get(quem)!;
       const criadaEm = noT0(t0, criadaNoDia);
+      const status = restritos.has(recurso) ? 'Pendente' : 'Confirmada';
       await reservas.executar(tx, {
         evento: 'ReservaCriada',
         reserva: {
@@ -176,10 +195,11 @@ export async function semear(banco: Banco, agora: Date): Promise<'semeado' | 'ig
           recursoId: idDoRecurso(recurso),
           inicio: noT0(t0, dias, das),
           fim: noT0(t0, dias, ate),
-          status: 'Confirmada',
+          ...detalhes,
+          status,
           criadaEm,
         },
-        transicao: { de: null, para: 'Confirmada', em: criadaEm, porId: usuarioId },
+        transicao: { de: null, para: status, em: criadaEm, porId: usuarioId },
       });
     }
 
