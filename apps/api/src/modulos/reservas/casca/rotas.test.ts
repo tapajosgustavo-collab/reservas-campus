@@ -612,7 +612,12 @@ comBanco('US08 · Reservar', () => {
     const app = await umaApp({ banco });
     const { lab, ana } = await cenario();
     for (const status of ['Pendente', 'Confirmada', 'EmUso'] as const) {
-      await umaReserva(banco, { usuarioId: ana.id, status });
+      await umaReserva(banco, {
+        usuarioId: ana.id,
+        status,
+        inicio: status === 'Pendente' ? AMANHA_INICIO : undefined,
+        fim: status === 'Pendente' ? AMANHA_FIM : undefined,
+      });
     }
 
     const resposta = await reservar(app, ana.id, {

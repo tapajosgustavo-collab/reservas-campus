@@ -27,6 +27,8 @@ export interface Politica {
   toleranciaMin: number;
   /** RN12: o Prazo de decisão do Pedido, em minutos antes do início. */
   prazoDeDecisaoMin: number;
+  /** US16: o Lembrete de Reserva Confirmada, em minutos antes do início. */
+  lembreteAntesDoInicioMin: number;
   /** RN21: quantas semanas a Série cobre, da primeira Ocorrência à última, com as desmarcadas. */
   semanasMaximasDaSerie: number;
 }
@@ -45,5 +47,6 @@ export const POLITICA = {
   checkInAntesDoInicioMin: 15,
   toleranciaMin: 15,
   prazoDeDecisaoMin: 120,
+  lembreteAntesDoInicioMin: 60,
   semanasMaximasDaSerie: 18,
 } as const satisfies Politica;

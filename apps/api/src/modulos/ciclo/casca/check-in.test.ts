@@ -112,7 +112,7 @@ comBanco('US12 · Fazer Check-in', () => {
     });
   });
 
-  it('RN14 · Reserva Pendente, na janela → 422 citando a regra', async () => {
+  it('RN14 · Reserva Expirada, na janela → 422 citando a regra', async () => {
     const app = await umaAppAs('09:50');
     const ana = await umUsuario(banco);
     const reserva = await umaReserva(banco, { usuarioId: ana.id, status: 'Pendente' });
@@ -124,7 +124,7 @@ comBanco('US12 · Fazer Check-in', () => {
       {
         rn: 'RN14',
         nome: 'Janela de Check-in',
-        mensagem: 'Reserva Pendente não aceita Check-in: ela ainda aguarda a decisão do Gestor.',
+        mensagem: 'Esta Reserva já foi encerrada e não aceita mais Check-in.',
       },
     ]);
   });

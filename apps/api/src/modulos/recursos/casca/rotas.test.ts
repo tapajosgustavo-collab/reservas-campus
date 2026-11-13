@@ -432,7 +432,12 @@ comBanco('US04 · Editar Recurso', () => {
     const app = await umaApp({ banco });
     const carlos = await umUsuario(banco, 'Gestor');
     const lab = await umEspaco(banco, { gestorId: carlos.id, restrito: true });
-    const pedido = await umaReserva(banco, { recursoId: lab.id, status: 'Pendente' });
+    const pedido = await umaReserva(banco, {
+      recursoId: lab.id,
+      status: 'Pendente',
+      inicio: '2026-11-10T14:00:00-03:00',
+      fim: '2026-11-10T16:00:00-03:00',
+    });
 
     const resposta = await app.inject({
       method: 'PATCH',

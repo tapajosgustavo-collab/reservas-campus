@@ -85,11 +85,11 @@ export interface ReservaCriada {
   transicao: { de: null; para: Status; em: Date; porId: number };
 }
 
-/** A Reserva muda de Status, com a linha do histórico. Quem decide é outro módulo (o Check-in é do M4). */
+/** A Reserva muda de Status, com a linha do histórico. Quem decide é outro módulo (o Check-in e o sincronizar são do M4; porId null = o sistema). */
 export interface StatusMudou {
   evento: 'StatusMudou';
   reservaId: number;
-  transicao: { de: Status; para: Status; em: Date; porId: number; observacao?: string };
+  transicao: { de: Status; para: Status; em: Date; porId: number | null; observacao?: string };
 }
 
 /**
