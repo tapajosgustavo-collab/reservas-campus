@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import type { ItemDaFila } from '@reservas/shared';
 import { ErroDaApi } from '../../comum/api';
 import {
   corDoPrazo,
+  enderecoDaDecisao,
   msAteMudarACor,
+  nomeDoItem,
   podeConfirmarRecusa,
   resumoDoLote,
+  rotuloDasOcorrencias,
   rotuloDasPessoas,
 } from './pedidos';
 
@@ -86,5 +90,53 @@ describe('US11 · Pessoas/Capacidade na fila', () => {
     expect(rotuloDasPessoas({ participantes: 25, recurso: { capacidade: 30 } })).toBe('25/30');
     expect(rotuloDasPessoas({ participantes: null, recurso: { capacidade: 30 } })).toBe('—/30');
     expect(rotuloDasPessoas({ participantes: null, recurso: { capacidade: null } })).toBe('—');
+  });
+});
+
+/** O Pedido avulso da Ana e a Série do Eduardo, no laboratório do Carlos. */
+const avulso: ItemDaFila = {
+  id: 42,
+  serieId: null,
+  inicio: '2026-11-11T14:00:00-03:00',
+  fim: '2026-11-11T16:00:00-03:00',
+  expiraEm: '2026-11-11T12:00:00-03:00',
+  reservas: [{ id: 42, inicio: '2026-11-11T14:00:00-03:00', fim: '2026-11-11T16:00:00-03:00' }],
+  participantes: 25,
+  finalidade: null,
+  recurso: { id: 1, nome: 'Laboratório de Química', tipo: 'Espaco', capacidade: 30 },
+  solicitante: { id: 7, nome: 'Ana', perfil: 'Aluno' },
+};
+
+const daSerie: ItemDaFila = {
+  ...avulso,
+  id: 51,
+  serieId: 5,
+  reservas: ['11', '18', '25'].map((dia, i) => ({
+    id: 51 + i,
+    inicio: `2026-11-${dia}T14:00:00-03:00`,
+    fim: `2026-11-${dia}T16:00:00-03:00`,
+  })),
+  solicitante: { id: 9, nome: 'Eduardo', perfil: 'Docente' },
+};
+
+describe('RN21 · Série como um item só na fila', () => {
+  it('a Série mostra quantas Ocorrências e as datas; o Pedido avulso, nada a mais', () => {
+    expect(rotuloDasOcorrencias(daSerie)).toBe('Série: 3 Ocorrências (11/11, 18/11 e 25/11)');
+    expect(rotuloDasOcorrencias({ ...daSerie, reservas: daSerie.reservas.slice(2) })).toBe(
+      'Série: 1 Ocorrência (25/11)',
+    );
+    expect(rotuloDasOcorrencias(avulso)).toBeNull();
+  });
+
+  it('o nome do item nos botões e avisos diz se é a Série ou o Pedido', () => {
+    expect(nomeDoItem(avulso)).toBe('o Pedido de Laboratório de Química, de Ana');
+    expect(nomeDoItem(daSerie)).toBe('a Série de Laboratório de Química, de Eduardo');
+  });
+
+  it('a Série é aprovada e recusada pela rota da Série; o Pedido avulso, pela da Reserva', () => {
+    expect(enderecoDaDecisao(daSerie, 'aprovacao')).toBe('/api/series/5/aprovacao');
+    expect(enderecoDaDecisao(daSerie, 'recusa')).toBe('/api/series/5/recusa');
+    expect(enderecoDaDecisao(avulso, 'aprovacao')).toBe('/api/reservas/42/aprovacao');
+    expect(enderecoDaDecisao(avulso, 'recusa')).toBe('/api/reservas/42/recusa');
   });
 });

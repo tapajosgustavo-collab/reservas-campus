@@ -146,6 +146,8 @@ comBanco('US11 · Decidir Pedidos', () => {
         inicio: '2026-11-11T14:00:00-03:00',
         fim: '2026-11-11T16:00:00-03:00',
         expiraEm: '2026-11-11T12:00:00-03:00',
+        serieId: null,
+        reservas: [{ id: antes.id, ...QUARTA_14H }],
         participantes: null,
         finalidade: null,
         recurso: { id: camera.id, nome: 'Câmera 4K', tipo: 'Equipamento', capacidade: null },
@@ -156,6 +158,10 @@ comBanco('US11 · Decidir Pedidos', () => {
         inicio: '2026-11-12T08:00:00-03:00',
         fim: '2026-11-12T10:00:00-03:00',
         expiraEm: '2026-11-12T06:00:00-03:00',
+        serieId: null,
+        reservas: [
+          { id: depois.id, inicio: '2026-11-12T08:00:00-03:00', fim: '2026-11-12T10:00:00-03:00' },
+        ],
         participantes: 25,
         finalidade: 'Aula prática de titulação',
         recurso: {
@@ -398,5 +404,296 @@ comBanco('US11 · Decidir Pedidos', () => {
 
     expect(aprovacao.statusCode).toBe(401);
     expect(recusa.statusCode).toBe(401);
+  });
+});
+
+function decidirSerie(
+  app: App,
+  usuarioId: number,
+  serieId: number,
+  decisao: 'aprovacao' | 'recusa',
+  payload?: object,
+) {
+  return app.inject({
+    method: 'POST',
+    url: `/api/series/${serieId}/${decisao}`,
+    cookies: sessao(app, usuarioId),
+    ...(payload ? { payload } : {}),
+  });
+}
+
+/** As quartas da Série do Eduardo, das 14h às 16h: 11/11, 18/11 e 25/11 (Prazo de decisão: 11/11, 12h). */
+const QUARTAS = ['11', '18', '25'].map((dia) => ({
+  inicio: `2026-11-${dia}T14:00:00-03:00`,
+  fim: `2026-11-${dia}T16:00:00-03:00`,
+}));
+
+/** O laboratório restrito do Carlos e a Série do Eduardo nele, com as três Ocorrências Pendentes. */
+async function umaSerie() {
+  const carlos = await umUsuario(banco, 'Gestor', { nome: 'Carlos' });
+  const eduardo = await umUsuario(banco, 'Docente', { nome: 'Eduardo' });
+  const laboratorio = await umEspaco(banco, {
+    gestorId: carlos.id,
+    nome: 'Laboratório de Química',
+    capacidade: 30,
+    restrito: true,
+  });
+  const serie = await banco.serie.create({
+    data: {
+      usuarioId: eduardo.id,
+      recursoId: laboratorio.id,
+      criadaEm: new Date('2026-11-01T08:00:00-03:00'),
+    },
+  });
+  const ocorrencias = [];
+  for (const quarta of QUARTAS) {
+    ocorrencias.push(
+      await umaReserva(banco, {
+        usuarioId: eduardo.id,
+        recursoId: laboratorio.id,
+        serieId: serie.id,
+        ...quarta,
+        participantes: 20,
+        finalidade: 'Aula prática',
+        status: 'Pendente',
+      }),
+    );
+  }
+  return { carlos, eduardo, laboratorio, serie, ocorrencias };
+}
+
+comBanco('US11 · RN21 · Série restrita decidida inteira na fila', () => {
+  beforeAll(() => {
+    banco = bancoDeTeste();
+  });
+  afterAll(() => banco.$disconnect());
+  beforeEach(() => esvaziar(banco));
+
+  it('RN21 · GET /api/gestao/pedidos → a Série é um item só, com as Ocorrências Pendentes, e o Pedido avulso continua como antes', async () => {
+    const app = await umaAppAs('10T09:00');
+    const { carlos, eduardo, laboratorio, serie, ocorrencias } = await umaSerie();
+    const ana = await umUsuario(banco, 'Aluno', { nome: 'Ana' });
+    const avulso = await umaReserva(banco, {
+      usuarioId: ana.id,
+      recursoId: laboratorio.id,
+      inicio: '2026-11-12T08:00:00-03:00',
+      fim: '2026-11-12T10:00:00-03:00',
+      status: 'Pendente',
+    });
+
+    const resposta = await listarPedidos(app, carlos.id);
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json()).toEqual([
+      {
+        id: ocorrencias[0]!.id,
+        serieId: serie.id,
+        ...QUARTAS[0],
+        expiraEm: '2026-11-11T12:00:00-03:00',
+        reservas: ocorrencias.map(({ id }, i) => ({ id, ...QUARTAS[i] })),
+        participantes: 20,
+        finalidade: 'Aula prática',
+        recurso: {
+          id: laboratorio.id,
+          nome: 'Laboratório de Química',
+          tipo: 'Espaco',
+          capacidade: 30,
+        },
+        solicitante: { id: eduardo.id, nome: 'Eduardo', perfil: 'Docente' },
+      },
+      expect.objectContaining({
+        id: avulso.id,
+        serieId: null,
+        reservas: [
+          {
+            id: avulso.id,
+            inicio: '2026-11-12T08:00:00-03:00',
+            fim: '2026-11-12T10:00:00-03:00',
+          },
+        ],
+      }),
+    ]);
+  });
+
+  it('RN21 · POST /api/series/:id/aprovacao → 200 com todas as Ocorrências Confirmadas, cada uma com quem decidiu no histórico, e uma Notificação só', async () => {
+    const app = await umaAppAs('10T09:00');
+    const { carlos, eduardo, laboratorio, serie, ocorrencias } = await umaSerie();
+
+    const resposta = await decidirSerie(app, carlos.id, serie.id, 'aprovacao');
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json()).toEqual({
+      reservas: ocorrencias.map(({ id }, i) => ({
+        id,
+        recursoId: laboratorio.id,
+        ...QUARTAS[i],
+        participantes: 20,
+        finalidade: 'Aula prática',
+        status: 'Confirmada',
+        criadaEm: '2026-11-01T08:00:00-03:00',
+      })),
+    });
+    for (const { id } of ocorrencias) {
+      expect((await abrir(app, eduardo.id, id)).json().historico).toEqual([
+        {
+          de: 'Pendente',
+          para: 'Confirmada',
+          em: '2026-11-10T09:00:00-03:00',
+          por: { id: carlos.id, nome: 'Carlos' },
+          observacao: null,
+        },
+      ]);
+    }
+    expect(
+      await banco.notificacao.findMany({
+        where: { destinatarioId: eduardo.id },
+        select: { tipo: true, mensagem: true, reservaId: true },
+      }),
+    ).toEqual([
+      {
+        tipo: 'Aprovacao',
+        mensagem:
+          'Seu Pedido em Série de Laboratório de Química (3 Ocorrências, de 11/11/2026 a 25/11/2026, das 14:00 às 16:00) foi aprovado.',
+        reservaId: ocorrencias[0]!.id,
+      },
+    ]);
+    expect((await listarPedidos(app, carlos.id)).json()).toEqual([]);
+  });
+
+  it('RN21 · POST /api/series/:id/recusa → 200 com todas as Ocorrências Recusadas, a mesma justificativa em cada uma (RN11)', async () => {
+    const app = await umaAppAs('10T09:00');
+    const { carlos, eduardo, serie, ocorrencias } = await umaSerie();
+
+    const resposta = await decidirSerie(app, carlos.id, serie.id, 'recusa', {
+      justificativa: 'Laboratório em reforma no semestre.',
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json().reservas.map(({ status }: { status: string }) => status)).toEqual([
+      'Recusada',
+      'Recusada',
+      'Recusada',
+    ]);
+    for (const { id } of ocorrencias) {
+      expect((await abrir(app, eduardo.id, id)).json().historico).toEqual([
+        {
+          de: 'Pendente',
+          para: 'Recusada',
+          em: '2026-11-10T09:00:00-03:00',
+          por: { id: carlos.id, nome: 'Carlos' },
+          observacao: 'Laboratório em reforma no semestre.',
+        },
+      ]);
+    }
+    const notificacoes = await banco.notificacao.findMany({
+      where: { destinatarioId: eduardo.id },
+    });
+    expect(notificacoes).toHaveLength(1);
+    expect(notificacoes[0]).toMatchObject({
+      tipo: 'Recusa',
+      mensagem:
+        'Seu Pedido em Série de Laboratório de Química (3 Ocorrências, de 11/11/2026 a 25/11/2026, das 14:00 às 16:00) foi recusado: Laboratório em reforma no semestre.',
+    });
+  });
+
+  it('RN11 · Recusa da Série sem justificativa → 422, e as Ocorrências continuam Pendentes', async () => {
+    const app = await umaAppAs('10T09:00');
+    const { carlos, serie, ocorrencias } = await umaSerie();
+
+    const resposta = await decidirSerie(app, carlos.id, serie.id, 'recusa', {
+      justificativa: '  ',
+    });
+    const semCampo = await decidirSerie(app, carlos.id, serie.id, 'recusa', {});
+
+    expect(resposta.statusCode).toBe(422);
+    expect(resposta.json().erro.violacoes).toMatchObject([{ rn: 'RN11', campo: 'justificativa' }]);
+    expect(semCampo.statusCode).toBe(400);
+    for (const { id } of ocorrencias) {
+      expect((await abrir(app, carlos.id, id)).json().status).toBe('Pendente');
+    }
+  });
+
+  it('RN21 · aprovar ou recusar uma Ocorrência sozinha pelas rotas da Reserva → 422 citando a RN21, e a Série continua Pendente', async () => {
+    const app = await umaAppAs('10T09:00');
+    const { carlos, ocorrencias } = await umaSerie();
+    const segunda = ocorrencias[1]!;
+
+    const aprovacao = await aprovar(app, carlos.id, segunda.id);
+    const recusa = await recusar(app, carlos.id, segunda.id, { justificativa: 'Só esta data.' });
+
+    for (const resposta of [aprovacao, recusa]) {
+      expect(resposta.statusCode).toBe(422);
+      expect(resposta.json().erro.violacoes).toEqual([
+        {
+          rn: 'RN21',
+          nome: 'Série tudo-ou-nada',
+          mensagem: 'Esta Ocorrência é de uma Série: aprove ou recuse a Série inteira, na fila.',
+        },
+      ]);
+    }
+    for (const { id } of ocorrencias) {
+      expect((await abrir(app, carlos.id, id)).json().status).toBe('Pendente');
+    }
+  });
+
+  it('RN12 · no Prazo de decisão da primeira Ocorrência, o sincronizar expira a Série inteira e a Aprovação dela → 422', async () => {
+    const app = await umaAppAs('11T12:00');
+    const { carlos, eduardo, serie, ocorrencias } = await umaSerie();
+
+    const resposta = await decidirSerie(app, carlos.id, serie.id, 'aprovacao');
+
+    expect(resposta.statusCode).toBe(422);
+    expect(resposta.json().erro.violacoes).toEqual([
+      { rn: 'RN12', nome: 'Expiração', mensagem: 'Esta Série já expirou.' },
+    ]);
+    for (const { id } of ocorrencias) {
+      expect((await abrir(app, eduardo.id, id)).json().status).toBe('Expirada');
+    }
+    expect((await listarPedidos(app, carlos.id)).json()).toEqual([]);
+  });
+
+  it('RN13 · outro Gestor decidindo a Série → 403, e as Ocorrências continuam Pendentes', async () => {
+    const app = await umaAppAs('10T09:00');
+    const { carlos, serie, ocorrencias } = await umaSerie();
+    const dora = await umUsuario(banco, 'Gestor', { nome: 'Dora' });
+
+    const aprovacao = await decidirSerie(app, dora.id, serie.id, 'aprovacao');
+    const recusa = await decidirSerie(app, dora.id, serie.id, 'recusa', { justificativa: 'Não.' });
+
+    for (const resposta of [aprovacao, recusa]) {
+      expect(resposta.statusCode).toBe(403);
+      expect(resposta.json().erro.violacoes).toMatchObject([{ rn: 'RN13' }]);
+    }
+    for (const { id } of ocorrencias) {
+      expect((await abrir(app, carlos.id, id)).json().status).toBe('Pendente');
+    }
+  });
+
+  it('o próprio Docente tentando aprovar a Série → 403', async () => {
+    const app = await umaAppAs('10T09:00');
+    const { eduardo, serie } = await umaSerie();
+
+    const resposta = await decidirSerie(app, eduardo.id, serie.id, 'aprovacao');
+
+    expect(resposta.statusCode).toBe(403);
+    expect(resposta.json().erro.mensagem).toBe('Só Gestor pode fazer isto.');
+  });
+
+  it('Série que não existe → 404; sem sessão → 401', async () => {
+    const app = await umaAppAs('10T09:00');
+    const carlos = await umUsuario(banco, 'Gestor');
+
+    const aprovacao = await decidirSerie(app, carlos.id, 999, 'aprovacao');
+    const recusa = await decidirSerie(app, carlos.id, 999, 'recusa', { justificativa: 'Não.' });
+    const semSessao = await app.inject({ method: 'POST', url: '/api/series/999/aprovacao' });
+
+    for (const resposta of [aprovacao, recusa]) {
+      expect(resposta.statusCode).toBe(404);
+      expect(resposta.json().erro).toMatchObject({
+        codigo: 'nao_encontrado',
+        mensagem: 'Série 999 não encontrada.',
+      });
+    }
+    expect(semSessao.statusCode).toBe(401);
   });
 });
