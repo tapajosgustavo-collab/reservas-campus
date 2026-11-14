@@ -74,10 +74,20 @@ const RESERVAS: {
   /** Só no Pedido, que a fila do Gestor mostra com as pessoas e a Finalidade (cena 5). */
   participantes?: number;
   finalidade?: string;
+  /** Check-in feito pelo dono tantos minutos antes do início (RN14). */
+  checkInMinAntes?: number;
 }[] = [
-  // D−7, 10h–12h: a aba "Encerradas" com conteúdo. O Check-in às 9h55 chega no incremento 4, e com
-  // ele o sincronizar a Conclui às 12h (RN18).
-  { quem: 'ana.demo@unifesp.br', recurso: 'Sala 101', dias: -7, das: 2, ate: 4, criadaNoDia: -8 },
+  // D−7, 10h–12h: a aba "Encerradas" com conteúdo. Com o Check-in às 9h55, o sincronizar a Conclui
+  // às 12h (RN18); sem ele, viraria Não comparecimento com Penalidade (RN15).
+  {
+    quem: 'ana.demo@unifesp.br',
+    recurso: 'Sala 101',
+    dias: -7,
+    das: 2,
+    ate: 4,
+    criadaNoDia: -8,
+    checkInMinAntes: 5,
+  },
   // D, 10h–12h: tira a Sala 101 da busca da Ana (cena 2), dá o Conflito da cena 3 e é a falta
   // que suspende o Bruno (cena 7).
   { quem: 'bruno.demo@unifesp.br', recurso: 'Sala 101', dias: 0, das: 2, ate: 4, criadaNoDia: -2 },
@@ -184,16 +194,26 @@ export async function semear(banco: Banco, agora: Date): Promise<'semeado' | 'ig
       if (recurso.restrito) restritos.add(recurso.nome);
     }
 
-    for (const { quem, recurso, dias, das, ate, criadaNoDia, ...detalhes } of RESERVAS) {
+    for (const {
+      quem,
+      recurso,
+      dias,
+      das,
+      ate,
+      criadaNoDia,
+      checkInMinAntes,
+      ...detalhes
+    } of RESERVAS) {
       const usuarioId = idDe.get(quem)!;
       const criadaEm = noT0(t0, criadaNoDia);
       const status = restritos.has(recurso) ? 'Pendente' : 'Confirmada';
-      await reservas.executar(tx, {
+      const inicio = noT0(t0, dias, das);
+      const reserva = await reservas.executar(tx, {
         evento: 'ReservaCriada',
         reserva: {
           usuarioId,
           recursoId: idDoRecurso(recurso),
-          inicio: noT0(t0, dias, das),
+          inicio,
           fim: noT0(t0, dias, ate),
           ...detalhes,
           status,
@@ -201,6 +221,18 @@ export async function semear(banco: Banco, agora: Date): Promise<'semeado' | 'ig
         },
         transicao: { de: null, para: status, em: criadaEm, porId: usuarioId },
       });
+      if (checkInMinAntes !== undefined) {
+        await reservas.executar(tx, {
+          evento: 'StatusMudou',
+          reservaId: reserva.id,
+          transicao: {
+            de: status,
+            para: 'EmUso',
+            em: new Date(inicio.getTime() - checkInMinAntes * 60_000),
+            porId: usuarioId,
+          },
+        });
+      }
     }
 
     for (const { recurso, dias, ateDias, motivo } of INDISPONIBILIDADES) {
