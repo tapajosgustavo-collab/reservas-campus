@@ -55,3 +55,15 @@ export function datasDaSerie(primeira: string, ate: string, limite: number): str
   }
   return datas;
 }
+
+// O id é INT4 no banco: maior que isso nem chega ao Prisma.
+export const esquemaIdDaSerie = z.object({
+  id: z.coerce.number().int().positive().max(2_147_483_647),
+});
+
+/** US11 e RN21: a Série decidida inteira, com as Ocorrências que a decisão mudou. */
+export const esquemaSerieDecidida = z.object({
+  reservas: z.array(esquemaReserva).describe('As Ocorrências decididas, da primeira à última'),
+});
+
+export type SerieDecidida = z.infer<typeof esquemaSerieDecidida>;

@@ -117,14 +117,21 @@ export const esquemaDevolucao = z.strictObject({
 export type RegistrarDevolucao = z.infer<typeof esquemaDevolucao>;
 
 /**
- * US11: um Pedido Pendente na fila do Gestor. Os dados de conduta do solicitante (`penalidades30d`,
- * `suspensoAte`) entram no incremento 4 (#58) e a Série como um item só, no 5 (#65).
+ * US11: um Pedido Pendente na fila do Gestor, ou a Série inteira como um item só (RN21), com o `id`,
+ * o Intervalo e os dados da primeira Ocorrência Pendente. Os dados de conduta do solicitante
+ * (`penalidades30d`, `suspensoAte`) entram no incremento 4 (#58).
  */
 export const esquemaItemDaFila = z.object({
-  id: z.number().int(),
+  id: z.number().int().describe('O Pedido avulso, ou a primeira Ocorrência Pendente da Série'),
+  serieId: z.number().int().nullable().describe('Vazio no Pedido avulso'),
   inicio: esquemaInstante,
   fim: esquemaInstante,
-  expiraEm: esquemaInstante.describe('Prazo de decisão (RN12): depois dele, o Pedido expira'),
+  expiraEm: esquemaInstante.describe(
+    'Prazo de decisão (RN12) do Pedido ou da primeira Ocorrência: depois dele, expira',
+  ),
+  reservas: z
+    .array(z.object({ id: z.number().int(), inicio: esquemaInstante, fim: esquemaInstante }))
+    .describe('As Ocorrências Pendentes da Série, da primeira à última; no avulso, só ele'),
   participantes: z.number().int().nullable(),
   finalidade: z.string().nullable(),
   recurso: z.object({

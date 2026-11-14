@@ -310,6 +310,18 @@ describe('RN21 · Série tudo-ou-nada na fila', () => {
     ]);
   });
 
+  it('US11 · dois Pedidos avulsos no mesmo início → o de id menor primeiro', () => {
+    const fila = filaDoGestor(
+      [
+        { id: 44, serieId: null, inicio: em('12T08:00'), fim: em('12T10:00') },
+        { id: 43, serieId: null, inicio: em('12T08:00'), fim: em('12T09:00') },
+      ],
+      POLITICA,
+    );
+
+    expect(fila.map(({ id }) => id)).toEqual([43, 44]);
+  });
+
   it('RN12 · o "Expira em" da Série é o Prazo de decisão da primeira Ocorrência Pendente', () => {
     const [item] = filaDoGestor(
       [

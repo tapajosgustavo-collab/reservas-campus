@@ -22,8 +22,10 @@ import { Erro, useAgoraEmDiaNaBorda } from './botao';
 import {
   corDoPrazo,
   msAteMudarACor,
+  nomeDoItem,
   podeConfirmarRecusa,
   resumoDoLote,
+  rotuloDasOcorrencias,
   rotuloDasPessoas,
   useAprovarPedidos,
   useFila,
@@ -31,10 +33,20 @@ import {
 } from './pedidos';
 
 /** Uma linha curta para os avisos: "Laboratório de Química, de Ana". */
-const doPedido = ({ recurso, solicitante }: ItemDaFila) =>
-  `${recurso.nome}, de ${solicitante.nome}`;
+const deQuem = ({ recurso, solicitante }: ItemDaFila) => `${recurso.nome}, de ${solicitante.nome}`;
 
-/** US11: o Gestor vê os Pedidos dos seus Recursos, aprova um ou vários e recusa com justificativa. */
+/** O começo do aviso depois de decidir: "Pedido aprovado" ou, na Série (RN21), "Série aprovada". */
+const DECIDIDO = {
+  aprovacao: { pedido: 'Pedido aprovado', serie: 'Série aprovada' },
+  recusa: { pedido: 'Pedido recusado', serie: 'Série recusada' },
+} as const;
+const decidido = ({ serieId }: ItemDaFila, decisao: keyof typeof DECIDIDO) =>
+  DECIDIDO[decisao][serieId === null ? 'pedido' : 'serie'];
+
+/**
+ * US11: o Gestor vê os Pedidos dos seus Recursos, aprova um ou vários e recusa com justificativa. A
+ * Série é um item só e é decidida inteira (RN21), na linha ou no lote.
+ */
 export function FilaDePedidos() {
   const fila = useFila();
   const agora = useSessao().data?.agora;
@@ -75,7 +87,7 @@ export function FilaDePedidos() {
     aprovar.mutate([item], {
       onSuccess: ([erro]) => {
         if (erro) setFalha(erro);
-        else setAviso(`Pedido aprovado: ${doPedido(item)}.`);
+        else setAviso(`${decidido(item, 'aprovacao')}: ${deQuem(item)}.`);
       },
     });
   }
@@ -104,11 +116,13 @@ export function FilaDePedidos() {
     setAviso(null);
     setFalha(null);
     recusar.mutate(
-      { id: item.id, justificativa },
+      { item, justificativa },
       {
         onSuccess: () => {
           setRecusando(null);
-          setAviso(`Pedido recusado: ${doPedido(item)}. Justificativa: ${justificativa.trim()}`);
+          setAviso(
+            `${decidido(item, 'recusa')}: ${deQuem(item)}. Justificativa: ${justificativa.trim()}`,
+          );
         },
       },
     );
@@ -181,18 +195,26 @@ export function FilaDePedidos() {
               <Table.Tbody>
                 {pedidos.map((item) => {
                   const cor = agora ? corDoPrazo(item.expiraEm, agora) : null;
+                  const ocorrencias = rotuloDasOcorrencias(item);
                   return (
                     <Fragment key={item.id}>
                       <Table.Tr>
                         <Table.Td>
                           <Checkbox
-                            aria-label={`Selecionar o Pedido de ${doPedido(item)}`}
+                            aria-label={`Selecionar ${nomeDoItem(item)}`}
                             checked={selecionados.has(item.id)}
                             disabled={ocupado}
                             onChange={(evento) => alternar(item.id, evento.currentTarget.checked)}
                           />
                         </Table.Td>
-                        <Table.Td>{rotuloDoIntervalo(item.inicio, item.fim)}</Table.Td>
+                        <Table.Td>
+                          {rotuloDoIntervalo(item.inicio, item.fim)}
+                          {ocorrencias && (
+                            <Text size="sm" c="dimmed">
+                              {ocorrencias}
+                            </Text>
+                          )}
+                        </Table.Td>
                         <Table.Td>
                           {cor ? (
                             <Badge variant="light" color={cor}>
@@ -219,7 +241,7 @@ export function FilaDePedidos() {
                               onClick={() => aprovarNaLinha(item)}
                             >
                               Aprovar
-                              <VisuallyHidden> o Pedido de {doPedido(item)}</VisuallyHidden>
+                              <VisuallyHidden> {nomeDoItem(item)}</VisuallyHidden>
                             </Button>
                             <Button
                               size="xs"
@@ -228,11 +250,14 @@ export function FilaDePedidos() {
                               onClick={() => abrirRecusa(item.id)}
                             >
                               Recusar
-                              <VisuallyHidden> o Pedido de {doPedido(item)}</VisuallyHidden>
+                              <VisuallyHidden> {nomeDoItem(item)}</VisuallyHidden>
                             </Button>
                             <Anchor component={Link} to={`/reservas/${item.id}`} size="sm">
                               Detalhes
-                              <VisuallyHidden> do Pedido de {doPedido(item)}</VisuallyHidden>
+                              <VisuallyHidden>
+                                {item.serieId === null ? ' do Pedido' : ' da primeira Ocorrência'}{' '}
+                                de {deQuem(item)}
+                              </VisuallyHidden>
                             </Anchor>
                           </Group>
                         </Table.Td>
@@ -243,8 +268,12 @@ export function FilaDePedidos() {
                           <Table.Td colSpan={8}>
                             <Stack gap="xs">
                               <Textarea
-                                label={`Justificativa da Recusa (${doPedido(item)})`}
-                                description="Obrigatória: vai na Notificação ao Usuário (RN11)."
+                                label={`Justificativa da Recusa (${deQuem(item)})`}
+                                description={
+                                  item.serieId === null
+                                    ? 'Obrigatória: vai na Notificação ao Usuário (RN11).'
+                                    : 'Obrigatória: vale para todas as Ocorrências da Série e vai na Notificação ao Usuário (RN11, RN21).'
+                                }
                                 required
                                 autosize
                                 minRows={2}
