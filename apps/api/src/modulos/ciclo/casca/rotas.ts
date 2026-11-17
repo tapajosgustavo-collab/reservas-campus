@@ -214,7 +214,6 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
           recurso: { select: { id: true, nome: true, tipo: true, capacidade: true } },
           usuario: { select: { id: true, nome: true, perfil: true } },
         },
-        orderBy: [{ inicio: 'asc' }, { id: 'asc' }],
       });
       return filaDoGestor(pedidos, POLITICA).map(
         ({ inicio, fim, expiraEm, reservas, usuario, ...item }) => ({
