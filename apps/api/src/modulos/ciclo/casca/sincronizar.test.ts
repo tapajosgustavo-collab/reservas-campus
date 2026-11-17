@@ -349,8 +349,9 @@ comBanco('sincronizar (casca e integração)', () => {
         create: [1, 2, 3, 4, 5].map((diaSemana) => ({ diaSemana, abre: 7 * 60, fecha: 23 * 60 })),
       },
     });
-    // Três Reservas Confirmadas da semana passada, sem Check-in: a Cota de Aluno é 3.
-    for (const dia of ['02', '03', '04']) {
+    // A Cota de Aluno é 3: duas Confirmadas da semana passada, sem Check-in, e uma de amanhã. Com
+    // três faltas, a Ana seria suspensa (RN19) e a RN09 recusaria a Reserva por outro motivo.
+    for (const dia of ['02', '03', '11']) {
       await umaReserva(banco, {
         usuarioId: ana.id,
         recursoId: sala.id,
