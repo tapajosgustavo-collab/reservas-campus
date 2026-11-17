@@ -445,20 +445,23 @@ async function umaSerie() {
       criadaEm: new Date('2026-11-01T08:00:00-03:00'),
     },
   });
-  const ocorrencias = [];
-  for (const quarta of QUARTAS) {
-    ocorrencias.push(
+  // Insere fora de ordem (25/11 antes de 11/11 e 18/11) para provar que o núcleo ordena sem orderBy.
+  const porIndice = new Map<number, Awaited<ReturnType<typeof umaReserva>>>();
+  for (const i of [2, 0, 1] as const) {
+    porIndice.set(
+      i,
       await umaReserva(banco, {
         usuarioId: eduardo.id,
         recursoId: laboratorio.id,
         serieId: serie.id,
-        ...quarta,
+        ...QUARTAS[i]!,
         participantes: 20,
         finalidade: 'Aula prática',
         status: 'Pendente',
       }),
     );
   }
+  const ocorrencias = [porIndice.get(0)!, porIndice.get(1)!, porIndice.get(2)!];
   return { carlos, eduardo, laboratorio, serie, ocorrencias };
 }
 
@@ -553,7 +556,7 @@ comBanco('US11 · RN21 · Série restrita decidida inteira na fila', () => {
       {
         tipo: 'Aprovacao',
         mensagem:
-          'Seu Pedido em Série de Laboratório de Química (3 Ocorrências, de 11/11/2026 a 25/11/2026, das 14:00 às 16:00) foi aprovado.',
+          'Seu Pedido em Série de Laboratório de Química (3 Ocorrências, 11/11/2026, 18/11/2026 e 25/11/2026, das 14:00 às 16:00) foi aprovado.',
         reservaId: ocorrencias[0]!.id,
       },
     ]);
@@ -592,7 +595,7 @@ comBanco('US11 · RN21 · Série restrita decidida inteira na fila', () => {
     expect(notificacoes[0]).toMatchObject({
       tipo: 'Recusa',
       mensagem:
-        'Seu Pedido em Série de Laboratório de Química (3 Ocorrências, de 11/11/2026 a 25/11/2026, das 14:00 às 16:00) foi recusado: Laboratório em reforma no semestre.',
+        'Seu Pedido em Série de Laboratório de Química (3 Ocorrências, 11/11/2026, 18/11/2026 e 25/11/2026, das 14:00 às 16:00) foi recusado: Laboratório em reforma no semestre.',
     });
   });
 
