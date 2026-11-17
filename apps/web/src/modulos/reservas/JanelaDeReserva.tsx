@@ -21,6 +21,7 @@ import { opcoesDeMeiaHora } from '../../comum/minutos';
 import { linhaDaViolacao } from '../../comum/violacoes';
 import { useSessao } from '../conduta';
 import {
+  avisoDoCancelamentoTardio,
   avisoDoPedido,
   corpoDaReserva,
   corpoDaSerie,
@@ -92,7 +93,8 @@ function Erro({ erro }: { erro: Error }) {
 function Formulario({ recurso, intervalo, aoFechar, aoCriar }: PropsDoFormulario) {
   const criarReserva = useCriarReserva();
   const criarSerie = useCriarSerie();
-  const docente = useSessao().data?.usuario.perfil === 'Docente';
+  const sessao = useSessao().data;
+  const docente = sessao?.usuario.perfil === 'Docente';
   const [repetir, setRepetir] = useState(false);
   const [ate, setAte] = useState('');
   const [desmarcadas, setDesmarcadas] = useState<string[]>([]);
@@ -102,6 +104,10 @@ function Formulario({ recurso, intervalo, aoFechar, aoCriar }: PropsDoFormulario
   const [participantes, setParticipantes] = useState<number | string>('');
   const [finalidade, setFinalidade] = useState('');
   const espaco = recurso.tipo === 'Espaco';
+  // RN16: só a Confirmada tem Cancelamento tardio; o Pedido nasce Pendente (RN10).
+  const avisoTardio = recurso.restrito
+    ? null
+    : avisoDoCancelamentoTardio({ data, inicio }, sessao?.agora);
   const serie = docente && repetir;
   const criar = serie ? criarSerie : criarReserva;
   // RN21: a tela mostra as datas antes; quem recusa uma Série longa demais é a API.
@@ -217,6 +223,11 @@ function Formulario({ recurso, intervalo, aoFechar, aoCriar }: PropsDoFormulario
         {recurso.restrito && (
           <Alert color="orange" variant="light">
             {avisoDoPedido(recurso.gestor.nome, { data, inicio })}
+          </Alert>
+        )}
+        {avisoTardio && (
+          <Alert color="yellow" variant="light">
+            {avisoTardio}
           </Alert>
         )}
         {criar.error && <Erro erro={criar.error} />}

@@ -80,7 +80,12 @@ describe('RN16 · Cancelamento', () => {
         },
         {
           evento: 'PenalidadeGerada',
-          penalidade: { usuarioId: 7, reservaId: 42, motivo: 'CancelamentoTardio', em: em('12:30') },
+          penalidade: {
+            usuarioId: 7,
+            reservaId: 42,
+            motivo: 'CancelamentoTardio',
+            em: em('12:30'),
+          },
         },
         {
           evento: 'NotificacaoEmitida',

@@ -97,10 +97,17 @@ export const esquemaDetalheDaReserva = esquemaItemDeReserva.extend({
 
 export type DetalheDaReserva = z.infer<typeof esquemaDetalheDaReserva>;
 
-/** US13: o Cancelamento tardio com Penalidade entra no incremento 4 (#61); até lá, `penalidade: null`. */
+/** US13: o Cancelamento, com a Penalidade quando é tardio (RN16). */
 export const esquemaCancelamento = z.object({
   reserva: esquemaReserva,
-  penalidade: z.null(),
+  penalidade: z
+    .object({
+      id: z.number().int(),
+      motivo: z.literal('CancelamentoTardio'),
+      em: esquemaInstante,
+    })
+    .nullable()
+    .describe('`null` = sem Penalidade: Pendente, ou Confirmada a 2h ou mais do início (RN16)'),
 });
 
 export type Cancelamento = z.infer<typeof esquemaCancelamento>;

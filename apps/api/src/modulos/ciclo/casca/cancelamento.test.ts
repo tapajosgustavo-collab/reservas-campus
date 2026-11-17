@@ -44,8 +44,8 @@ comBanco('US13 · Cancelar', () => {
   afterAll(() => banco.$disconnect());
   beforeEach(() => esvaziar(banco));
 
-  it('a dona cancela a Reserva Confirmada 2h30 antes do início → 200 { reserva, penalidade: null }, com a transição no histórico e liberando o Recurso', async () => {
-    const app = await umaAppAs('07:30');
+  it('RN16 · a dona cancela a Reserva Confirmada 2h antes do início em ponto → 200 { reserva, penalidade: null }, com a transição no histórico e liberando o Recurso', async () => {
+    const app = await umaAppAs('08:00');
     const ana = await umUsuario(banco, 'Aluno', { nome: 'Ana' });
     const bruno = await umUsuario(banco, 'Aluno');
     const lab = await umEspaco(banco, {
@@ -73,7 +73,7 @@ comBanco('US13 · Cancelar', () => {
       {
         de: 'Confirmada',
         para: 'Cancelada',
-        em: '2026-11-10T07:30:00-03:00',
+        em: '2026-11-10T08:00:00-03:00',
         por: { id: ana.id, nome: 'Ana' },
         observacao: null,
       },
@@ -121,18 +121,6 @@ comBanco('US13 · Cancelar', () => {
         mensagem: expect.stringContaining('Cancelamento tardio'),
       },
     ]);
-  });
-
-  it('RN16 · a Pendente cancelada a menos de 2h do início → sem Penalidade', async () => {
-    const app = await umaAppAs('09:30');
-    const ana = await umUsuario(banco);
-    const reserva = await umaReserva(banco, { usuarioId: ana.id, status: 'Pendente' });
-
-    const resposta = await cancelar(app, ana.id, reserva.id);
-
-    expect(resposta.statusCode).toBe(200);
-    expect(resposta.json().penalidade).toBeNull();
-    expect(await banco.penalidade.count()).toBe(0);
   });
 
   it('a dona também cancela uma Reserva Pendente → 200 Cancelada, sem Penalidade', async () => {
