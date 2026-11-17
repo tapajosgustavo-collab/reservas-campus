@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { POLITICA } from './politica';
 import { esquemaInstante } from './instante';
-import { esquemaCriarReserva, esquemaReserva } from './reservas';
+import { esquemaCriarReserva, esquemaIdDaReserva, esquemaReserva } from './reservas';
 
 const esquemaData = z.iso.date();
 
@@ -55,3 +55,13 @@ export function datasDaSerie(primeira: string, ate: string, limite: number): str
   }
   return datas;
 }
+
+/** O id da Série segue a mesma forma do id da Reserva (INT4 no banco), sem repetir o limite. */
+export const esquemaIdDaSerie = esquemaIdDaReserva;
+
+/** US11 e RN21: a Série decidida inteira, com as Ocorrências que a decisão mudou. */
+export const esquemaSerieDecidida = z.object({
+  reservas: z.array(esquemaReserva).describe('As Ocorrências decididas, da primeira à última'),
+});
+
+export type SerieDecidida = z.infer<typeof esquemaSerieDecidida>;

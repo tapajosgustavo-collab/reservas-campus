@@ -6,9 +6,11 @@ import {
   esquemaFila,
   esquemaIdDaNotificacao,
   esquemaIdDaReserva,
+  esquemaIdDaSerie,
   esquemaPaginaDeNotificacoes,
   esquemaRecusa,
   esquemaReserva,
+  esquemaSerieDecidida,
   NOTIFICACOES_POR_PAGINA,
   POLITICA,
 } from '@reservas/shared';
@@ -25,10 +27,15 @@ import { decidirCheckIn } from '../nucleo/check-in';
 import { decidirDevolucao, devolucaoAtrasada } from '../nucleo/devolucao';
 import {
   decidirAprovacao,
+  decidirAprovacaoDaSerie,
   decidirRecusa,
-  prazoDeDecisao,
+  decidirRecusaDaSerie,
+  filaDoGestor,
   type Decisao as DecisaoDoPedido,
+  type DecisaoDaSerie,
+  type FatosDaSerie,
   type FatosDoPedido,
+  type NotificacaoEmitida,
 } from '../nucleo/pedido';
 import { executar } from './efeitos';
 
@@ -49,6 +56,7 @@ async function fatosDoPedido(tx: Transacao, id: number): Promise<FatosDoPedido> 
     select: {
       id: true,
       usuarioId: true,
+      serieId: true,
       status: true,
       inicio: true,
       fim: true,
@@ -59,6 +67,22 @@ async function fatosDoPedido(tx: Transacao, id: number): Promise<FatosDoPedido> 
   return { reserva, politica: POLITICA };
 }
 
+/** Os fatos da Série decidida inteira (US11, RN21): todas as Ocorrências e o Gestor do Recurso. */
+async function fatosDaSerie(tx: Transacao, id: number): Promise<FatosDaSerie> {
+  const serie = await tx.serie.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      usuarioId: true,
+      recurso: { select: { nome: true, gestorId: true } },
+      reservas: { select: { id: true, status: true, inicio: true, fim: true } },
+    },
+  });
+  if (!serie) throw new ErroApi('nao_encontrado', `Série ${id} não encontrada.`);
+  const { reservas: ocorrencias, ...resto } = serie;
+  return { serie: { ...resto, ocorrencias }, politica: POLITICA };
+}
+
 /** Responde 403 ou 422 pela decisão recusada, ou grava a mudança de Status (M3) e a Notificação (M4). */
 async function executarDecisao(request: FastifyRequest, decisao: DecisaoDoPedido) {
   if (decisao.tipo === 'proibida') throw proibidoPelaRegra(decisao.violacoes);
@@ -66,6 +90,23 @@ async function executarDecisao(request: FastifyRequest, decisao: DecisaoDoPedido
   const [mudanca, emitida] = decisao.efeitos;
   const reserva = await executarEmReservas(request.tx, mudanca);
   request.log.info({ evento: mudanca.evento, reservaId: reserva.id }, mudanca.evento);
+  await emitir(request, emitida);
+  return reserva;
+}
+
+/** Como o `executarDecisao`, para a Série decidida inteira: grava o lote (M3) e uma Notificação só. */
+async function executarDecisaoDaSerie(request: FastifyRequest, decisao: DecisaoDaSerie) {
+  if (decisao.tipo === 'proibida') throw proibidoPelaRegra(decisao.violacoes);
+  if (decisao.tipo === 'recusada') throw regraViolada(decisao.violacoes);
+  const [mudanca, emitida] = decisao.efeitos;
+  const reservas = await executarEmReservas(request.tx, mudanca);
+  request.log.info({ evento: mudanca.evento, reservaIds: mudanca.reservaIds }, mudanca.evento);
+  await emitir(request, emitida);
+  return reservas;
+}
+
+/** Grava a Notificação de decisão (M4) e registra no log. */
+async function emitir(request: FastifyRequest, emitida: NotificacaoEmitida) {
   const notificacao = await executar(request.tx, emitida);
   request.log.info(
     {
@@ -76,7 +117,6 @@ async function executarDecisao(request: FastifyRequest, decisao: DecisaoDoPedido
     },
     emitida.evento,
   );
-  return reserva;
 }
 
 /** Rotas do M4: a fila do Gestor (US11), o Check-in (US12), o Cancelamento (US13) e a Devolução (US14). */
@@ -154,7 +194,8 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
     '/api/gestao/pedidos',
     {
       schema: {
-        summary: 'Fila dos Pedidos Pendentes dos Recursos do Gestor, pelo início (US11)',
+        summary:
+          'Fila dos Pedidos Pendentes dos Recursos do Gestor, pelo início, com a Série como um item só (US11, RN21)',
         tags: ['ciclo'],
         response: { 200: esquemaFila },
       },
@@ -165,6 +206,7 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
         where: { status: 'Pendente', recurso: { gestorId: quem.id } },
         select: {
           id: true,
+          serieId: true,
           inicio: true,
           fim: true,
           participantes: true,
@@ -174,13 +216,61 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
         },
         orderBy: [{ inicio: 'asc' }, { id: 'asc' }],
       });
-      return pedidos.map(({ inicio, fim, usuario, ...pedido }) => ({
-        ...pedido,
-        inicio: paraIsoSaoPaulo(inicio),
-        fim: paraIsoSaoPaulo(fim),
-        expiraEm: paraIsoSaoPaulo(prazoDeDecisao(inicio, POLITICA)),
-        solicitante: usuario,
-      }));
+      return filaDoGestor(pedidos, POLITICA).map(
+        ({ inicio, fim, expiraEm, reservas, usuario, ...item }) => ({
+          ...item,
+          inicio: paraIsoSaoPaulo(inicio),
+          fim: paraIsoSaoPaulo(fim),
+          expiraEm: paraIsoSaoPaulo(expiraEm),
+          reservas: reservas.map((ocorrencia) => ({
+            id: ocorrencia.id,
+            inicio: paraIsoSaoPaulo(ocorrencia.inicio),
+            fim: paraIsoSaoPaulo(ocorrencia.fim),
+          })),
+          solicitante: usuario,
+        }),
+      );
+    },
+  );
+
+  rotas.post(
+    '/api/series/:id/aprovacao',
+    {
+      schema: {
+        summary:
+          'Aprova a Série inteira: confirma todas as Ocorrências Pendentes (US11, RN12, RN13, RN21)',
+        tags: ['ciclo'],
+        params: esquemaIdDaSerie,
+        response: { 200: esquemaSerieDecidida },
+      },
+    },
+    async (request) => {
+      const quem = await exigirPerfil(request, 'Gestor');
+      const fatos = await fatosDaSerie(request.tx, request.params.id);
+      const decisao = decidirAprovacaoDaSerie(fatos, quem, request.agora);
+      const reservas = await executarDecisaoDaSerie(request, decisao);
+      return { reservas: reservas.map(paraResposta) };
+    },
+  );
+
+  rotas.post(
+    '/api/series/:id/recusa',
+    {
+      schema: {
+        summary:
+          'Recusa a Série inteira, com a mesma justificativa em todas as Ocorrências Pendentes (US11, RN11, RN12, RN13, RN21)',
+        tags: ['ciclo'],
+        params: esquemaIdDaSerie,
+        body: esquemaRecusa,
+        response: { 200: esquemaSerieDecidida },
+      },
+    },
+    async (request) => {
+      const quem = await exigirPerfil(request, 'Gestor');
+      const fatos = await fatosDaSerie(request.tx, request.params.id);
+      const decisao = decidirRecusaDaSerie(fatos, request.body, quem, request.agora);
+      const reservas = await executarDecisaoDaSerie(request, decisao);
+      return { reservas: reservas.map(paraResposta) };
     },
   );
 
@@ -188,7 +278,8 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
     '/api/reservas/:id/aprovacao',
     {
       schema: {
-        summary: 'Aprova o Pedido Pendente pelo Gestor responsável (US11, RN12, RN13)',
+        summary:
+          'Aprova o Pedido Pendente pelo Gestor responsável; a Ocorrência de Série, só pela Série (US11, RN12, RN13, RN21)',
         tags: ['ciclo'],
         params: esquemaIdDaReserva,
         response: { 200: esquemaReserva },
@@ -206,7 +297,8 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
     '/api/reservas/:id/recusa',
     {
       schema: {
-        summary: 'Recusa o Pedido Pendente com justificativa (US11, RN11, RN12, RN13)',
+        summary:
+          'Recusa o Pedido Pendente com justificativa; a Ocorrência de Série, só pela Série (US11, RN11, RN12, RN13, RN21)',
         tags: ['ciclo'],
         params: esquemaIdDaReserva,
         body: esquemaRecusa,

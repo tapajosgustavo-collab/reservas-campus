@@ -13,10 +13,14 @@ export function horaEmSaoPaulo(instante: Date): string {
   return format(new TZDate(instante, FUSO), 'HH:mm');
 }
 
+/** A data do instante em São Paulo, como as Notificações mostram: `11/11/2026`. */
+export function dataEmSaoPaulo(instante: Date): string {
+  return format(new TZDate(instante, FUSO), 'dd/MM/yyyy');
+}
+
 /** O Intervalo em São Paulo, como as Notificações mostram: `11/11/2026, das 14:00 às 16:00`. */
 export function intervaloEmSaoPaulo(inicio: Date, fim: Date): string {
-  const comeca = new TZDate(inicio, FUSO);
-  return `${format(comeca, 'dd/MM/yyyy')}, das ${format(comeca, 'HH:mm')} às ${horaEmSaoPaulo(fim)}`;
+  return `${dataEmSaoPaulo(inicio)}, das ${horaEmSaoPaulo(inicio)} às ${horaEmSaoPaulo(fim)}`;
 }
 
 /** Onde um instante cai no calendário de São Paulo. */
