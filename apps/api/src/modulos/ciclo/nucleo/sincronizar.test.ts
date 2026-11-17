@@ -10,6 +10,7 @@ const em = (diaHora: string) => new Date(`2026-11-${diaHora}:00-03:00`);
 const POLITICA = {
   prazoDeDecisaoMin: 120,
   lembreteAntesDoInicioMin: 60,
+  toleranciaMin: 15,
 };
 
 const umaReserva = (dados: Partial<ReservaDoCiclo> = {}): ReservaDoCiclo => ({
@@ -18,7 +19,7 @@ const umaReserva = (dados: Partial<ReservaDoCiclo> = {}): ReservaDoCiclo => ({
   status: 'Pendente',
   inicio: em('11T14:00'),
   fim: em('11T16:00'),
-  recurso: { nome: 'Laboratório de Química' },
+  recurso: { nome: 'Laboratório de Química', tipo: 'Espaco' },
   ...dados,
 });
 
@@ -36,7 +37,7 @@ describe('vencimentos(mundo)', () => {
     ]);
   });
 
-  it('Reserva Confirmada sem lembrete gera vencimento de Lembrete (US16) 1h antes do início', () => {
+  it('RN15_Reserva Confirmada gera Lembrete (US16) 1h antes do início e Não comparecimento no fim da Tolerância', () => {
     const confirmada = umaReserva({ id: 11, status: 'Confirmada', inicio: em('11T14:00') });
     const lista = vencimentos({ reservas: [confirmada], politica: POLITICA });
     expect(lista).toEqual([
@@ -44,6 +45,12 @@ describe('vencimentos(mundo)', () => {
         em: em('11T13:00'),
         regra: 'US16',
         tipo: 'Lembrete',
+        reserva: confirmada,
+      },
+      {
+        em: em('11T14:15'),
+        regra: 'RN15',
+        tipo: 'NaoComparecimento',
         reserva: confirmada,
       },
     ]);
@@ -73,6 +80,7 @@ describe('vencimentos(mundo)', () => {
       { regra: 'RN12', em: em('11T13:00'), id: 10 },
       { regra: 'US16', em: em('11T13:00'), id: 20 },
       { regra: 'RN12', em: em('11T14:00'), id: 30 },
+      { regra: 'RN15', em: em('11T14:15'), id: 20 },
     ]);
   });
 
@@ -118,7 +126,7 @@ describe('sincronizar(mundo, agora)', () => {
         status: 'Pendente',
         inicio: em('11T14:00'),
         fim: em('11T16:00'),
-        recurso: { nome: 'Laboratório de Química' },
+        recurso: { nome: 'Laboratório de Química', tipo: 'Espaco' },
       });
       const mundo: Mundo = { reservas: [pedido], politica: POLITICA };
 
@@ -158,7 +166,7 @@ describe('sincronizar(mundo, agora)', () => {
         status: 'Pendente',
         inicio: em('11T12:00'),
         fim: em('11T14:00'),
-        recurso: { nome: 'Auditório' },
+        recurso: { nome: 'Auditório', tipo: 'Espaco' },
       });
       const oc2 = umaReserva({
         id: 102,
@@ -166,7 +174,7 @@ describe('sincronizar(mundo, agora)', () => {
         status: 'Pendente',
         inicio: em('18T12:00'),
         fim: em('18T14:00'),
-        recurso: { nome: 'Auditório' },
+        recurso: { nome: 'Auditório', tipo: 'Espaco' },
       });
       const mundo: Mundo = { reservas: [oc1, oc2], politica: POLITICA };
 
@@ -217,7 +225,7 @@ describe('sincronizar(mundo, agora)', () => {
         status: 'Confirmada',
         inicio: em('11T14:00'),
         fim: em('11T16:00'),
-        recurso: { nome: 'Sala 101' },
+        recurso: { nome: 'Sala 101', tipo: 'Espaco' },
       });
       const resultado = sincronizar({ reservas: [confirmada], politica: POLITICA }, em('11T13:00'));
 
@@ -243,7 +251,7 @@ describe('sincronizar(mundo, agora)', () => {
         status: 'Confirmada',
         inicio: em('11T14:00'),
         fim: em('11T16:00'),
-        recurso: { nome: 'Sala 101' },
+        recurso: { nome: 'Sala 101', tipo: 'Espaco' },
       });
       const resultado = sincronizar({ reservas: [confirmada], politica: POLITICA }, em('11T13:25'));
 
@@ -265,11 +273,134 @@ describe('sincronizar(mundo, agora)', () => {
         status: 'Confirmada',
         inicio: em('11T14:00'),
         fim: em('11T16:00'),
-        recurso: { nome: 'Sala 101' },
+        recurso: { nome: 'Sala 101', tipo: 'Espaco' },
       });
       // Servidor acordou às 14h00 (ou depois)
       const resultado = sincronizar({ reservas: [confirmada], politica: POLITICA }, em('11T14:00'));
 
+      expect(resultado.efeitos).toEqual([]);
+    });
+  });
+
+  describe('RN15 · Não comparecimento', () => {
+    const confirmadaDaAna = () =>
+      umaReserva({
+        id: 60,
+        usuarioId: ANA.id,
+        status: 'Confirmada',
+        inicio: em('11T14:00'),
+        fim: em('11T16:00'),
+        recurso: { nome: 'Sala 101', tipo: 'Espaco' },
+      });
+
+    it('RN15_Confirmada às 14h sem Check-in, agora às 14h14 (dentro da Tolerância) → nenhum efeito', () => {
+      const resultado = sincronizar(
+        { reservas: [confirmadaDaAna()], politica: POLITICA },
+        em('11T14:14'),
+      );
+      expect(resultado.efeitos).toEqual([]);
+    });
+
+    it('RN15_Confirmada às 14h sem Check-in até 14h15 → Não comparecimento, Penalidade e Notificação datadas no fim da Tolerância', () => {
+      const resultado = sincronizar(
+        { reservas: [confirmadaDaAna()], politica: POLITICA },
+        em('11T14:15'),
+      );
+
+      expect(resultado.efeitos).toEqual([
+        {
+          evento: 'StatusMudou',
+          reservaId: 60,
+          transicao: {
+            de: 'Confirmada',
+            para: 'NaoComparecimento',
+            em: em('11T14:15'),
+            porId: null,
+          },
+        },
+        {
+          evento: 'PenalidadeGerada',
+          penalidade: {
+            usuarioId: ANA.id,
+            reservaId: 60,
+            motivo: 'NaoComparecimento',
+            em: em('11T14:15'),
+          },
+        },
+        {
+          evento: 'NotificacaoEmitida',
+          notificacao: {
+            destinatarioId: ANA.id,
+            tipo: 'Penalidade',
+            mensagem:
+              'Você recebeu uma Penalidade por Não comparecimento na Reserva de Sala 101 (11/11/2026, das 14:00 às 16:00).',
+            em: em('11T14:15'),
+            reservaId: 60,
+          },
+        },
+      ]);
+      expect(resultado.mundo.reservas[0]?.status).toBe('NaoComparecimento');
+    });
+
+    it('RN15_servidor dormindo: processado às 18h, a Penalidade continua datada às 14h15 e sai uma vez só', () => {
+      const primeira = sincronizar(
+        { reservas: [confirmadaDaAna()], politica: POLITICA },
+        em('11T18:00'),
+      );
+
+      expect(primeira.efeitos.map((e) => e.evento)).toEqual([
+        'StatusMudou',
+        'PenalidadeGerada',
+        'NotificacaoEmitida',
+      ]);
+      expect(primeira.efeitos).toContainEqual(
+        expect.objectContaining({
+          evento: 'PenalidadeGerada',
+          penalidade: expect.objectContaining({ em: em('11T14:15') }),
+        }),
+      );
+      expect(sincronizar(primeira.mundo, em('11T18:00')).efeitos).toEqual([]);
+    });
+  });
+
+  describe('RN18 · Conclusão automática', () => {
+    const emUso = (tipo: 'Espaco' | 'Equipamento') =>
+      umaReserva({
+        id: 70,
+        status: 'EmUso',
+        inicio: em('11T10:00'),
+        fim: em('11T12:00'),
+        recurso: { nome: tipo === 'Espaco' ? 'Sala 101' : 'Notebook Dell N-01', tipo },
+      });
+
+    it('RN18_Espaço Em uso até 12h, agora às 11h59 → nenhum efeito', () => {
+      const resultado = sincronizar(
+        { reservas: [emUso('Espaco')], politica: POLITICA },
+        em('11T11:59'),
+      );
+      expect(resultado.efeitos).toEqual([]);
+    });
+
+    it('RN18_Espaço Em uso até 12h, processado às 15h → Concluída às 12h, sem Penalidade', () => {
+      const resultado = sincronizar(
+        { reservas: [emUso('Espaco')], politica: POLITICA },
+        em('11T15:00'),
+      );
+      expect(resultado.efeitos).toEqual([
+        {
+          evento: 'StatusMudou',
+          reservaId: 70,
+          transicao: { de: 'EmUso', para: 'Concluida', em: em('11T12:00'), porId: null },
+        },
+      ]);
+      expect(resultado.mundo.reservas[0]?.status).toBe('Concluida');
+    });
+
+    it('RN18_Equipamento Em uso não conclui sozinho: só termina com a Devolução (RN17)', () => {
+      const resultado = sincronizar(
+        { reservas: [emUso('Equipamento')], politica: POLITICA },
+        em('11T15:00'),
+      );
       expect(resultado.efeitos).toEqual([]);
     });
   });

@@ -316,23 +316,21 @@ comBanco('RNF10 · Seed', () => {
     ]);
   });
 
-  it('a Ana tem a Sala 101 em D−7, 10h–12h, já passada (a aba "Encerradas")', async () => {
-    const { get, idDoRecurso } = await demoNoT0();
+  it('RN18 · a Ana tem a Sala 101 em D−7, 10h–12h, Concluída pelo Check-in das 9h55 (a aba "Encerradas")', async () => {
+    const { get } = await demoNoT0();
 
-    const agenda = await get(
-      'ana.demo@unifesp.br',
-      `/api/recursos/${await idDoRecurso('Sala 101')}/agenda?semana=2026-11-02`,
-    );
+    const encerradas = await get('ana.demo@unifesp.br', '/api/reservas?situacao=encerradas');
 
-    // Confirmada até o incremento 4, quando o Check-in das 9h55 faz o sincronizar Concluí-la (RN18).
-    expect(agenda.ocupacoes).toMatchObject([
+    // Sem o Check-in, o sincronizar a faria Não comparecimento, com Penalidade (RN15).
+    expect(encerradas.itens).toMatchObject([
       {
         inicio: '2026-11-03T10:00:00-03:00',
         fim: '2026-11-03T12:00:00-03:00',
-        minha: true,
-        status: 'Confirmada',
+        status: 'Concluida',
+        recurso: { nome: 'Sala 101' },
       },
     ]);
+    expect(await banco.penalidade.count()).toBe(0);
   });
 
   it('RN10 · o Laboratório de Informática 2 e o Auditório são restritos; os outros Recursos, comuns', async () => {

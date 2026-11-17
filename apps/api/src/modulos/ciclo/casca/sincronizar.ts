@@ -1,5 +1,6 @@
 import { POLITICA } from '@reservas/shared';
 import type { Transacao } from '../../../comum/banco';
+import { executar as executarEmConduta } from '../../conduta';
 import { executar as executarEmReservas } from '../../reservas';
 import { sincronizar as sincronizarNucleo, type ReservaDoCiclo } from '../nucleo/sincronizar';
 import { executar } from './efeitos';
@@ -13,21 +14,25 @@ const selectReservaCiclo = {
   inicio: true,
   fim: true,
   serieId: true,
-  recurso: { select: { nome: true } },
+  recurso: { select: { nome: true, tipo: true } },
 } as const;
 
 /**
  * Aplica tudo o que o tempo fez vencer até `agora` (#12, #51) e devolve quantos efeitos gravou.
  * Roda no começo de toda requisição e no tique, sempre dentro da transação e sob o advisory lock.
  * RN12: Pedido não decidido expira no prazo de decisão (2h antes do início).
+ * RN15: Confirmada sem Check-in até o fim da Tolerância vira Não comparecimento, com Penalidade.
+ * RN18: Espaço Em uso vira Concluída no fim do Intervalo.
  * US16: Reserva Confirmada recebe lembrete 1h antes do início (descartado se já passou do início).
  * ADR 0004: Janela temporal nas consultas evita ler todo o banco sob o lock e descarta lembretes passados.
  */
 export async function sincronizar(tx: Transacao, agora: Date): Promise<number> {
   const limiteLembrete = new Date(agora.getTime() + POLITICA.lembreteAntesDoInicioMin * MINUTO);
   const limiteDecisao = new Date(agora.getTime() + POLITICA.prazoDeDecisaoMin * MINUTO);
+  const limiteTolerancia = new Date(agora.getTime() - POLITICA.toleranciaMin * MINUTO);
 
-  // Busca pedidos que atingiram o prazo de decisão e reservas confirmadas na janela de lembrete
+  // Busca pedidos que atingiram o prazo de decisão, reservas confirmadas na janela de lembrete ou
+  // com a Tolerância vencida, e Espaços Em uso que já passaram do fim.
   const candidatas = await tx.reserva.findMany({
     where: {
       OR: [
@@ -39,6 +44,15 @@ export async function sincronizar(tx: Transacao, agora: Date): Promise<number> {
           status: 'Confirmada',
           inicio: { gt: agora, lte: limiteLembrete },
           notificacoes: { none: { tipo: 'Lembrete' } },
+        },
+        {
+          status: 'Confirmada',
+          inicio: { lte: limiteTolerancia },
+        },
+        {
+          status: 'EmUso',
+          fim: { lte: agora },
+          recurso: { tipo: 'Espaco' },
         },
       ],
     },
@@ -82,6 +96,9 @@ export async function sincronizar(tx: Transacao, agora: Date): Promise<number> {
     switch (efeito.evento) {
       case 'StatusMudou':
         await executarEmReservas(tx, efeito);
+        break;
+      case 'PenalidadeGerada':
+        await executarEmConduta(tx, efeito);
         break;
       case 'NotificacaoEmitida':
         await executar(tx, efeito);

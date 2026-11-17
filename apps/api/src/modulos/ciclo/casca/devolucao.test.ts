@@ -264,7 +264,8 @@ comBanco('US14 · Em uso e Registrar Devolução', () => {
   });
 
   it('RN17 · Reserva Confirmada (ainda sem Check-in) → 422 citando a regra', async () => {
-    const app = await umaAppAs('12:10');
+    // 10h05: dentro da Tolerância; às 10h15 ela viraria Não comparecimento (RN15).
+    const app = await umaAppAs('10:05');
     const carlos = await umUsuario(banco, 'Gestor');
     const p123 = await umEquipamento(banco, { gestorId: carlos.id });
     const reserva = await umaReserva(banco, { recursoId: p123.id, status: 'Confirmada' });

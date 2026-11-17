@@ -7,6 +7,7 @@ import {
   comBanco,
   esvaziar,
   umaReserva,
+  umEquipamento,
   umEspaco,
   umUsuario,
 } from '../../../teste/banco';
@@ -191,12 +192,13 @@ comBanco('sincronizar (casca e integração)', () => {
   });
 
   it('US16 · Reserva Confirmada que já começou não entra na consulta e sincronizar devolve 0 em requisições seguidas', async () => {
-    const relogio = new RelogioFixo(as('11T14:30'));
+    // 14h10: já começou, mas ainda está na Tolerância (às 14h15 viraria Não comparecimento, RN15).
+    const relogio = new RelogioFixo(as('11T14:10'));
     const carlos = await umUsuario(banco, 'Gestor', { nome: 'Carlos' });
     const ana = await umUsuario(banco, 'Aluno', { nome: 'Ana' });
     const sala = await umEspaco(banco, { gestorId: carlos.id, nome: 'Sala 102' });
 
-    // Reserva das 14h às 16h; o relógio já está às 14h30 (já começou)
+    // Reserva das 14h às 16h; o relógio já está às 14h10 (já começou)
     await umaReserva(banco, {
       usuarioId: ana.id,
       recursoId: sala.id,
@@ -273,6 +275,147 @@ comBanco('sincronizar (casca e integração)', () => {
         reservaId: oc1.id,
       }),
     ]);
+  });
+
+  it('RN15_Confirmada sem Check-in vira Não comparecimento com Penalidade datada no fim da Tolerância, mesmo com o servidor dormindo', async () => {
+    const relogio = new RelogioFixo(as('11T13:30'));
+    const app = await umaApp({ banco, relogio });
+
+    const carlos = await umUsuario(banco, 'Gestor', { nome: 'Carlos' });
+    const ana = await umUsuario(banco, 'Aluno', { nome: 'Ana' });
+    const bruno = await umUsuario(banco, 'Aluno', { nome: 'Bruno' });
+    const sala = await umEspaco(banco, { gestorId: carlos.id, nome: 'Sala 101' });
+    const reserva = await umaReserva(banco, {
+      usuarioId: ana.id,
+      recursoId: sala.id,
+      ...QUARTA_14H,
+      status: 'Confirmada',
+    });
+
+    // Ninguém faz Check-in, e a próxima requisição só chega às 18h (servidor dormindo).
+    relogio.ir(as('11T18:00'));
+    const notificacoes = await app.inject({
+      method: 'GET',
+      url: '/api/notificacoes',
+      cookies: sessaoDe(app, ana.id, relogio.agora()),
+    });
+
+    expect(notificacoes.json().itens).toEqual([
+      expect.objectContaining({
+        tipo: 'Penalidade',
+        mensagem:
+          'Você recebeu uma Penalidade por Não comparecimento na Reserva de Sala 101 (11/11/2026, das 14:00 às 16:00).',
+        em: '2026-11-11T14:15:00-03:00',
+        reservaId: reserva.id,
+      }),
+    ]);
+    const noBanco = await banco.reserva.findUniqueOrThrow({
+      where: { id: reserva.id },
+      include: { transicoes: true, penalidade: true },
+    });
+    expect(noBanco.status).toBe('NaoComparecimento');
+    expect(noBanco.transicoes).toContainEqual(
+      expect.objectContaining({
+        de: 'Confirmada',
+        para: 'NaoComparecimento',
+        em: as('11T14:15'),
+        porId: null,
+      }),
+    );
+    expect(noBanco.penalidade).toMatchObject({
+      usuarioId: ana.id,
+      motivo: 'NaoComparecimento',
+      em: as('11T14:15'),
+      suspensaoId: null,
+    });
+
+    // O Intervalo foi liberado, e a requisição seguinte não gera outra Penalidade.
+    const agenda = await app.inject({
+      method: 'GET',
+      url: `/api/recursos/${sala.id}/agenda?semana=2026-11-09`,
+      cookies: sessaoDe(app, bruno.id, relogio.agora()),
+    });
+    expect(agenda.json().ocupacoes).toEqual([]);
+    expect(await banco.$transaction((tx) => sincronizar(tx, relogio.agora()))).toBe(0);
+    expect(await banco.penalidade.count()).toBe(1);
+  });
+
+  it('RN15_depois do fim da Tolerância, a Reserva passada sem Check-in não ocupa mais a Cota (RN07)', async () => {
+    const relogio = new RelogioFixo(as('10T08:00'));
+    const app = await umaApp({ banco, relogio });
+    const ana = await umUsuario(banco, 'Aluno', { nome: 'Ana' });
+    const sala = await umEspaco(banco, {
+      horarios: {
+        create: [1, 2, 3, 4, 5].map((diaSemana) => ({ diaSemana, abre: 7 * 60, fecha: 23 * 60 })),
+      },
+    });
+    // Três Reservas Confirmadas da semana passada, sem Check-in: a Cota de Aluno é 3.
+    for (const dia of ['02', '03', '04']) {
+      await umaReserva(banco, {
+        usuarioId: ana.id,
+        recursoId: sala.id,
+        inicio: `2026-11-${dia}T10:00:00-03:00`,
+        fim: `2026-11-${dia}T12:00:00-03:00`,
+      });
+    }
+
+    const resposta = await app.inject({
+      method: 'POST',
+      url: '/api/reservas',
+      cookies: sessaoDe(app, ana.id, relogio.agora()),
+      payload: {
+        recursoId: sala.id,
+        inicio: '2026-11-10T10:00:00-03:00',
+        fim: '2026-11-10T12:00:00-03:00',
+        participantes: 10,
+      },
+    });
+
+    expect(resposta.statusCode).toBe(201);
+  });
+
+  it('RN18_Espaço Em uso vira Concluída no fim do Intervalo; Equipamento Em uso continua Em uso', async () => {
+    const relogio = new RelogioFixo(as('11T15:00'));
+    const app = await umaApp({ banco, relogio });
+    const carlos = await umUsuario(banco, 'Gestor', { nome: 'Carlos' });
+    const ana = await umUsuario(banco, 'Aluno', { nome: 'Ana' });
+    const sala = await umEspaco(banco, { gestorId: carlos.id });
+    const notebook = await umEquipamento(banco, { gestorId: carlos.id });
+    const espacoEmUso = await umaReserva(banco, {
+      usuarioId: ana.id,
+      recursoId: sala.id,
+      ...QUARTA_14H,
+      status: 'EmUso',
+    });
+    const equipamentoEmUso = await umaReserva(banco, {
+      usuarioId: ana.id,
+      recursoId: notebook.id,
+      ...QUARTA_14H,
+      status: 'EmUso',
+    });
+
+    // Às 16h, no fim do Intervalo.
+    relogio.ir(as('11T16:00'));
+    const resposta = await app.inject({
+      method: 'GET',
+      url: '/api/notificacoes',
+      cookies: sessaoDe(app, ana.id, relogio.agora()),
+    });
+    expect(resposta.statusCode).toBe(200);
+
+    const espaco = await banco.reserva.findUniqueOrThrow({
+      where: { id: espacoEmUso.id },
+      include: { transicoes: true, penalidade: true },
+    });
+    expect(espaco.status).toBe('Concluida');
+    expect(espaco.penalidade).toBeNull();
+    expect(espaco.transicoes).toContainEqual(
+      expect.objectContaining({ de: 'EmUso', para: 'Concluida', em: as('11T16:00'), porId: null }),
+    );
+    const equipamento = await banco.reserva.findUniqueOrThrow({
+      where: { id: equipamentoEmUso.id },
+    });
+    expect(equipamento.status).toBe('EmUso');
   });
 
   it('função sincronizar(tx, agora) devolve a quantidade de efeitos gravados e é idempotente', async () => {
