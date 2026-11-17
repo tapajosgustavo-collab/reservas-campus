@@ -6,10 +6,17 @@ const ANA = { id: 7 };
 /** Terça, 10/11/2026, em São Paulo. */
 const em = (hora: string) => new Date(`2026-11-10T${hora}:00-03:00`);
 
-/** A Reserva Confirmada da Ana às 10h, com a janela da Política: 15 min antes e 15 depois. */
-const fatos = (reserva: Partial<FatosDoCheckIn['reserva']> = {}): FatosDoCheckIn => ({
+/**
+ * A Reserva Confirmada da Ana às 10h, com a janela da Política: 15 min antes e 15 depois. Sem
+ * Reserva anterior do mesmo Equipamento ainda fora (RN23).
+ */
+const fatos = (
+  reserva: Partial<FatosDoCheckIn['reserva']> = {},
+  equipamentoFora = false,
+): FatosDoCheckIn => ({
   reserva: { id: 42, usuarioId: ANA.id, inicio: em('10:00'), status: 'Confirmada', ...reserva },
   politica: { checkInAntesDoInicioMin: 15, toleranciaMin: 15 },
+  equipamentoFora,
 });
 
 describe('US12 · Fazer Check-in', () => {
@@ -145,4 +152,44 @@ describe('RN14 · Janela de Check-in', () => {
       });
     },
   );
+});
+
+describe('RN23 · Equipamento ainda fora', () => {
+  const ainda = 'O Equipamento ainda não foi devolvido pela Reserva anterior.';
+
+  it('RN23_Reserva do N-01 às 12h, Check-in às 11h55 com a anterior sem Devolução → recusado, dizendo que ele ainda não foi devolvido', () => {
+    expect(decidirCheckIn(fatos({ inicio: em('12:00') }, true), ANA, em('11:55'))).toEqual({
+      tipo: 'recusada',
+      violacoes: [
+        {
+          rn: 'RN23',
+          nome: 'Equipamento ainda fora',
+          mensagem: `${ainda} Se ele não voltar até as 12:15, no fim da Tolerância, esta Reserva será cancelada sem Penalidade.`,
+        },
+      ],
+    });
+  });
+
+  it('RN23_o Equipamento voltou antes do fim da Tolerância → o Check-in das 12h10 segue normal', () => {
+    expect(decidirCheckIn(fatos({ inicio: em('12:00') }, false), ANA, em('12:10')).tipo).toBe(
+      'aceita',
+    );
+  });
+
+  it('RN23_fora da janela e com o Equipamento fora → recusado com as duas regras', () => {
+    expect(decidirCheckIn(fatos({ inicio: em('12:00') }, true), ANA, em('11:40'))).toMatchObject({
+      tipo: 'recusada',
+      violacoes: [
+        { rn: 'RN14', mensagem: expect.stringContaining('abre às 11:45') },
+        { rn: 'RN23', mensagem: expect.stringContaining(ainda) },
+      ],
+    });
+  });
+
+  it('RN23_Reserva que já não aceita Check-in (Em uso) não fala do Equipamento', () => {
+    expect(decidirCheckIn(fatos({ status: 'EmUso' }, true), ANA, em('10:05'))).toMatchObject({
+      tipo: 'recusada',
+      violacoes: [{ rn: 'RN14' }],
+    });
+  });
 });
