@@ -20,10 +20,13 @@ import { useSessao } from '../conduta';
 import { rotuloDoInstante, rotuloDoIntervalo } from '../reservas';
 import { Erro, useAgoraEmDiaNaBorda } from './botao';
 import {
+  chaveDoItem,
   corDoPrazo,
   msAteMudarACor,
+  nomeDoItem,
   podeConfirmarRecusa,
   resumoDoLote,
+  rotuloDasOcorrencias,
   rotuloDasPessoas,
   useAprovarPedidos,
   useFila,
@@ -31,17 +34,27 @@ import {
 } from './pedidos';
 
 /** Uma linha curta para os avisos: "Laboratório de Química, de Ana". */
-const doPedido = ({ recurso, solicitante }: ItemDaFila) =>
-  `${recurso.nome}, de ${solicitante.nome}`;
+const deQuem = ({ recurso, solicitante }: ItemDaFila) => `${recurso.nome}, de ${solicitante.nome}`;
 
-/** US11: o Gestor vê os Pedidos dos seus Recursos, aprova um ou vários e recusa com justificativa. */
+/** O começo do aviso depois de decidir: "Pedido aprovado" ou, na Série (RN21), "Série aprovada". */
+const DECIDIDO = {
+  aprovacao: { pedido: 'Pedido aprovado', serie: 'Série aprovada' },
+  recusa: { pedido: 'Pedido recusado', serie: 'Série recusada' },
+} as const;
+const decidido = ({ serieId }: ItemDaFila, decisao: keyof typeof DECIDIDO) =>
+  DECIDIDO[decisao][serieId === null ? 'pedido' : 'serie'];
+
+/**
+ * US11: o Gestor vê os Pedidos dos seus Recursos, aprova um ou vários e recusa com justificativa. A
+ * Série é um item só e é decidida inteira (RN21), na linha ou no lote.
+ */
 export function FilaDePedidos() {
   const fila = useFila();
   const agora = useSessao().data?.agora;
   const aprovar = useAprovarPedidos();
   const recusar = useRecusarPedido();
-  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
-  const [recusando, setRecusando] = useState<number | null>(null);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [recusando, setRecusando] = useState<string | null>(null);
   const [justificativa, setJustificativa] = useState('');
   const [aviso, setAviso] = useState<string | null>(null);
   const [falha, setFalha] = useState<Error | null>(null);
@@ -49,7 +62,7 @@ export function FilaDePedidos() {
 
   const pedidos = fila.data ?? [];
   // Um Pedido que saiu da fila (decidido ou expirado) não fica selecionado.
-  const escolhidos = pedidos.filter(({ id }) => selecionados.has(id));
+  const escolhidos = pedidos.filter((item) => selecionados.has(chaveDoItem(item)));
   const ocupado = aprovar.isPending || recusar.isPending;
   useAgoraEmDiaNaBorda(
     agora
@@ -60,11 +73,11 @@ export function FilaDePedidos() {
       : null,
   );
 
-  function alternar(id: number, marcado: boolean) {
+  function alternar(chave: string, marcado: boolean) {
     setSelecionados((atual) => {
       const proximo = new Set(atual);
-      if (marcado) proximo.add(id);
-      else proximo.delete(id);
+      if (marcado) proximo.add(chave);
+      else proximo.delete(chave);
       return proximo;
     });
   }
@@ -75,7 +88,7 @@ export function FilaDePedidos() {
     aprovar.mutate([item], {
       onSuccess: ([erro]) => {
         if (erro) setFalha(erro);
-        else setAviso(`Pedido aprovado: ${doPedido(item)}.`);
+        else setAviso(`${decidido(item, 'aprovacao')}: ${deQuem(item)}.`);
       },
     });
   }
@@ -93,10 +106,10 @@ export function FilaDePedidos() {
     });
   }
 
-  function abrirRecusa(id: number) {
+  function abrirRecusa(chave: string) {
     recusar.reset();
     setJustificativa('');
-    setRecusando(id);
+    setRecusando(chave);
   }
 
   function confirmarRecusa(item: ItemDaFila) {
@@ -104,11 +117,13 @@ export function FilaDePedidos() {
     setAviso(null);
     setFalha(null);
     recusar.mutate(
-      { id: item.id, justificativa },
+      { item, justificativa },
       {
         onSuccess: () => {
           setRecusando(null);
-          setAviso(`Pedido recusado: ${doPedido(item)}. Justificativa: ${justificativa.trim()}`);
+          setAviso(
+            `${decidido(item, 'recusa')}: ${deQuem(item)}. Justificativa: ${justificativa.trim()}`,
+          );
         },
       },
     );
@@ -161,7 +176,7 @@ export function FilaDePedidos() {
                       onChange={(evento) =>
                         setSelecionados(
                           evento.currentTarget.checked
-                            ? new Set(pedidos.map(({ id }) => id))
+                            ? new Set(pedidos.map(chaveDoItem))
                             : new Set(),
                         )
                       }
@@ -181,18 +196,27 @@ export function FilaDePedidos() {
               <Table.Tbody>
                 {pedidos.map((item) => {
                   const cor = agora ? corDoPrazo(item.expiraEm, agora) : null;
+                  const ocorrencias = rotuloDasOcorrencias(item);
+                  const chave = chaveDoItem(item);
                   return (
-                    <Fragment key={item.id}>
+                    <Fragment key={chave}>
                       <Table.Tr>
                         <Table.Td>
                           <Checkbox
-                            aria-label={`Selecionar o Pedido de ${doPedido(item)}`}
-                            checked={selecionados.has(item.id)}
+                            aria-label={`Selecionar ${nomeDoItem(item)}`}
+                            checked={selecionados.has(chave)}
                             disabled={ocupado}
-                            onChange={(evento) => alternar(item.id, evento.currentTarget.checked)}
+                            onChange={(evento) => alternar(chave, evento.currentTarget.checked)}
                           />
                         </Table.Td>
-                        <Table.Td>{rotuloDoIntervalo(item.inicio, item.fim)}</Table.Td>
+                        <Table.Td>
+                          {rotuloDoIntervalo(item.inicio, item.fim)}
+                          {ocorrencias && (
+                            <Text size="sm" c="dimmed">
+                              {ocorrencias}
+                            </Text>
+                          )}
+                        </Table.Td>
                         <Table.Td>
                           {cor ? (
                             <Badge variant="light" color={cor}>
@@ -219,32 +243,39 @@ export function FilaDePedidos() {
                               onClick={() => aprovarNaLinha(item)}
                             >
                               Aprovar
-                              <VisuallyHidden> o Pedido de {doPedido(item)}</VisuallyHidden>
+                              <VisuallyHidden> {nomeDoItem(item)}</VisuallyHidden>
                             </Button>
                             <Button
                               size="xs"
                               variant="default"
                               disabled={ocupado}
-                              onClick={() => abrirRecusa(item.id)}
+                              onClick={() => abrirRecusa(chave)}
                             >
                               Recusar
-                              <VisuallyHidden> o Pedido de {doPedido(item)}</VisuallyHidden>
+                              <VisuallyHidden> {nomeDoItem(item)}</VisuallyHidden>
                             </Button>
                             <Anchor component={Link} to={`/reservas/${item.id}`} size="sm">
                               Detalhes
-                              <VisuallyHidden> do Pedido de {doPedido(item)}</VisuallyHidden>
+                              <VisuallyHidden>
+                                {item.serieId === null ? ' do Pedido' : ' da primeira Ocorrência'}{' '}
+                                de {deQuem(item)}
+                              </VisuallyHidden>
                             </Anchor>
                           </Group>
                         </Table.Td>
                       </Table.Tr>
 
-                      {recusando === item.id && (
+                      {recusando === chave && (
                         <Table.Tr>
                           <Table.Td colSpan={8}>
                             <Stack gap="xs">
                               <Textarea
-                                label={`Justificativa da Recusa (${doPedido(item)})`}
-                                description="Obrigatória: vai na Notificação ao Usuário (RN11)."
+                                label={`Justificativa da Recusa (${deQuem(item)})`}
+                                description={
+                                  item.serieId === null
+                                    ? 'Obrigatória: vai na Notificação ao Usuário (RN11).'
+                                    : 'Obrigatória: vale para todas as Ocorrências da Série e vai na Notificação ao Usuário (RN11, RN21).'
+                                }
                                 required
                                 autosize
                                 minRows={2}

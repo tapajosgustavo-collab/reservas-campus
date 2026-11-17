@@ -93,6 +93,16 @@ export interface StatusMudou {
 }
 
 /**
+ * RN21: a mesma mudança de Status em várias Reservas de uma vez, com a mesma linha no histórico de
+ * cada uma. Quem decide é o M4 (a Série restrita aprovada ou recusada inteira).
+ */
+export interface StatusMudouEmLote {
+  evento: 'StatusMudouEmLote';
+  reservaIds: number[];
+  transicao: StatusMudou['transicao'];
+}
+
+/**
  * RN04: Cancelamento pelo sistema de várias Reservas de uma vez, cada uma com o Status de antes.
  * Sem Usuário (`por` vazio) e com a causa na observação. Quem decide é o M2 (Indisponibilidade).
  */

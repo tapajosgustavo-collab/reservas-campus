@@ -1,4 +1,9 @@
-import { esquemaFila, esquemaReserva, type ItemDaFila } from '@reservas/shared';
+import {
+  esquemaFila,
+  esquemaReserva,
+  esquemaSerieDecidida,
+  type ItemDaFila,
+} from '@reservas/shared';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { ErroDaApi, buscarJson, enviarJson } from '../../comum/api';
 
@@ -72,6 +77,56 @@ export function resumoDoLote(resultados: (Error | null)[]): string {
   return partes.join(', ');
 }
 
+/** "11/11" de um instante da API, que já vem com o deslocamento de São Paulo. */
+const diaEMes = (instante: string) => `${instante.slice(8, 10)}/${instante.slice(5, 7)}`;
+
+/**
+ * RN21: o que a fila mostra da Série, como "Série: 3 Ocorrências (11/11, 18/11 e 25/11)". O Pedido
+ * avulso não tem nada a mais (`null`).
+ */
+export function rotuloDasOcorrencias({ serieId, reservas }: ItemDaFila): string | null {
+  if (serieId === null) return null;
+  const quantas = reservas.length === 1 ? '1 Ocorrência' : `${reservas.length} Ocorrências`;
+  const datas = reservas.map(({ inicio }) => diaEMes(inicio));
+  const ultima = datas.pop();
+  const lista = datas.length > 0 ? `${datas.join(', ')} e ${ultima}` : ultima;
+  return `Série: ${quantas} (${lista})`;
+}
+
+/**
+ * A identidade do item na fila, estável entre as buscas: `serie-5` para a Série (o `id` do item é o
+ * da primeira Ocorrência Pendente, que muda se ela sair da fila) e `pedido-42` para o avulso.
+ */
+export function chaveDoItem({ id, serieId }: ItemDaFila): string {
+  return serieId === null ? `pedido-${id}` : `serie-${serieId}`;
+}
+
+/** Nos botões e avisos: "o Pedido de Laboratório de Química, de Ana" ou "a Série de ...". */
+export function nomeDoItem({ serieId, recurso, solicitante }: ItemDaFila): string {
+  const doItem = `${recurso.nome}, de ${solicitante.nome}`;
+  return serieId === null ? `o Pedido de ${doItem}` : `a Série de ${doItem}`;
+}
+
+/** RN21: a Série é decidida inteira, pela rota dela; o Pedido avulso, pela da Reserva. */
+export function enderecoDaDecisao(
+  { id, serieId }: ItemDaFila,
+  decisao: 'aprovacao' | 'recusa',
+): string {
+  return serieId === null ? `/api/reservas/${id}/${decisao}` : `/api/series/${serieId}/${decisao}`;
+}
+
+/** Envia a decisão pela rota do item; a resposta é a Reserva, ou as Ocorrências da Série. */
+function decidir(
+  item: ItemDaFila,
+  decisao: 'aprovacao' | 'recusa',
+  corpo?: object,
+): Promise<unknown> {
+  const endereco = enderecoDaDecisao(item, decisao);
+  return item.serieId === null
+    ? enviarJson('POST', endereco, corpo, esquemaReserva)
+    : enviarJson('POST', endereco, corpo, esquemaSerieDecidida);
+}
+
 /** US11: os Pedidos Pendentes dos Recursos do Gestor da sessão, do mais urgente. */
 export function useFila() {
   return useQuery({
@@ -80,22 +135,19 @@ export function useFila() {
   });
 }
 
-function aprovar(id: number) {
-  return enviarJson('POST', `/api/reservas/${id}/aprovacao`, undefined, esquemaReserva);
-}
-
 /**
  * US11: Aprovação de um ou de vários Pedidos, uma requisição por item, em sequência (spec §5: sem
- * rota de lote). Devolve um resultado por Pedido, na ordem, sem parar no primeiro erro.
+ * rota de lote). A Série é um item, aprovado inteiro pela rota dela (RN21). Devolve um resultado
+ * por item, na ordem, sem parar no primeiro erro.
  */
 export function useAprovarPedidos() {
   const cliente = useQueryClient();
   return useMutation({
     mutationFn: async (pedidos: ItemDaFila[]) => {
       const resultados: (Error | null)[] = [];
-      for (const { id } of pedidos) {
+      for (const item of pedidos) {
         try {
-          await aprovar(id);
+          await decidir(item, 'aprovacao');
           resultados.push(null);
         } catch (erro) {
           resultados.push(erro instanceof Error ? erro : new Error(String(erro)));
@@ -110,8 +162,8 @@ export function useAprovarPedidos() {
 export function useRecusarPedido() {
   const cliente = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, justificativa }: { id: number; justificativa: string }) =>
-      enviarJson('POST', `/api/reservas/${id}/recusa`, { justificativa }, esquemaReserva),
+    mutationFn: ({ item, justificativa }: { item: ItemDaFila; justificativa: string }) =>
+      decidir(item, 'recusa', { justificativa }),
     onSettled: () => cliente.invalidateQueries(),
   });
 }

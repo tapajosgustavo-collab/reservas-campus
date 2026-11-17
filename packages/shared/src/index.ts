@@ -82,9 +82,12 @@ export {
 export {
   datasDaSerie,
   esquemaCriarSerie,
+  esquemaIdDaSerie,
+  esquemaSerieDecidida,
   esquemaSerieCriada,
   type CriarSerie,
   type SerieCriada,
+  type SerieDecidida,
 } from './series';
 export {
   esquemaAgenda,
