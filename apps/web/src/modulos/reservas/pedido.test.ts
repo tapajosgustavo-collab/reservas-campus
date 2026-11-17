@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  avisoDoCancelamentoTardio,
   avisoDoPedido,
   corpoDaReserva,
   corpoDaSerie,
@@ -130,5 +131,25 @@ describe('US09 · Série', () => {
     expect(resumoDaSerie(tercas.map((t) => ({ ...t, status: 'Pendente' as const })))).toContain(
       'Pendentes até o Gestor decidir a Série',
     );
+  });
+});
+
+describe('RN16 · aviso do Cancelamento tardio na criação', () => {
+  const as = (hora: string) => `2026-11-10T${hora}:00-03:00`;
+
+  it('início a menos de 2h → avisa que cancelar já gera Penalidade', () => {
+    expect(avisoDoCancelamentoTardio(formulario, as('08:30'))).toBe(
+      'O início é daqui a menos de 2h: se você cancelar esta Reserva, o Cancelamento tardio gera Penalidade.',
+    );
+  });
+
+  it('início a 2h ou mais → sem aviso', () => {
+    expect(avisoDoCancelamentoTardio(formulario, as('08:00'))).toBeNull();
+    expect(avisoDoCancelamentoTardio(formulario, as('07:00'))).toBeNull();
+  });
+
+  it('sem o agora da API, ou sem Data no formulário → sem aviso', () => {
+    expect(avisoDoCancelamentoTardio(formulario, undefined)).toBeNull();
+    expect(avisoDoCancelamentoTardio({ ...formulario, data: '' }, as('08:30'))).toBeNull();
   });
 });

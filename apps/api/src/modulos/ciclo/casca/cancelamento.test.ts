@@ -44,8 +44,8 @@ comBanco('US13 · Cancelar', () => {
   afterAll(() => banco.$disconnect());
   beforeEach(() => esvaziar(banco));
 
-  it('a dona cancela a Reserva Confirmada antes do início → 200 { reserva, penalidade: null }, com a transição no histórico e liberando o Recurso', async () => {
-    const app = await umaAppAs('09:30');
+  it('a dona cancela a Reserva Confirmada 2h30 antes do início → 200 { reserva, penalidade: null }, com a transição no histórico e liberando o Recurso', async () => {
+    const app = await umaAppAs('07:30');
     const ana = await umUsuario(banco, 'Aluno', { nome: 'Ana' });
     const bruno = await umUsuario(banco, 'Aluno');
     const lab = await umEspaco(banco, {
@@ -73,26 +73,66 @@ comBanco('US13 · Cancelar', () => {
       {
         de: 'Confirmada',
         para: 'Cancelada',
-        em: '2026-11-10T09:30:00-03:00',
+        em: '2026-11-10T07:30:00-03:00',
         por: { id: ana.id, nome: 'Ana' },
         observacao: null,
       },
     ]);
 
-    // O Intervalo ficou livre para outra Reserva (RN01). Começa às 10:30, sobre a cancelada, pela
-    // Antecedência mínima de 1h (RN05).
+    // O Intervalo inteiro ficou livre para outra Reserva (RN01).
     const nova = await app.inject({
       method: 'POST',
       url: '/api/reservas',
       cookies: sessaoDe(app, bruno.id),
       payload: {
         recursoId: lab.id,
-        inicio: '2026-11-10T10:30:00-03:00',
+        inicio: '2026-11-10T10:00:00-03:00',
         fim: '2026-11-10T12:00:00-03:00',
         participantes: 20,
       },
     });
     expect(nova.statusCode).toBe(201);
+    expect(await banco.penalidade.count()).toBe(0);
+  });
+
+  it('RN16 · a dona cancela a Confirmada a menos de 2h do início → 200 com a Penalidade, gravada no histórico dela e notificada', async () => {
+    const app = await umaAppAs('08:30');
+    const ana = await umUsuario(banco, 'Aluno', { nome: 'Ana' });
+    const reserva = await umaReserva(banco, { usuarioId: ana.id });
+
+    const resposta = await cancelar(app, ana.id, reserva.id);
+
+    expect(resposta.statusCode).toBe(200);
+    const { penalidade } = resposta.json();
+    expect(resposta.json()).toMatchObject({ reserva: { id: reserva.id, status: 'Cancelada' } });
+    expect(penalidade).toEqual({
+      id: expect.any(Number),
+      motivo: 'CancelamentoTardio',
+      em: '2026-11-10T08:30:00-03:00',
+    });
+    expect(await banco.penalidade.findMany()).toMatchObject([
+      { id: penalidade.id, usuarioId: ana.id, reservaId: reserva.id, motivo: 'CancelamentoTardio' },
+    ]);
+    expect(await banco.notificacao.findMany()).toMatchObject([
+      {
+        destinatarioId: ana.id,
+        tipo: 'Penalidade',
+        reservaId: reserva.id,
+        mensagem: expect.stringContaining('Cancelamento tardio'),
+      },
+    ]);
+  });
+
+  it('RN16 · a Pendente cancelada a menos de 2h do início → sem Penalidade', async () => {
+    const app = await umaAppAs('09:30');
+    const ana = await umUsuario(banco);
+    const reserva = await umaReserva(banco, { usuarioId: ana.id, status: 'Pendente' });
+
+    const resposta = await cancelar(app, ana.id, reserva.id);
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json().penalidade).toBeNull();
+    expect(await banco.penalidade.count()).toBe(0);
   });
 
   it('a dona também cancela uma Reserva Pendente → 200 Cancelada, sem Penalidade', async () => {
