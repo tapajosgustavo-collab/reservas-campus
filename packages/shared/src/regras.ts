@@ -29,6 +29,7 @@ export const REGRAS = {
   RN17: { nome: 'Devolução atrasada' },
   RN21: { nome: 'Série tudo-ou-nada' },
   RN22: { nome: 'Agenda sem nomes' },
+  RN23: { nome: 'Equipamento ainda fora' },
 } as const satisfies Record<`RN${number}`, Regra>;
 
 export type IdRegra = keyof typeof REGRAS;

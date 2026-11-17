@@ -10,17 +10,22 @@ const MINUTO = 60_000;
 export interface ReservaDoCiclo {
   id: number;
   usuarioId: number;
+  /** Quem reservou: vai na Notificação da Devolução atrasada ao Gestor (RN17). */
+  usuario: { nome: string };
   status: Status;
   inicio: Date;
   fim: Date;
-  recurso: { nome: string; tipo: TipoRecurso };
+  recurso: { id: number; nome: string; tipo: TipoRecurso; gestorId: number };
   serieId?: number | null;
+  /** A Reserva já tem Penalidade (`reserva_id` único): marca o atraso já penalizado (RN17). */
+  penalizada: boolean;
 }
 
 export interface PoliticaDoCiclo {
   prazoDeDecisaoMin: number;
   lembreteAntesDoInicioMin: number;
   toleranciaMin: number;
+  toleranciaDeDevolucaoMin: number;
 }
 
 export interface Mundo {
@@ -28,8 +33,14 @@ export interface Mundo {
   politica: PoliticaDoCiclo;
 }
 
-export type RegraVencimento = 'RN12' | 'RN15' | 'RN18' | 'US16';
-export type TipoVencimento = 'Expiracao' | 'NaoComparecimento' | 'Conclusao' | 'Lembrete';
+export type RegraVencimento = 'RN17' | 'RN12' | 'RN15' | 'RN23' | 'RN18' | 'US16';
+export type TipoVencimento =
+  | 'DevolucaoAtrasada'
+  | 'Expiracao'
+  | 'NaoComparecimento'
+  | 'EquipamentoFora'
+  | 'Conclusao'
+  | 'Lembrete';
 
 export interface Vencimento {
   em: Date;
@@ -40,13 +51,21 @@ export interface Vencimento {
 
 export type EfeitoCiclo = StatusMudou | PenalidadeGerada | NotificacaoEmitida;
 
-/** ADR 0004: ordem fixa de desempate no mesmo instante: RN17 → RN12 → RN15 → RN23 → RN18 → RN19 → lembrete. */
+/**
+ * ADR 0004: ordem fixa de desempate no mesmo instante: RN17 → RN12 → RN15 → RN23 → RN18 → RN19 →
+ * lembrete. O 6 é o lugar da RN19 (fim da Suspensão), que entra no #57.
+ */
 const PRIORIDADE_REGRA: Record<RegraVencimento, number> = {
+  RN17: 1,
   RN12: 2,
   RN15: 3,
+  RN23: 4,
   RN18: 5,
   US16: 7,
 };
+
+const somarMinutos = (instante: Date, minutos: number) =>
+  new Date(instante.getTime() + minutos * MINUTO);
 
 /** Mapeia o início da primeira ocorrência para séries com pedidos pendentes (RN21/RN12). */
 function primeiroInicioDasSeries(reservas: readonly ReservaDoCiclo[]): Map<number, number> {
@@ -61,6 +80,24 @@ function primeiroInicioDasSeries(reservas: readonly ReservaDoCiclo[]): Map<numbe
     }
   }
   return mapa;
+}
+
+/**
+ * RN23: a Reserva anterior do mesmo Equipamento ainda está sem Devolução. A Devolução não acontece
+ * dentro do `sincronizar` (o Equipamento Em uso só termina pelo Gestor, RN17), então o que vale
+ * agora vale também no fim da Tolerância desta Reserva.
+ */
+function equipamentoAindaFora(reservas: readonly ReservaDoCiclo[], reserva: ReservaDoCiclo) {
+  return (
+    reserva.recurso.tipo === 'Equipamento' &&
+    reservas.some(
+      (anterior) =>
+        anterior.id !== reserva.id &&
+        anterior.recurso.id === reserva.recurso.id &&
+        anterior.status === 'EmUso' &&
+        anterior.inicio < reserva.inicio,
+    )
+  );
 }
 
 /**
@@ -87,23 +124,31 @@ export function vencimentos(mundo: Mundo): Vencimento[] {
         reserva,
       });
     } else if (reserva.status === 'Confirmada') {
-      const em = new Date(reserva.inicio.getTime() - politica.lembreteAntesDoInicioMin * MINUTO);
       lista.push({
-        em,
+        em: somarMinutos(reserva.inicio, -politica.lembreteAntesDoInicioMin),
         regra: 'US16',
         tipo: 'Lembrete',
         reserva,
       });
-      // RN15: sem Check-in até o fim da Tolerância, vira Não comparecimento.
-      lista.push({
-        em: new Date(reserva.inicio.getTime() + politica.toleranciaMin * MINUTO),
-        regra: 'RN15',
-        tipo: 'NaoComparecimento',
-        reserva,
-      });
+      // RN15: sem Check-in até o fim da Tolerância, vira Não comparecimento. A exceção é o
+      // Equipamento que a Reserva anterior ainda não devolveu: Cancelamento sem Penalidade (RN23).
+      const em = somarMinutos(reserva.inicio, politica.toleranciaMin);
+      lista.push(
+        equipamentoAindaFora(reservas, reserva)
+          ? { em, regra: 'RN23', tipo: 'EquipamentoFora', reserva }
+          : { em, regra: 'RN15', tipo: 'NaoComparecimento', reserva },
+      );
     } else if (reserva.status === 'EmUso' && reserva.recurso.tipo === 'Espaco') {
       // RN18: o Espaço Em uso conclui sozinho no fim; o Equipamento só termina com a Devolução.
       lista.push({ em: reserva.fim, regra: 'RN18', tipo: 'Conclusao', reserva });
+    } else if (reserva.status === 'EmUso' && !reserva.penalizada) {
+      // RN17: o Equipamento sem Devolução no fim da Tolerância de Devolução gera uma Penalidade.
+      lista.push({
+        em: somarMinutos(reserva.fim, politica.toleranciaDeDevolucaoMin),
+        regra: 'RN17',
+        tipo: 'DevolucaoAtrasada',
+        reserva,
+      });
     }
   }
 
@@ -116,8 +161,86 @@ export function vencimentos(mundo: Mundo): Vencimento[] {
   });
 }
 
+function com(
+  reservas: ReservaDoCiclo[],
+  id: number,
+  mudanca: Partial<ReservaDoCiclo>,
+): ReservaDoCiclo[] {
+  return reservas.map((r) => (r.id === id ? { ...r, ...mudanca } : r));
+}
+
 function comStatus(reservas: ReservaDoCiclo[], id: number, status: Status): ReservaDoCiclo[] {
-  return reservas.map((r) => (r.id === id ? { ...r, status } : r));
+  return com(reservas, id, { status });
+}
+
+/** RN17: as Notificações ao Usuário e ao Gestor responsável e a Penalidade. */
+function devolucaoAtrasada(reserva: ReservaDoCiclo, em: Date): EfeitoCiclo[] {
+  const { recurso } = reserva;
+  const intervalo = intervaloEmSaoPaulo(reserva.inicio, reserva.fim);
+  const quando = `até o fim da Tolerância de Devolução, às ${horaEmSaoPaulo(em)}`;
+  return [
+    {
+      evento: 'NotificacaoEmitida',
+      notificacao: {
+        destinatarioId: reserva.usuarioId,
+        tipo: 'DevolucaoAtrasada',
+        mensagem: `Você recebeu uma Penalidade por Devolução atrasada: ${recurso.nome} (${intervalo}) não foi devolvido ${quando}.`,
+        em,
+        reservaId: reserva.id,
+      },
+    },
+    {
+      evento: 'NotificacaoEmitida',
+      notificacao: {
+        destinatarioId: recurso.gestorId,
+        tipo: 'DevolucaoAtrasada',
+        mensagem: `${reserva.usuario.nome} não devolveu ${recurso.nome} (${intervalo}) ${quando}. A Reserva continua Em uso até a Devolução.`,
+        em,
+        reservaId: reserva.id,
+      },
+    },
+    // Por último, como no Não comparecimento: a gravação da Penalidade pode iniciar uma Suspensão
+    // (RN19, #57), e o aviso dela fica por cima dos avisos do atraso.
+    {
+      evento: 'PenalidadeGerada',
+      penalidade: {
+        usuarioId: reserva.usuarioId,
+        reservaId: reserva.id,
+        motivo: 'DevolucaoAtrasada',
+        em,
+      },
+    },
+  ];
+}
+
+/** RN23: Cancelamento pelo sistema, sem Penalidade, com Notificação ao Usuário. */
+function equipamentoFora(reserva: ReservaDoCiclo, em: Date): EfeitoCiclo[] {
+  const intervalo = intervaloEmSaoPaulo(reserva.inicio, reserva.fim);
+  const causa =
+    'o Equipamento não foi devolvido pela Reserva anterior até o fim da Tolerância do Check-in';
+  return [
+    {
+      evento: 'StatusMudou',
+      reservaId: reserva.id,
+      transicao: {
+        de: 'Confirmada',
+        para: 'Cancelada',
+        em,
+        porId: null,
+        observacao: `Cancelamento pelo sistema: ${causa} (RN23).`,
+      },
+    },
+    {
+      evento: 'NotificacaoEmitida',
+      notificacao: {
+        destinatarioId: reserva.usuarioId,
+        tipo: 'CancelamentoPeloSistema',
+        mensagem: `Sua Reserva de ${reserva.recurso.nome} (${intervalo}) foi cancelada pelo sistema, sem Penalidade: ${causa}.`,
+        em,
+        reservaId: reserva.id,
+      },
+    },
+  ];
 }
 
 /**
@@ -138,6 +261,17 @@ export function sincronizar(mundo: Mundo, agora: Date): { mundo: Mundo; efeitos:
     const { reserva, em, tipo } = vencimento;
 
     switch (tipo) {
+      case 'DevolucaoAtrasada': {
+        // Não é Status: a Reserva continua Em uso; só passa a ter a Penalidade (RN17).
+        reservasAtuais = com(reservasAtuais, reserva.id, { penalizada: true });
+        efeitos.push(...devolucaoAtrasada(reserva, em));
+        break;
+      }
+      case 'EquipamentoFora': {
+        reservasAtuais = comStatus(reservasAtuais, reserva.id, 'Cancelada');
+        efeitos.push(...equipamentoFora(reserva, em));
+        break;
+      }
       case 'Expiracao': {
         reservasAtuais = comStatus(reservasAtuais, reserva.id, 'Expirada');
         efeitos.push({
