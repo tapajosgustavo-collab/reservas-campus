@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ItemDaFila } from '@reservas/shared';
 import { ErroDaApi } from '../../comum/api';
 import {
+  chaveDoItem,
   corDoPrazo,
   enderecoDaDecisao,
   msAteMudarACor,
@@ -120,6 +121,24 @@ const daSerie: ItemDaFila = {
 };
 
 describe('RN21 · Série como um item só na fila', () => {
+  it('a chave do item da Série não muda quando a primeira Ocorrência sai da lista; a do avulso é o Pedido', () => {
+    const semAPrimeira: ItemDaFila = {
+      ...daSerie,
+      id: 52,
+      inicio: daSerie.reservas[1]!.inicio,
+      fim: daSerie.reservas[1]!.fim,
+      reservas: daSerie.reservas.slice(1),
+    };
+
+    expect(chaveDoItem(daSerie)).toBe('serie-5');
+    expect(chaveDoItem(semAPrimeira)).toBe(chaveDoItem(daSerie));
+    expect(chaveDoItem(avulso)).toBe('pedido-42');
+  });
+
+  it('a Série e um Pedido avulso com o mesmo id da primeira Ocorrência têm chaves diferentes', () => {
+    expect(chaveDoItem({ ...avulso, id: 5 })).not.toBe(chaveDoItem(daSerie));
+  });
+
   it('a Série mostra quantas Ocorrências e as datas; o Pedido avulso, nada a mais', () => {
     expect(rotuloDasOcorrencias(daSerie)).toBe('Série: 3 Ocorrências (11/11, 18/11 e 25/11)');
     expect(rotuloDasOcorrencias({ ...daSerie, reservas: daSerie.reservas.slice(2) })).toBe(
