@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { POLITICA } from './politica';
 import { esquemaInstante } from './instante';
-import { esquemaCriarReserva, esquemaReserva } from './reservas';
+import { esquemaCriarReserva, esquemaIdDaReserva, esquemaReserva } from './reservas';
 
 const esquemaData = z.iso.date();
 
@@ -56,10 +56,8 @@ export function datasDaSerie(primeira: string, ate: string, limite: number): str
   return datas;
 }
 
-// O id é INT4 no banco: maior que isso nem chega ao Prisma.
-export const esquemaIdDaSerie = z.object({
-  id: z.coerce.number().int().positive().max(2_147_483_647),
-});
+/** O id da Série segue a mesma forma do id da Reserva (INT4 no banco), sem repetir o limite. */
+export const esquemaIdDaSerie = esquemaIdDaReserva;
 
 /** US11 e RN21: a Série decidida inteira, com as Ocorrências que a decisão mudou. */
 export const esquemaSerieDecidida = z.object({

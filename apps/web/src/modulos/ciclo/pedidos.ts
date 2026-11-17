@@ -93,6 +93,14 @@ export function rotuloDasOcorrencias({ serieId, reservas }: ItemDaFila): string 
   return `Série: ${quantas} (${lista})`;
 }
 
+/**
+ * A identidade do item na fila, estável entre as buscas: `serie-5` para a Série (o `id` do item é o
+ * da primeira Ocorrência Pendente, que muda se ela sair da fila) e `pedido-42` para o avulso.
+ */
+export function chaveDoItem({ id, serieId }: ItemDaFila): string {
+  return serieId === null ? `pedido-${id}` : `serie-${serieId}`;
+}
+
 /** Nos botões e avisos: "o Pedido de Laboratório de Química, de Ana" ou "a Série de ...". */
 export function nomeDoItem({ serieId, recurso, solicitante }: ItemDaFila): string {
   const doItem = `${recurso.nome}, de ${solicitante.nome}`;

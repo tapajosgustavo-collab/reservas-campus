@@ -20,6 +20,7 @@ import { useSessao } from '../conduta';
 import { rotuloDoInstante, rotuloDoIntervalo } from '../reservas';
 import { Erro, useAgoraEmDiaNaBorda } from './botao';
 import {
+  chaveDoItem,
   corDoPrazo,
   msAteMudarACor,
   nomeDoItem,
@@ -52,8 +53,8 @@ export function FilaDePedidos() {
   const agora = useSessao().data?.agora;
   const aprovar = useAprovarPedidos();
   const recusar = useRecusarPedido();
-  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
-  const [recusando, setRecusando] = useState<number | null>(null);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [recusando, setRecusando] = useState<string | null>(null);
   const [justificativa, setJustificativa] = useState('');
   const [aviso, setAviso] = useState<string | null>(null);
   const [falha, setFalha] = useState<Error | null>(null);
@@ -61,7 +62,7 @@ export function FilaDePedidos() {
 
   const pedidos = fila.data ?? [];
   // Um Pedido que saiu da fila (decidido ou expirado) não fica selecionado.
-  const escolhidos = pedidos.filter(({ id }) => selecionados.has(id));
+  const escolhidos = pedidos.filter((item) => selecionados.has(chaveDoItem(item)));
   const ocupado = aprovar.isPending || recusar.isPending;
   useAgoraEmDiaNaBorda(
     agora
@@ -72,11 +73,11 @@ export function FilaDePedidos() {
       : null,
   );
 
-  function alternar(id: number, marcado: boolean) {
+  function alternar(chave: string, marcado: boolean) {
     setSelecionados((atual) => {
       const proximo = new Set(atual);
-      if (marcado) proximo.add(id);
-      else proximo.delete(id);
+      if (marcado) proximo.add(chave);
+      else proximo.delete(chave);
       return proximo;
     });
   }
@@ -105,10 +106,10 @@ export function FilaDePedidos() {
     });
   }
 
-  function abrirRecusa(id: number) {
+  function abrirRecusa(chave: string) {
     recusar.reset();
     setJustificativa('');
-    setRecusando(id);
+    setRecusando(chave);
   }
 
   function confirmarRecusa(item: ItemDaFila) {
@@ -175,7 +176,7 @@ export function FilaDePedidos() {
                       onChange={(evento) =>
                         setSelecionados(
                           evento.currentTarget.checked
-                            ? new Set(pedidos.map(({ id }) => id))
+                            ? new Set(pedidos.map(chaveDoItem))
                             : new Set(),
                         )
                       }
@@ -196,15 +197,16 @@ export function FilaDePedidos() {
                 {pedidos.map((item) => {
                   const cor = agora ? corDoPrazo(item.expiraEm, agora) : null;
                   const ocorrencias = rotuloDasOcorrencias(item);
+                  const chave = chaveDoItem(item);
                   return (
-                    <Fragment key={item.id}>
+                    <Fragment key={chave}>
                       <Table.Tr>
                         <Table.Td>
                           <Checkbox
                             aria-label={`Selecionar ${nomeDoItem(item)}`}
-                            checked={selecionados.has(item.id)}
+                            checked={selecionados.has(chave)}
                             disabled={ocupado}
-                            onChange={(evento) => alternar(item.id, evento.currentTarget.checked)}
+                            onChange={(evento) => alternar(chave, evento.currentTarget.checked)}
                           />
                         </Table.Td>
                         <Table.Td>
@@ -247,7 +249,7 @@ export function FilaDePedidos() {
                               size="xs"
                               variant="default"
                               disabled={ocupado}
-                              onClick={() => abrirRecusa(item.id)}
+                              onClick={() => abrirRecusa(chave)}
                             >
                               Recusar
                               <VisuallyHidden> {nomeDoItem(item)}</VisuallyHidden>
@@ -263,7 +265,7 @@ export function FilaDePedidos() {
                         </Table.Td>
                       </Table.Tr>
 
-                      {recusando === item.id && (
+                      {recusando === chave && (
                         <Table.Tr>
                           <Table.Td colSpan={8}>
                             <Stack gap="xs">

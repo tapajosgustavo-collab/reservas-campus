@@ -24,7 +24,17 @@ export async function executar(
     case 'StatusMudouEmLote': {
       // Três idas ao banco para o lote inteiro, e não duas por Reserva.
       const where = { id: { in: efeito.reservaIds } };
-      await tx.reserva.updateMany({ where, data: { status: efeito.transicao.para } });
+      const { de, para } = efeito.transicao;
+      // Só grava `de → para` sobre quem ainda está em `de`; senão, a transação inteira desfaz.
+      const { count } = await tx.reserva.updateMany({
+        where: { ...where, status: de },
+        data: { status: para },
+      });
+      if (count !== efeito.reservaIds.length) {
+        throw new Error(
+          `StatusMudouEmLote: ${count} de ${efeito.reservaIds.length} Reservas estavam ${de}.`,
+        );
+      }
       await tx.transicao.createMany({
         data: efeito.reservaIds.map((reservaId) => ({ reservaId, ...efeito.transicao })),
       });
