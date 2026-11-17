@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { msAteInicio, podeCancelar } from './cancelamento';
+import { cancelarGeraPenalidade, msAteInicio, podeCancelar } from './cancelamento';
 
 /** A Reserva Confirmada das 14h de terça, 10/11/2026. */
 const dasQuatorze = { status: 'Confirmada', inicio: '2026-11-10T14:00:00-03:00' } as const;
@@ -50,5 +50,20 @@ describe('RN16 · O botão some no início sem recarregar a tela', () => {
 
   it('Reserva que já não pode ser cancelada: nada a esperar', () => {
     expect(msAteInicio({ ...dasQuatorze, status: 'EmUso' }, as('13:50'))).toBeNull();
+  });
+});
+
+describe('RN16 · a confirmação de cancelar avisa do Cancelamento tardio', () => {
+  it.each([
+    ['11:00', false],
+    ['12:00', false],
+    ['12:01', true],
+    ['13:59', true],
+  ])('Reserva Confirmada às 14h, agora %s → avisa: %s', (hora, avisa) => {
+    expect(cancelarGeraPenalidade(dasQuatorze, as(hora))).toBe(avisa);
+  });
+
+  it('Reserva Pendente nunca gera Penalidade → sem aviso', () => {
+    expect(cancelarGeraPenalidade({ ...dasQuatorze, status: 'Pendente' }, as('13:00'))).toBe(false);
   });
 });

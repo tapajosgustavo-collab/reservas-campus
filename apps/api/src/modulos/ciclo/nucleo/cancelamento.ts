@@ -1,21 +1,28 @@
-import { violacao, type Status, type Violacao } from '@reservas/shared';
-import { horaEmSaoPaulo } from '../../../comum/instante';
+import { violacao, type Politica, type Status, type Violacao } from '@reservas/shared';
+import { horaEmSaoPaulo, intervaloEmSaoPaulo } from '../../../comum/instante';
+import type { PenalidadeGerada } from '../../conduta';
 import type { StatusMudou } from '../../reservas';
+import type { NotificacaoEmitida } from './notificacao';
+
+const MINUTO = 60_000;
 
 /** O que a regra precisa saber da Reserva do Cancelamento. */
 export interface ReservaDoCancelamento {
   id: number;
   usuarioId: number;
   inicio: Date;
+  fim: Date;
   status: Status;
+  recurso: { nome: string };
 }
 
 export interface FatosDoCancelamento {
   reserva: ReservaDoCancelamento;
+  politica: Politica;
 }
 
 export type Decisao =
-  | { tipo: 'aceita'; efeitos: [StatusMudou] }
+  | { tipo: 'aceita'; efeitos: [StatusMudou] | [StatusMudou, PenalidadeGerada, NotificacaoEmitida] }
   | { tipo: 'recusada'; violacoes: Violacao[] }
   | { tipo: 'proibida'; violacoes: Violacao[] };
 
@@ -45,9 +52,54 @@ function naoCancelavel(status: Status): Violacao[] {
   }
 }
 
-/** US13: o dono cancela a própria Reserva Pendente ou Confirmada antes do início. */
+/**
+ * RN16: cancelar a Confirmada com menos de `cancelamentoSemPenalidadeMin` até o início é
+ * Cancelamento tardio. Cancelar uma Pendente nunca é.
+ */
+function ehTardio({ status, inicio }: ReservaDoCancelamento, politica: Politica, agora: Date) {
+  const antecedencia = inicio.getTime() - agora.getTime();
+  return status === 'Confirmada' && antecedencia < politica.cancelamentoSemPenalidadeMin * MINUTO;
+}
+
+/** RN16: a Penalidade do Cancelamento tardio, gravada pelo M1, e a Notificação dela. */
+function penalidadeDoTardio(
+  reserva: ReservaDoCancelamento,
+  { cancelamentoSemPenalidadeMin }: Politica,
+  agora: Date,
+): [PenalidadeGerada, NotificacaoEmitida] {
+  const intervalo = intervaloEmSaoPaulo(reserva.inicio, reserva.fim);
+  return [
+    {
+      evento: 'PenalidadeGerada',
+      penalidade: {
+        usuarioId: reserva.usuarioId,
+        reservaId: reserva.id,
+        motivo: 'CancelamentoTardio',
+        em: agora,
+      },
+    },
+    {
+      evento: 'NotificacaoEmitida',
+      notificacao: {
+        destinatarioId: reserva.usuarioId,
+        tipo: 'Penalidade',
+        mensagem:
+          `Você recebeu uma Penalidade por Cancelamento tardio na Reserva de ` +
+          `${reserva.recurso.nome} (${intervalo}): faltavam menos de ` +
+          `${cancelamentoSemPenalidadeMin / 60}h para o início.`,
+        em: agora,
+        reservaId: reserva.id,
+      },
+    },
+  ];
+}
+
+/**
+ * US13: o dono cancela a própria Reserva Pendente ou Confirmada antes do início. A Confirmada
+ * cancelada perto do início gera Penalidade (RN16).
+ */
 export function decidirCancelamento(
-  { reserva }: FatosDoCancelamento,
+  { reserva, politica }: FatosDoCancelamento,
   quem: { id: number },
   agora: Date,
 ): Decisao {
@@ -63,14 +115,14 @@ export function decidirCancelamento(
   const violacoes = porStatus.length > 0 ? porStatus : depoisDoInicio(reserva.inicio, agora);
   if (violacoes.length > 0) return { tipo: 'recusada', violacoes };
 
+  const cancelada: StatusMudou = {
+    evento: 'StatusMudou',
+    reservaId: reserva.id,
+    transicao: { de: reserva.status, para: 'Cancelada', em: agora, porId: quem.id },
+  };
+  if (!ehTardio(reserva, politica, agora)) return { tipo: 'aceita', efeitos: [cancelada] };
   return {
     tipo: 'aceita',
-    efeitos: [
-      {
-        evento: 'StatusMudou',
-        reservaId: reserva.id,
-        transicao: { de: reserva.status, para: 'Cancelada', em: agora, porId: quem.id },
-      },
-    ],
+    efeitos: [cancelada, ...penalidadeDoTardio(reserva, politica, agora)],
   };
 }

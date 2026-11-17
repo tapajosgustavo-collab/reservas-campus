@@ -31,6 +31,8 @@ export interface Politica {
   lembreteAntesDoInicioMin: number;
   /** RN21: quantas semanas a Série cobre, da primeira Ocorrência à última, com as desmarcadas. */
   semanasMaximasDaSerie: number;
+  /** RN16: cancelar a Confirmada com menos que isso antes do início é Cancelamento tardio. */
+  cancelamentoSemPenalidadeMin: number;
 }
 
 /** Os limites da Política. Cada um entra aqui no ticket que o usa. */
@@ -49,4 +51,5 @@ export const POLITICA = {
   prazoDeDecisaoMin: 120,
   lembreteAntesDoInicioMin: 60,
   semanasMaximasDaSerie: 18,
+  cancelamentoSemPenalidadeMin: 120,
 } as const satisfies Politica;

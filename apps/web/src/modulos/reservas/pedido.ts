@@ -93,6 +93,24 @@ export function avisoDoPedido(
 }
 
 /**
+ * RN16 (US08): com o início a menos de 2h do `agora` da API, cancelar a Reserva já seria
+ * Cancelamento tardio. `null` quando não há o que avisar, ou sem Data ou `agora` para calcular.
+ */
+export function avisoDoCancelamentoTardio(
+  { data, inicio }: Pick<FormularioDaReserva, 'data' | 'inicio'>,
+  agora: string | undefined,
+) {
+  const comeca = instanteDe(data, inicio).getTime();
+  if (agora === undefined || Number.isNaN(comeca)) return null;
+  const prazo = POLITICA.cancelamentoSemPenalidadeMin;
+  if (comeca - Date.parse(agora) >= prazo * 60_000) return null;
+  return (
+    `O início é daqui a menos de ${prazo / 60}h: se você cancelar esta Reserva, o ` +
+    `Cancelamento tardio gera Penalidade.`
+  );
+}
+
+/**
  * O que a agenda diz depois de criar: o Intervalo e o próximo passo, que na Reserva Confirmada é
  * a janela de Check-in (RN14) e no Pedido é esperar a Aprovação (RN10).
  */

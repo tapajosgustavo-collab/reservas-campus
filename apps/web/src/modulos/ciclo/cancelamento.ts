@@ -1,4 +1,4 @@
-import { esquemaCancelamento, type Reserva } from '@reservas/shared';
+import { esquemaCancelamento, POLITICA, type Reserva } from '@reservas/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { enviarJson } from '../../comum/api';
 
@@ -12,6 +12,15 @@ type ReservaDoBotao = Pick<Reserva, 'status' | 'inicio'>;
 export function podeCancelar({ status, inicio }: ReservaDoBotao, agora: string) {
   if (status !== 'Pendente' && status !== 'Confirmada') return false;
   return Date.parse(agora) < Date.parse(inicio);
+}
+
+/**
+ * RN16: cancelar agora seria Cancelamento tardio? Só a Confirmada, com menos de 2h até o início,
+ * pelo `agora` da API. Quem decide e grava a Penalidade é a API: aqui é só para avisar antes.
+ */
+export function cancelarGeraPenalidade({ status, inicio }: ReservaDoBotao, agora: string) {
+  const antecedencia = Date.parse(inicio) - Date.parse(agora);
+  return status === 'Confirmada' && antecedencia < POLITICA.cancelamentoSemPenalidadeMin * 60_000;
 }
 
 /**
