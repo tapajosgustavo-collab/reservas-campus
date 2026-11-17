@@ -9,6 +9,7 @@ import {
   intervaloValido,
   semConflito,
   semIndisponibilidade,
+  semSuspensao,
   type FatosDaReserva,
   type Intervalo,
   type PedidoDeReserva,
@@ -154,6 +155,7 @@ export function decidirSerie(
     ...dentroDaDuracao(base, docente, fatos.recurso, fatos.politica),
     ...dentroDaCota(fatos.ativasDoUsuario, docente, fatos.politica),
     ...dentroDaCapacidade(base, fatos.recurso),
+    ...semSuspensao(fatos.suspensoAte),
     ...ocorrencias.flatMap((ocorrencia) => violacoesDaOcorrencia(ocorrencia, fatos, agora)),
   ];
   if (violacoes.length > 0) return { tipo: 'recusada', violacoes };

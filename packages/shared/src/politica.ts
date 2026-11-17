@@ -31,6 +31,12 @@ export interface Politica {
   lembreteAntesDoInicioMin: number;
   /** RN21: quantas semanas a Série cobre, da primeira Ocorrência à última, com as desmarcadas. */
   semanasMaximasDaSerie: number;
+  /** RN19: quantas Penalidades na janela suspendem o Usuário. */
+  penalidadesParaSuspensao: number;
+  /** RN19: a janela móvel, em dias para trás a partir de cada nova Penalidade. */
+  janelaDePenalidadesDias: number;
+  /** RN19: quantos dias dura a Suspensão, a partir da Penalidade que a causou. */
+  suspensaoDias: number;
 }
 
 /** Os limites da Política. Cada um entra aqui no ticket que o usa. */
@@ -49,4 +55,7 @@ export const POLITICA = {
   prazoDeDecisaoMin: 120,
   lembreteAntesDoInicioMin: 60,
   semanasMaximasDaSerie: 18,
+  penalidadesParaSuspensao: 3,
+  janelaDePenalidadesDias: 30,
+  suspensaoDias: 7,
 } as const satisfies Politica;

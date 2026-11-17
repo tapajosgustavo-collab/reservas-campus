@@ -20,6 +20,7 @@ export const REGRAS = {
   RN06: { nome: 'Duração máxima' },
   RN07: { nome: 'Cota' },
   RN08: { nome: 'Capacidade' },
+  RN09: { nome: 'Suspenso não reserva' },
   RN10: { nome: 'Restrito começa Pendente' },
   RN11: { nome: 'Recusa justificada' },
   RN12: { nome: 'Expiração' },
