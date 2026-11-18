@@ -18,6 +18,11 @@ export function dataEmSaoPaulo(instante: Date): string {
   return format(new TZDate(instante, FUSO), 'dd/MM/yyyy');
 }
 
+/** O instante em São Paulo, como as mensagens de Suspensão mostram: `11/11/2026 às 10:15`. */
+export function dataHoraEmSaoPaulo(instante: Date): string {
+  return `${dataEmSaoPaulo(instante)} às ${horaEmSaoPaulo(instante)}`;
+}
+
 /** O Intervalo em São Paulo, como as Notificações mostram: `11/11/2026, das 14:00 às 16:00`. */
 export function intervaloEmSaoPaulo(inicio: Date, fim: Date): string {
   return `${dataEmSaoPaulo(inicio)}, das ${horaEmSaoPaulo(inicio)} às ${horaEmSaoPaulo(fim)}`;

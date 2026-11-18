@@ -16,7 +16,11 @@
   // ]
   //
   "allowlist": [
-    // GHSA-fc5q-39xc-vjpf | Motivo: Sem versão corrigida no npm (picomatch <= 4.0.7); usado só em dev/build/test (vite, vitest, typescript-eslint), sem entrada de usuário em runtime | Aprovador: Guilherme | Validade: 2026-11-30
+    // GHSA-fc5q-39xc-vjpf (picomatch <= 4.0.7, ReDoS com extglob) | Motivo: sem versão corrigida;
+    // só entra por ferramentas de desenvolvimento e CI (Vite, Vitest, typescript-eslint, via
+    // tinyglobby/fdir), fora das dependências de produção (`npm ls picomatch --omit=dev` vazio), e
+    // só recebe os padrões do próprio repositório, nunca entrada de usuário | Aprovador: Rafael |
+    // Validade: 2026-12-15
     "GHSA-fc5q-39xc-vjpf",
   ],
 }

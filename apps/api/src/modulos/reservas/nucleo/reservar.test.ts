@@ -29,6 +29,7 @@ const fatos = (dados: Partial<FatosDaReserva> = {}): FatosDaReserva => ({
   indisponibilidades: [],
   recurso: { tipo: 'Espaco', capacidade: 30, restrito: false },
   ativasDoUsuario: [],
+  suspensoAte: null,
   politica: POLITICA,
   ...dados,
 });
@@ -781,6 +782,42 @@ describe('RN07 · Cota', () => {
     );
 
     expect(decisao).toMatchObject({ violacoes: [{ rn: 'RN01' }, { rn: 'RN07' }] });
+  });
+});
+
+describe('RN09 · Suspenso não reserva', () => {
+  it('RN09_suspenso até 11/11 às 10:15 tenta reservar → recusado, dizendo até quando', () => {
+    const decisao = decidirReserva(
+      fatos({ suspensoAte: new Date('2026-11-11T10:15:00-03:00') }),
+      pedido('10:00', '12:00'),
+      ANA,
+      AGORA,
+    );
+
+    expect(decisao).toEqual({
+      tipo: 'recusada',
+      violacoes: [
+        {
+          rn: 'RN09',
+          nome: 'Suspenso não reserva',
+          mensagem: 'Você está suspenso até 11/11/2026 às 10:15 e não pode criar Reservas.',
+        },
+      ],
+    });
+  });
+
+  it('RN09_suspenso e com o Intervalo ocupado → RN01 e RN09 na mesma resposta', () => {
+    const decisao = decidirReserva(
+      fatos({
+        suspensoAte: new Date('2026-11-11T10:15:00-03:00'),
+        reservasDoRecurso: [{ inicio: em('10:00'), fim: em('12:00'), status: 'Confirmada' }],
+      }),
+      pedido('10:00', '12:00'),
+      ANA,
+      AGORA,
+    );
+
+    expect(decisao).toMatchObject({ violacoes: [{ rn: 'RN01' }, { rn: 'RN09' }] });
   });
 });
 

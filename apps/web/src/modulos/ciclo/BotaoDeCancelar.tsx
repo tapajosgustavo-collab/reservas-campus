@@ -1,9 +1,14 @@
-import { Button, Group, Modal, Stack, Text, VisuallyHidden } from '@mantine/core';
-import type { Reserva } from '@reservas/shared';
+import { Alert, Button, Group, Modal, Stack, Text, VisuallyHidden } from '@mantine/core';
+import { POLITICA, type Reserva } from '@reservas/shared';
 import { useState } from 'react';
 import { rotuloDoIntervalo } from '../reservas';
 import { Erro, useAgoraEmDiaNaBorda } from './botao';
-import { msAteInicio, podeCancelar, useCancelarReserva } from './cancelamento';
+import {
+  cancelarGeraPenalidade,
+  msAteInicio,
+  podeCancelar,
+  useCancelarReserva,
+} from './cancelamento';
 
 interface Props {
   reserva: Pick<Reserva, 'id' | 'status' | 'inicio' | 'fim'>;
@@ -49,6 +54,12 @@ export function BotaoDeCancelar({ reserva, agora, nomeDoRecurso }: Props) {
             Tem certeza de que deseja cancelar a Reserva de <strong>{nomeDoRecurso}</strong> (
             {rotuloDoIntervalo(reserva.inicio, reserva.fim)})?
           </Text>
+          {cancelarGeraPenalidade(reserva, agora) && (
+            <Alert color="yellow" variant="light">
+              Faltam menos de {POLITICA.cancelamentoSemPenalidadeMin / 60}h para o início: cancelar
+              agora é Cancelamento tardio e gera Penalidade.
+            </Alert>
+          )}
           <Group justify="flex-end">
             <Button
               variant="default"

@@ -37,7 +37,7 @@ import {
   type FatosDoPedido,
   type NotificacaoEmitida,
 } from '../nucleo/pedido';
-import { executar } from './efeitos';
+import { executar, registrarPenalidadeEAvisar } from './efeitos';
 
 /** Os instantes da Reserva em ISO com o deslocamento de São Paulo. */
 function paraResposta<T extends { inicio: Date; fim: Date; criadaEm: Date }>(reserva: T) {
@@ -159,7 +159,9 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
     '/api/reservas/:id/cancelamento',
     {
       schema: {
-        summary: 'Cancela a própria Reserva Pendente ou Confirmada até o início (RN16)',
+        summary:
+          'Cancela a própria Reserva Pendente ou Confirmada até o início; a Confirmada a menos de ' +
+          '2h do início gera Penalidade por Cancelamento tardio (RN16)',
         tags: ['ciclo'],
         params: esquemaIdDaReserva,
         response: { 200: esquemaCancelamento },
@@ -171,11 +173,18 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
       const { params, tx, agora } = request;
       const reserva = await tx.reserva.findUnique({
         where: { id: params.id },
-        select: { id: true, usuarioId: true, inicio: true, status: true },
+        select: {
+          id: true,
+          usuarioId: true,
+          inicio: true,
+          fim: true,
+          status: true,
+          recurso: { select: { nome: true } },
+        },
       });
       if (!reserva) throw new ErroApi('nao_encontrado', `Reserva ${params.id} não encontrada.`);
 
-      const decisao = decidirCancelamento({ reserva }, quem, agora);
+      const decisao = decidirCancelamento({ reserva, politica: POLITICA }, quem, agora);
       if (decisao.tipo === 'proibida') throw proibidoPelaRegra(decisao.violacoes);
       if (decisao.tipo === 'recusada') throw regraViolada(decisao.violacoes);
 
@@ -183,9 +192,23 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
       const [efeito] = decisao.efeitos;
       const cancelada = await executarEmReservas(tx, efeito);
       request.log.info({ evento: efeito.evento, reservaId: cancelada.id }, efeito.evento);
+      if (decisao.efeitos.length === 1) {
+        return { reserva: paraResposta(cancelada), penalidade: null };
+      }
+
+      // RN16: a Penalidade é do M1, que grava; a Notificação é do M4. O aviso da Penalidade vai
+      // antes, para o da Suspensão que ela pode iniciar (RN19) ficar por cima na lista.
+      const [, penalidadeGerada, notificacao] = decisao.efeitos;
+      await executar(tx, notificacao);
+      const { penalidade } = await registrarPenalidadeEAvisar(tx, penalidadeGerada);
+      const { id, em } = penalidade;
+      request.log.info(
+        { evento: penalidadeGerada.evento, reservaId: cancelada.id },
+        penalidadeGerada.evento,
+      );
       return {
         reserva: paraResposta(cancelada),
-        penalidade: null,
+        penalidade: { id, motivo: 'CancelamentoTardio' as const, em: paraIsoSaoPaulo(em) },
       };
     },
   );
