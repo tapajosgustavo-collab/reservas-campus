@@ -37,6 +37,8 @@ export interface Politica {
   janelaDePenalidadesDias: number;
   /** RN19: quantos dias dura a Suspensão, a partir da Penalidade que a causou. */
   suspensaoDias: number;
+  /** RN16: cancelar a Confirmada com menos que isso antes do início é Cancelamento tardio. */
+  cancelamentoSemPenalidadeMin: number;
 }
 
 /** Os limites da Política. Cada um entra aqui no ticket que o usa. */
@@ -58,4 +60,5 @@ export const POLITICA = {
   penalidadesParaSuspensao: 3,
   janelaDePenalidadesDias: 30,
   suspensaoDias: 7,
+  cancelamentoSemPenalidadeMin: 120,
 } as const satisfies Politica;
