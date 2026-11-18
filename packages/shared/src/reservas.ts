@@ -125,8 +125,8 @@ export type RegistrarDevolucao = z.infer<typeof esquemaDevolucao>;
 
 /**
  * US11: um Pedido Pendente na fila do Gestor, ou a Série inteira como um item só (RN21), com o `id`,
- * o Intervalo e os dados da primeira Ocorrência Pendente. Os dados de conduta do solicitante
- * (`penalidades30d`, `suspensoAte`) entram no incremento 4 (#58).
+ * o Intervalo e os dados da primeira Ocorrência Pendente. O solicitante vem com os dados de conduta,
+ * para o Gestor decidir com contexto; nada disso decide sozinho (US11).
  */
 export const esquemaItemDaFila = z.object({
   id: z.number().int().describe('O Pedido avulso, ou a primeira Ocorrência Pendente da Série'),
@@ -147,7 +147,16 @@ export const esquemaItemDaFila = z.object({
     tipo: esquemaTipoRecurso,
     capacidade: z.number().int().nullable().describe('Só Espaço'),
   }),
-  solicitante: esquemaPessoa.extend({ perfil: esquemaPerfil }),
+  solicitante: esquemaPessoa.extend({
+    perfil: esquemaPerfil,
+    penalidades30d: z
+      .number()
+      .int()
+      .describe('Penalidades dos últimos 30 dias, também as que já causaram Suspensão'),
+    suspensoAte: esquemaInstante
+      .nullable()
+      .describe('Fim da Suspensão em vigor; `null` = não está suspenso (RN19)'),
+  }),
 });
 
 export type ItemDaFila = z.infer<typeof esquemaItemDaFila>;

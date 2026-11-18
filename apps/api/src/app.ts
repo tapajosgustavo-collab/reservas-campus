@@ -17,7 +17,7 @@ import { registrarSessao } from './comum/sessao';
 import { iniciarTique } from './comum/tique';
 import { emTransacao } from './comum/transacao';
 import { registrarRotasDoCiclo } from './modulos/ciclo';
-import { registrarSessaoDoUsuario } from './modulos/conduta';
+import { registrarRotasDaConduta, registrarSessaoDoUsuario } from './modulos/conduta';
 import { registrarRotasDeRecursos } from './modulos/recursos';
 import { registrarRotasDeReservas } from './modulos/reservas';
 
@@ -108,6 +108,7 @@ export async function construirApp({
   });
 
   registrarSessaoDoUsuario(app, demo);
+  registrarRotasDaConduta(app);
   registrarRotasDeRecursos(app);
   registrarRotasDeReservas(app);
   registrarRotasDoCiclo(app);

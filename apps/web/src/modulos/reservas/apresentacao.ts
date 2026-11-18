@@ -23,6 +23,11 @@ export function rotuloDoIntervalo(inicio: string, fim: string) {
   return `${dia}, das ${format(comeca, 'HH:mm')} às ${format(emSaoPaulo(fim), 'HH:mm')}`;
 }
 
+/** "11/11": o dia e o mês de São Paulo. */
+export function rotuloDoDia(instante: string) {
+  return format(emSaoPaulo(instante), 'dd/MM');
+}
+
 export function rotuloDoInstante(instante: string) {
   return format(emSaoPaulo(instante), "dd/MM/yyyy 'às' HH:mm");
 }

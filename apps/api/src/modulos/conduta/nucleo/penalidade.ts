@@ -1,4 +1,4 @@
-export type MotivoPenalidade = 'NaoComparecimento' | 'CancelamentoTardio' | 'DevolucaoAtrasada';
+import type { MotivoPenalidade } from '@reservas/shared';
 
 /**
  * Uma Penalidade para gravar no histórico do Usuário. Quem decide é outro módulo (o Não
