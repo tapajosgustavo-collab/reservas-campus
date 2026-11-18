@@ -9,7 +9,7 @@ import {
   type TipoRecurso,
   type Violacao,
 } from '@reservas/shared';
-import { emSaoPaulo } from '../../../comum/instante';
+import { dataHoraEmSaoPaulo, emSaoPaulo } from '../../../comum/instante';
 
 /** O Usuário da sessão. */
 export interface Quem {
@@ -76,6 +76,8 @@ export interface FatosDaReserva extends FatosDoIntervalo {
   recurso: { tipo: TipoRecurso; capacidade: number | null; restrito: boolean };
   /** Só as Reservas ativas (Pendente, Confirmada e Em uso) de quem está reservando. */
   ativasDoUsuario: ReservaNaCota[];
+  /** RN09: até quando quem reserva está suspenso, ou `null` se não está (calculado pelo M1). */
+  suspensoAte: Date | null;
   politica: Politica;
 }
 
@@ -320,6 +322,17 @@ export function dentroDaCapacidade(
   ];
 }
 
+/** RN09: quem tem Suspensão em vigor não cria Reservas nem Séries; as que já tinha continuam. */
+export function semSuspensao(suspensoAte: Date | null): Violacao[] {
+  if (suspensoAte === null) return [];
+  return [
+    violacao(
+      'RN09',
+      `Você está suspenso até ${dataHoraEmSaoPaulo(suspensoAte)} e não pode criar Reservas.`,
+    ),
+  ];
+}
+
 /** US08: criar uma Reserva. Devolve todas as RNs violadas, não só a primeira. */
 export function decidirReserva(
   fatos: FatosDaReserva,
@@ -333,6 +346,7 @@ export function decidirReserva(
     ...dentroDaDuracao(pedido, quem, fatos.recurso, fatos.politica),
     ...dentroDaCota(fatos.ativasDoUsuario, quem, fatos.politica),
     ...dentroDaCapacidade(pedido, fatos.recurso),
+    ...semSuspensao(fatos.suspensoAte),
   ];
   if (violacoes.length > 0) return { tipo: 'recusada', violacoes };
 

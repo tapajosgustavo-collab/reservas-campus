@@ -123,6 +123,46 @@ comBanco('US13 · Cancelar', () => {
     ]);
   });
 
+  it('RN19_o Cancelamento tardio que é a 3ª Penalidade em 30 dias suspende a dona e avisa o início da Suspensão', async () => {
+    const app = await umaAppAs('08:30');
+    const ana = await umUsuario(banco, 'Aluno', { nome: 'Ana' });
+    // Duas faltas da semana passada: o sincronizar desta requisição as transforma em Penalidades.
+    for (const dia of ['02', '03']) {
+      await umaReserva(banco, {
+        usuarioId: ana.id,
+        inicio: `2026-11-${dia}T10:00:00-03:00`,
+        fim: `2026-11-${dia}T12:00:00-03:00`,
+      });
+    }
+    const reserva = await umaReserva(banco, { usuarioId: ana.id });
+
+    const resposta = await cancelar(app, ana.id, reserva.id);
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json().penalidade).toMatchObject({ motivo: 'CancelamentoTardio' });
+    const suspensao = await banco.suspensao.findFirstOrThrow({ include: { penalidades: true } });
+    expect(suspensao).toMatchObject({
+      usuarioId: ana.id,
+      inicio: as('08:30'),
+      fim: new Date('2026-11-17T08:30:00-03:00'),
+    });
+    expect(suspensao.penalidades).toHaveLength(3);
+    const notificacoes = await app.inject({
+      method: 'GET',
+      url: '/api/notificacoes',
+      cookies: sessaoDe(app, ana.id),
+    });
+    expect(notificacoes.json().itens.map((n: { tipo: string }) => n.tipo)).toEqual([
+      'InicioSuspensao',
+      'Penalidade',
+      'Penalidade',
+      'Penalidade',
+    ]);
+    expect(notificacoes.json().itens[0].mensagem).toBe(
+      'Você está suspenso até 17/11/2026 às 08:30 por acumular 3 Penalidades em 30 dias e não pode criar Reservas. As Reservas que você já tem continuam valendo.',
+    );
+  });
+
   it('a dona também cancela uma Reserva Pendente → 200 Cancelada, sem Penalidade', async () => {
     const app = await umaAppAs('09:30');
     const ana = await umUsuario(banco);

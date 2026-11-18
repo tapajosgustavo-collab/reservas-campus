@@ -16,6 +16,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { ErroApi, proibidoPelaRegra, regraViolada } from '../../../comum/erros';
 import { instanteEmSaoPaulo, paraIsoSaoPaulo } from '../../../comum/instante';
 import { exigirPerfil, exigirSessao } from '../../../comum/sessao';
+import { suspensoAte } from '../../conduta';
 import { violacoesDoDetalhe } from '../nucleo/detalhe';
 import { decidirReserva, type FatosDaReserva, type Quem } from '../nucleo/reservar';
 import { decidirSerie } from '../nucleo/serie';
@@ -49,7 +50,7 @@ function comInstantes<T extends { inicio: Date; fim: Date; criadaEm: Date }>(res
  * da Série. Quem escolhe o que cai em cada Intervalo é o núcleo.
  */
 async function fatosDaReserva(
-  { tx }: FastifyRequest,
+  { tx, agora }: FastifyRequest,
   quem: Quem,
   { recursoId, participantes }: { recursoId: number; participantes?: number },
   periodo: { inicio: Date; fim: Date },
@@ -91,12 +92,18 @@ async function fatosDaReserva(
     where: { usuarioId: quem.id, status: { in: [...STATUS_ATIVOS] } },
     select: { id: true, serieId: true },
   });
+  // RN09: as Suspensões que ainda não acabaram; quem diz se alguma está em vigor é o M1.
+  const suspensoes = await tx.suspensao.findMany({
+    where: { usuarioId: quem.id, fim: { gt: agora } },
+    select: { inicio: true, fim: true },
+  });
   return {
     horarios: recurso.horarios,
     reservasDoRecurso,
     indisponibilidades: recurso.indisponibilidades,
     recurso: { tipo: recurso.tipo, capacidade: recurso.capacidade, restrito: recurso.restrito },
     ativasDoUsuario,
+    suspensoAte: suspensoAte(suspensoes, agora),
     politica: POLITICA,
   };
 }

@@ -27,6 +27,7 @@ const fatos = (dados: Partial<FatosDaReserva> = {}): FatosDaReserva => ({
   indisponibilidades: [],
   recurso: { tipo: 'Espaco', capacidade: 30, restrito: false },
   ativasDoUsuario: [],
+  suspensoAte: null,
   politica: POLITICA,
   ...dados,
 });
@@ -249,6 +250,26 @@ describe('RN21 · Série tudo-ou-nada', () => {
           rn: 'RN07',
           nome: 'Cota',
           mensagem: 'Você já tem 10 Reservas ativas, e a Cota de Docente é 10.',
+        },
+      ],
+    });
+  });
+
+  it('RN09_Docente suspenso tenta criar Série → recusado uma vez só, sem data', () => {
+    const decisao = decidirSerie(
+      fatos({ suspensoAte: new Date('2026-11-11T10:15:00-03:00') }),
+      serie(),
+      CARLA,
+      AGORA,
+    );
+
+    expect(decisao).toEqual({
+      tipo: 'recusada',
+      violacoes: [
+        {
+          rn: 'RN09',
+          nome: 'Suspenso não reserva',
+          mensagem: 'Você está suspenso até 11/11/2026 às 10:15 e não pode criar Reservas.',
         },
       ],
     });
