@@ -600,4 +600,77 @@ comBanco('sincronizar (casca e integração)', () => {
       { usuarioId: bia.id, motivo: 'NaoComparecimento' },
     ]);
   });
+
+  it('RN23 · a anterior já penalizada numa passada antes (o tique): a Reserva seguinte ainda é cancelada sem Penalidade, não vira Não comparecimento', async () => {
+    const { eduardo, doEduardo, daBia } = await notebookQueNaoVoltou();
+    // As Reservas não se encostam: o Eduardo das 8h às 10h, a Bia às 12h.
+    await banco.reserva.update({
+      where: { id: doEduardo.id },
+      data: { inicio: as('11T08:00'), fim: as('11T10:00') },
+    });
+
+    // 10h15: o tique grava a Penalidade do Eduardo (RN17). Depois disso ele não é mais candidato.
+    await banco.$transaction((tx) => sincronizar(tx, as('11T10:15')));
+    // 12h15: só a consulta das Reservas Em uso do Equipamento faz o núcleo ver que ele ainda está fora.
+    await banco.$transaction((tx) => sincronizar(tx, as('11T12:15')));
+
+    expect(
+      await banco.reserva.findUniqueOrThrow({
+        where: { id: daBia.id },
+        include: { penalidade: true },
+      }),
+    ).toMatchObject({ status: 'Cancelada', penalidade: null });
+    expect(
+      await banco.penalidade.findMany({ select: { usuarioId: true, reservaId: true, em: true } }),
+    ).toEqual([{ usuarioId: eduardo.id, reservaId: doEduardo.id, em: as('11T10:15') }]);
+  });
+
+  it('RN17 · a Devolução atrasada que é a 3ª Penalidade em 30 dias abre a Suspensão (RN19), com o aviso dela por cima do aviso do atraso', async () => {
+    const { carlos, eduardo, notebook, doEduardo, daBia } = await notebookQueNaoVoltou();
+    await banco.reserva.delete({ where: { id: daBia.id } });
+    // Duas faltas do Eduardo antes, na Sala 101, nos dias 09 e 10 (RN15).
+    const sala = await umEspaco(banco, { gestorId: carlos.id, nome: 'Sala 101' });
+    for (const dia of ['09', '10']) {
+      await umaReserva(banco, {
+        usuarioId: eduardo.id,
+        recursoId: sala.id,
+        inicio: `2026-11-${dia}T10:00:00-03:00`,
+        fim: `2026-11-${dia}T12:00:00-03:00`,
+      });
+    }
+    const relogio = new RelogioFixo(as('11T18:00'));
+    const app = await umaApp({ banco, relogio });
+
+    const notificacoes = await app.inject({
+      method: 'GET',
+      url: '/api/notificacoes',
+      cookies: sessaoDe(app, eduardo.id, relogio.agora()),
+    });
+
+    expect(notificacoes.json().itens.slice(0, 2)).toMatchObject([
+      { tipo: 'InicioSuspensao', em: '2026-11-11T12:15:00-03:00' },
+      { tipo: 'DevolucaoAtrasada', em: '2026-11-11T12:15:00-03:00', reservaId: doEduardo.id },
+    ]);
+    expect(
+      await banco.suspensao.findMany({
+        select: {
+          usuarioId: true,
+          inicio: true,
+          fim: true,
+          _count: { select: { penalidades: true } },
+        },
+      }),
+    ).toEqual([
+      {
+        usuarioId: eduardo.id,
+        inicio: as('11T12:15'),
+        fim: as('18T12:15'),
+        _count: { penalidades: 3 },
+      },
+    ]);
+    // O Equipamento continua com ele: a Suspensão não mexe na Reserva Em uso (RN17).
+    expect(
+      (await banco.reserva.findFirstOrThrow({ where: { recursoId: notebook.id } })).status,
+    ).toBe('EmUso');
+  });
 });
