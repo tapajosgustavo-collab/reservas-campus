@@ -5,12 +5,12 @@ import type { PenalidadeGerada } from '../nucleo/penalidade';
 import { inicioDaJanela, suspensaoPelaPenalidade } from '../nucleo/suspensao';
 
 /**
- * Grava um efeito do M1 (só ele grava em `penalidade` e `suspensao`). Os outros módulos que geram
- * uma Penalidade (o Não comparecimento do `sincronizar`, no M4) gravam por aqui. A Penalidade
- * pode iniciar uma Suspensão (RN19), que marca as Penalidades que contaram (RN20) e volta junto
- * para quem chamou avisar o Usuário.
+ * Registra uma Penalidade (só o M1 grava em `penalidade` e `suspensao`). Os outros módulos que
+ * geram uma (o Não comparecimento e o Cancelamento tardio, no M4) gravam por aqui. Carrega o
+ * histórico do Usuário e pergunta ao núcleo se nasce uma Suspensão (RN19); se nascer, grava e
+ * marca as Penalidades que contaram (RN20), e ela volta junto para quem chamou avisar o Usuário.
  */
-export async function executar(
+export async function registrarPenalidade(
   tx: Transacao,
   efeito: PenalidadeGerada,
 ): Promise<{ penalidade: Penalidade; suspensao: Suspensao | null }> {

@@ -21,7 +21,6 @@ import type { Transacao } from '../../../comum/banco';
 import { ErroApi, proibidoPelaRegra, regraViolada } from '../../../comum/erros';
 import { paraIsoSaoPaulo } from '../../../comum/instante';
 import { exigirPerfil, exigirSessao } from '../../../comum/sessao';
-import { executar as executarEmConduta } from '../../conduta';
 import { executar as executarEmReservas } from '../../reservas';
 import { decidirCancelamento } from '../nucleo/cancelamento';
 import { decidirCheckIn } from '../nucleo/check-in';
@@ -38,7 +37,7 @@ import {
   type FatosDoPedido,
   type NotificacaoEmitida,
 } from '../nucleo/pedido';
-import { executar } from './efeitos';
+import { executar, registrarPenalidadeEAvisar } from './efeitos';
 
 /** Os instantes da Reserva em ISO com o deslocamento de São Paulo. */
 function paraResposta<T extends { inicio: Date; fim: Date; criadaEm: Date }>(reserva: T) {
@@ -197,10 +196,12 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
         return { reserva: paraResposta(cancelada), penalidade: null };
       }
 
-      // RN16: a Penalidade é do M1, que grava; a Notificação é do M4.
+      // RN16: a Penalidade é do M1, que grava; a Notificação é do M4. O aviso da Penalidade vai
+      // antes, para o da Suspensão que ela pode iniciar (RN19) ficar por cima na lista.
       const [, penalidadeGerada, notificacao] = decisao.efeitos;
-      const { id, em } = await executarEmConduta(tx, penalidadeGerada);
       await executar(tx, notificacao);
+      const { penalidade } = await registrarPenalidadeEAvisar(tx, penalidadeGerada);
+      const { id, em } = penalidade;
       request.log.info(
         { evento: penalidadeGerada.evento, reservaId: cancelada.id },
         penalidadeGerada.evento,

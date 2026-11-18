@@ -1,15 +1,13 @@
 import { POLITICA } from '@reservas/shared';
 import type { Transacao } from '../../../comum/banco';
-import { executar as executarEmConduta } from '../../conduta';
 import { executar as executarEmReservas } from '../../reservas';
-import { notificacaoDeInicioDaSuspensao } from '../nucleo/notificacao';
 import {
   sincronizar as sincronizarNucleo,
   type EfeitoCiclo,
   type ReservaDoCiclo,
   type SuspensaoDoCiclo,
 } from '../nucleo/sincronizar';
-import { executar } from './efeitos';
+import { executar, registrarPenalidadeEAvisar } from './efeitos';
 
 const MINUTO = 60_000;
 
@@ -150,11 +148,8 @@ async function executarEfeitos(tx: Transacao, efeitos: EfeitoCiclo[]): Promise<n
         await executarEmReservas(tx, efeito);
         break;
       case 'PenalidadeGerada': {
-        const { suspensao } = await executarEmConduta(tx, efeito);
-        if (suspensao) {
-          await executar(tx, notificacaoDeInicioDaSuspensao(suspensao, POLITICA));
-          gravados++;
-        }
+        const { suspensao } = await registrarPenalidadeEAvisar(tx, efeito);
+        if (suspensao) gravados++;
         break;
       }
       case 'NotificacaoEmitida':
