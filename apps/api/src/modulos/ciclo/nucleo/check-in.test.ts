@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { decidirCheckIn, type FatosDoCheckIn } from './check-in';
+import type { ReservaDoEquipamento } from './equipamento-fora';
 
 const ANA = { id: 7 };
+
+/** O Notebook Dell N-01. */
+const N01 = { id: 5, tipo: 'Equipamento' } as const;
 
 /** Terça, 10/11/2026, em São Paulo. */
 const em = (hora: string) => new Date(`2026-11-10T${hora}:00-03:00`);
@@ -12,11 +16,27 @@ const em = (hora: string) => new Date(`2026-11-10T${hora}:00-03:00`);
  */
 const fatos = (
   reserva: Partial<FatosDoCheckIn['reserva']> = {},
-  equipamentoFora = false,
+  emUsoDoRecurso: ReservaDoEquipamento[] = [],
 ): FatosDoCheckIn => ({
-  reserva: { id: 42, usuarioId: ANA.id, inicio: em('10:00'), status: 'Confirmada', ...reserva },
+  reserva: {
+    id: 42,
+    usuarioId: ANA.id,
+    inicio: em('10:00'),
+    status: 'Confirmada',
+    recurso: N01,
+    ...reserva,
+  },
   politica: { checkInAntesDoInicioMin: 15, toleranciaMin: 15 },
-  equipamentoFora,
+  emUsoDoRecurso,
+});
+
+/** RN23: a Reserva do Eduardo no mesmo N-01, das 10h às 12h, Em uso e sem Devolução. */
+const doEduardoEmUso = (dados: Partial<ReservaDoEquipamento> = {}): ReservaDoEquipamento => ({
+  id: 41,
+  inicio: em('10:00'),
+  status: 'EmUso',
+  recurso: N01,
+  ...dados,
 });
 
 describe('US12 · Fazer Check-in', () => {
@@ -158,7 +178,9 @@ describe('RN23 · Equipamento ainda fora', () => {
   const ainda = 'O Equipamento ainda não foi devolvido pela Reserva anterior.';
 
   it('RN23_Reserva do N-01 às 12h, Check-in às 11h55 com a anterior sem Devolução → recusado, dizendo que ele ainda não foi devolvido', () => {
-    expect(decidirCheckIn(fatos({ inicio: em('12:00') }, true), ANA, em('11:55'))).toEqual({
+    expect(
+      decidirCheckIn(fatos({ inicio: em('12:00') }, [doEduardoEmUso()]), ANA, em('11:55')),
+    ).toEqual({
       tipo: 'recusada',
       violacoes: [
         {
@@ -171,13 +193,19 @@ describe('RN23 · Equipamento ainda fora', () => {
   });
 
   it('RN23_o Equipamento voltou antes do fim da Tolerância → o Check-in das 12h10 segue normal', () => {
-    expect(decidirCheckIn(fatos({ inicio: em('12:00') }, false), ANA, em('12:10')).tipo).toBe(
-      'aceita',
-    );
+    expect(
+      decidirCheckIn(
+        fatos({ inicio: em('12:00') }, [doEduardoEmUso({ status: 'Concluida' })]),
+        ANA,
+        em('12:10'),
+      ).tipo,
+    ).toBe('aceita');
   });
 
   it('RN23_fora da janela e com o Equipamento fora → recusado com as duas regras', () => {
-    expect(decidirCheckIn(fatos({ inicio: em('12:00') }, true), ANA, em('11:40'))).toMatchObject({
+    expect(
+      decidirCheckIn(fatos({ inicio: em('12:00') }, [doEduardoEmUso()]), ANA, em('11:40')),
+    ).toMatchObject({
       tipo: 'recusada',
       violacoes: [
         { rn: 'RN14', mensagem: expect.stringContaining('abre às 11:45') },
@@ -187,9 +215,35 @@ describe('RN23 · Equipamento ainda fora', () => {
   });
 
   it('RN23_Reserva que já não aceita Check-in (Em uso) não fala do Equipamento', () => {
-    expect(decidirCheckIn(fatos({ status: 'EmUso' }, true), ANA, em('10:05'))).toMatchObject({
+    expect(
+      decidirCheckIn(
+        fatos({ status: 'EmUso', inicio: em('12:00') }, [doEduardoEmUso()]),
+        ANA,
+        em('10:05'),
+      ),
+    ).toMatchObject({
       tipo: 'recusada',
       violacoes: [{ rn: 'RN14' }],
     });
+  });
+
+  it('RN23_outro Equipamento Em uso, ou uma Reserva Em uso que começa depois, não segura o Check-in', () => {
+    const outroNotebook = doEduardoEmUso({ recurso: { id: 6, tipo: 'Equipamento' } });
+    const depois = doEduardoEmUso({ inicio: em('14:00') });
+    expect(
+      decidirCheckIn(fatos({ inicio: em('12:00') }, [outroNotebook, depois]), ANA, em('11:55'))
+        .tipo,
+    ).toBe('aceita');
+  });
+
+  it('RN23_no Espaço não há Devolução: uma Reserva Em uso antes não segura o Check-in', () => {
+    const sala = { id: 9, tipo: 'Espaco' } as const;
+    expect(
+      decidirCheckIn(
+        fatos({ inicio: em('12:00'), recurso: sala }, [doEduardoEmUso({ recurso: sala })]),
+        ANA,
+        em('11:55'),
+      ).tipo,
+    ).toBe('aceita');
   });
 });

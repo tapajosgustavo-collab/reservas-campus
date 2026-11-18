@@ -2,6 +2,7 @@ import { type Status, type TipoRecurso } from '@reservas/shared';
 import { dataHoraEmSaoPaulo, horaEmSaoPaulo, intervaloEmSaoPaulo } from '../../../comum/instante';
 import type { PenalidadeGerada } from '../../conduta';
 import type { StatusMudou } from '../../reservas';
+import { equipamentoAindaFora } from './equipamento-fora';
 import type { NotificacaoEmitida } from './notificacao';
 import { prazoDeDecisao } from './pedido';
 
@@ -103,24 +104,6 @@ function primeiroInicioDasSeries(reservas: readonly ReservaDoCiclo[]): Map<numbe
 }
 
 /**
- * RN23: a Reserva anterior do mesmo Equipamento ainda está sem Devolução. A Devolução não acontece
- * dentro do `sincronizar` (o Equipamento Em uso só termina pelo Gestor, RN17), então o que vale
- * agora vale também no fim da Tolerância desta Reserva.
- */
-function equipamentoAindaFora(reservas: readonly ReservaDoCiclo[], reserva: ReservaDoCiclo) {
-  return (
-    reserva.recurso.tipo === 'Equipamento' &&
-    reservas.some(
-      (anterior) =>
-        anterior.id !== reserva.id &&
-        anterior.recurso.id === reserva.recurso.id &&
-        anterior.status === 'EmUso' &&
-        anterior.inicio < reserva.inicio,
-    )
-  );
-}
-
-/**
  * ADR 0004: lista todos os vencimentos ainda não aplicados no mundo, em ordem cronológica
  * com desempate por prioridade de regra e id da Reserva.
  */
@@ -152,9 +135,11 @@ export function vencimentos(mundo: Mundo): Vencimento[] {
       });
       // RN15: sem Check-in até o fim da Tolerância, vira Não comparecimento. A exceção é o
       // Equipamento que a Reserva anterior ainda não devolveu: Cancelamento sem Penalidade (RN23).
+      // A Devolução não acontece dentro do `sincronizar` (só pelo Gestor, RN17), então o que vale
+      // agora vale também no fim da Tolerância desta Reserva.
       const em = somarMinutos(reserva.inicio, politica.toleranciaMin);
       lista.push(
-        equipamentoAindaFora(reservas, reserva)
+        equipamentoAindaFora(reserva, reservas)
           ? { em, regra: 'RN23', tipo: 'EquipamentoFora', reserva }
           : { em, regra: 'RN15', tipo: 'NaoComparecimento', reserva },
       );

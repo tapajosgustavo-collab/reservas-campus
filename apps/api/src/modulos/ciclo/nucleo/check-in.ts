@@ -1,15 +1,13 @@
 import { violacao, type Status, type Violacao } from '@reservas/shared';
 import { horaEmSaoPaulo } from '../../../comum/instante';
 import type { StatusMudou } from '../../reservas';
+import { equipamentoAindaFora, type ReservaDoEquipamento } from './equipamento-fora';
 
 const MINUTO = 60_000;
 
 /** O que a regra precisa saber da Reserva do Check-in. */
-export interface ReservaDoCheckIn {
-  id: number;
+export interface ReservaDoCheckIn extends ReservaDoEquipamento {
   usuarioId: number;
-  inicio: Date;
-  status: Status;
 }
 
 /** A janela do Check-in na Política (RN14), em minutos em volta do início. */
@@ -21,8 +19,8 @@ export interface JanelaDaPolitica {
 export interface FatosDoCheckIn {
   reserva: ReservaDoCheckIn;
   politica: JanelaDaPolitica;
-  /** RN23: a Reserva anterior do mesmo Equipamento ainda está sem Devolução. */
-  equipamentoFora: boolean;
+  /** As Reservas Em uso do mesmo Recurso: a anterior sem Devolução segura o Check-in (RN23). */
+  emUsoDoRecurso: ReservaDoEquipamento[];
 }
 
 export type Decisao =
@@ -91,7 +89,7 @@ const temJanela = (status: Status) => status === 'Confirmada' || status === 'Pen
 
 /** US12: o dono registra que chegou ao Espaço ou retirou o Equipamento. */
 export function decidirCheckIn(
-  { reserva, politica, equipamentoFora }: FatosDoCheckIn,
+  { reserva, politica, emUsoDoRecurso }: FatosDoCheckIn,
   quem: { id: number },
   agora: Date,
 ): Decisao {
@@ -106,7 +104,7 @@ export function decidirCheckIn(
   const violacoes = [
     ...naoConfirmada(reserva.status),
     ...(temJanela(reserva.status) ? foraDaJanela(reserva.inicio, politica, agora) : []),
-    ...(reserva.status === 'Confirmada' && equipamentoFora
+    ...(reserva.status === 'Confirmada' && equipamentoAindaFora(reserva, emUsoDoRecurso)
       ? aindaFora(reserva.inicio, politica)
       : []),
   ];

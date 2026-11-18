@@ -145,25 +145,23 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
           usuarioId: true,
           inicio: true,
           status: true,
-          recursoId: true,
-          recurso: { select: { tipo: true } },
+          recurso: { select: { id: true, tipo: true } },
         },
       });
       if (!reserva) throw new ErroApi('nao_encontrado', `Reserva ${params.id} não encontrada.`);
 
-      // RN23: no Equipamento, a Reserva anterior dele ainda Em uso (sem Devolução) segura o Check-in.
-      const equipamentoFora =
-        reserva.recurso.tipo === 'Equipamento' &&
-        (await tx.reserva.count({
-          where: {
-            recursoId: reserva.recursoId,
-            status: 'EmUso',
-            inicio: { lt: reserva.inicio },
-            id: { not: reserva.id },
-          },
-        })) > 0;
+      // RN23: quem decide se a anterior ainda está fora é o núcleo; a casca só carrega as Em uso.
+      const emUsoDoRecurso = await tx.reserva.findMany({
+        where: { recursoId: reserva.recurso.id, status: 'EmUso' },
+        select: {
+          id: true,
+          inicio: true,
+          status: true,
+          recurso: { select: { id: true, tipo: true } },
+        },
+      });
 
-      const decisao = decidirCheckIn({ reserva, politica: POLITICA, equipamentoFora }, quem, agora);
+      const decisao = decidirCheckIn({ reserva, politica: POLITICA, emUsoDoRecurso }, quem, agora);
       if (decisao.tipo === 'proibida') throw proibidoPelaRegra(decisao.violacoes);
       if (decisao.tipo === 'recusada') throw regraViolada(decisao.violacoes);
 
