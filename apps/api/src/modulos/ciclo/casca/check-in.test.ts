@@ -237,4 +237,31 @@ comBanco('US12 · Fazer Check-in', () => {
 
     expect((await fazerCheckIn(app, bia.id, daBia.id)).statusCode).toBe(200);
   });
+
+  it('RN23 · mesmo dono nas duas Reservas: o Check-in da segunda é recusado e, sem Devolução, ela é cancelada pelo sistema sem Penalidade', async () => {
+    // Decidido no #131: a RN23 vale ao pé da letra, também para o mesmo dono.
+    const relogio = new RelogioFixo(as('09:50'));
+    const app = await umaApp({ banco, relogio });
+    const ana = await umUsuario(banco);
+    const notebook = await umEquipamento(banco);
+    const primeira = await umaReserva(banco, {
+      usuarioId: ana.id,
+      recursoId: notebook.id,
+      inicio: '2026-11-10T08:00:00-03:00',
+      fim: '2026-11-10T10:00:00-03:00',
+      status: 'EmUso',
+    });
+    const segunda = await umaReserva(banco, { usuarioId: ana.id, recursoId: notebook.id });
+
+    const recusado = await fazerCheckIn(app, ana.id, segunda.id);
+    expect(recusado.statusCode).toBe(422);
+    expect(recusado.json().erro.violacoes).toMatchObject([{ rn: 'RN23' }]);
+
+    relogio.ir(as('10:15'));
+    const reservaDepois = (await abrir(app, ana.id, segunda.id)).json();
+    expect(reservaDepois).toMatchObject({ status: 'Cancelada' });
+    expect(await banco.penalidade.findMany({ select: { reservaId: true, motivo: true } })).toEqual([
+      { reservaId: primeira.id, motivo: 'DevolucaoAtrasada' },
+    ]);
+  });
 });

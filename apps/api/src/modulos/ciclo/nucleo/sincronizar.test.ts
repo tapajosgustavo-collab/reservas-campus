@@ -712,6 +712,35 @@ describe('sincronizar(mundo, agora)', () => {
       });
     });
 
+    it('RN23_mesmo dono nas duas Reservas: o Check-in da segunda é recusado e, sem Devolução, ela é cancelada pelo sistema sem Penalidade', () => {
+      // Decidido no #131: a RN23 vale ao pé da letra. O Gestor registra a Devolução da primeira e o
+      // Usuário faz o Check-in da segunda de novo.
+      const segundaDoEduardo = daBia({
+        usuarioId: EDUARDO.id,
+        usuario: { nome: 'Eduardo Prado' },
+      });
+      const resultado = sincronizar(
+        { reservas: [doEduardo(), segundaDoEduardo], suspensoes: [], politica: POLITICA },
+        em('11T12:15'),
+      );
+
+      expect(resultado.efeitos.map((e) => e.evento)).toEqual([
+        'NotificacaoEmitida',
+        'NotificacaoEmitida',
+        'PenalidadeGerada',
+        'StatusMudou',
+        'NotificacaoEmitida',
+      ]);
+      expect(resultado.efeitos[2]).toMatchObject({ penalidade: { reservaId: 80 } });
+      expect(resultado.efeitos[3]).toMatchObject({
+        reservaId: 81,
+        transicao: { para: 'Cancelada', porId: null },
+      });
+      expect(resultado.efeitos[4]).toMatchObject({
+        notificacao: { destinatarioId: EDUARDO.id, tipo: 'CancelamentoPeloSistema' },
+      });
+    });
+
     it('RN23_outro Equipamento fora não segura esta Reserva: sem Check-in, segue a RN15', () => {
       const outroNotebook = { ...N01, id: 6, nome: 'Notebook Dell N-02' };
       const resultado = sincronizar(

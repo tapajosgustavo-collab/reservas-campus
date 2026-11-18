@@ -246,4 +246,12 @@ describe('RN23 · Equipamento ainda fora', () => {
       ).tipo,
     ).toBe('aceita');
   });
+
+  it('RN23_mesmo dono nas duas Reservas: o Check-in da segunda é recusado enquanto a primeira, também dele, está sem Devolução', () => {
+    // Decidido no #131: a regra olha o Equipamento, não quem está com ele.
+    const primeiraDaAna = doEduardoEmUso({ id: 40 });
+    expect(
+      decidirCheckIn(fatos({ inicio: em('12:00') }, [primeiraDaAna]), ANA, em('11:55')),
+    ).toMatchObject({ tipo: 'recusada', violacoes: [{ rn: 'RN23' }] });
+  });
 });
