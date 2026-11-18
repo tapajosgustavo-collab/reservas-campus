@@ -151,7 +151,13 @@ comBanco('US11 · Decidir Pedidos', () => {
         participantes: null,
         finalidade: null,
         recurso: { id: camera.id, nome: 'Câmera 4K', tipo: 'Equipamento', capacidade: null },
-        solicitante: { id: eduardo.id, nome: 'Eduardo', perfil: 'Docente' },
+        solicitante: {
+          id: eduardo.id,
+          nome: 'Eduardo',
+          perfil: 'Docente',
+          penalidades30d: 0,
+          suspensoAte: null,
+        },
       },
       {
         id: depois.id,
@@ -170,7 +176,13 @@ comBanco('US11 · Decidir Pedidos', () => {
           tipo: 'Espaco',
           capacidade: 30,
         },
-        solicitante: { id: ana.id, nome: 'Ana', perfil: 'Aluno' },
+        solicitante: {
+          id: ana.id,
+          nome: 'Ana',
+          perfil: 'Aluno',
+          penalidades30d: 0,
+          suspensoAte: null,
+        },
       },
     ]);
   });
@@ -190,6 +202,68 @@ comBanco('US11 · Decidir Pedidos', () => {
     const resposta = await app.inject({ method: 'GET', url: '/api/gestao/pedidos' });
 
     expect(resposta.statusCode).toBe(401);
+  });
+
+  it('US11 · na fila, o solicitante vem com as Penalidades dos últimos 30 dias e o "suspenso até" da Suspensão em vigor (RN19)', async () => {
+    const app = await umaAppAs('10T09:00');
+    const { carlos, ana, laboratorio } = await umPedido();
+    const eduardo = await umUsuario(banco, 'Docente', { nome: 'Eduardo' });
+    await umaReserva(banco, {
+      usuarioId: eduardo.id,
+      recursoId: laboratorio.id,
+      inicio: '2026-11-12T14:00:00-03:00',
+      fim: '2026-11-12T16:00:00-03:00',
+      status: 'Pendente',
+    });
+
+    // As três faltas da Ana que a suspenderam de 04/11 a 11/11 e uma de mais de 30 dias atrás.
+    const suspensao = await banco.suspensao.create({
+      data: { usuarioId: ana.id, inicio: as('04T10:15'), fim: as('11T10:15') },
+    });
+    const faltas = [
+      { dia: '2026-10-05', suspensaoId: null },
+      { dia: '2026-11-02', suspensaoId: suspensao.id },
+      { dia: '2026-11-03', suspensaoId: suspensao.id },
+      { dia: '2026-11-04', suspensaoId: suspensao.id },
+    ];
+    for (const { dia, suspensaoId } of faltas) {
+      const falta = await umaReserva(banco, {
+        usuarioId: ana.id,
+        recursoId: laboratorio.id,
+        inicio: `${dia}T10:00:00-03:00`,
+        fim: `${dia}T12:00:00-03:00`,
+        status: 'NaoComparecimento',
+      });
+      await banco.penalidade.create({
+        data: {
+          usuarioId: ana.id,
+          reservaId: falta.id,
+          motivo: 'NaoComparecimento',
+          em: new Date(`${dia}T10:15:00-03:00`),
+          suspensaoId,
+        },
+      });
+    }
+
+    const resposta = await listarPedidos(app, carlos.id);
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json().map((item: { solicitante: object }) => item.solicitante)).toEqual([
+      {
+        id: ana.id,
+        nome: 'Ana',
+        perfil: 'Aluno',
+        penalidades30d: 3,
+        suspensoAte: '2026-11-11T10:15:00-03:00',
+      },
+      {
+        id: eduardo.id,
+        nome: 'Eduardo',
+        perfil: 'Docente',
+        penalidades30d: 0,
+        suspensoAte: null,
+      },
+    ]);
   });
 
   it('POST /api/reservas/:id/aprovacao pelo Gestor responsável → 200 Confirmada, com quem decidiu no histórico, e o Pedido sai da fila', async () => {
@@ -499,7 +573,13 @@ comBanco('US11 · RN21 · Série restrita decidida inteira na fila', () => {
           tipo: 'Espaco',
           capacidade: 30,
         },
-        solicitante: { id: eduardo.id, nome: 'Eduardo', perfil: 'Docente' },
+        solicitante: {
+          id: eduardo.id,
+          nome: 'Eduardo',
+          perfil: 'Docente',
+          penalidades30d: 0,
+          suspensoAte: null,
+        },
       },
       expect.objectContaining({
         id: avulso.id,
