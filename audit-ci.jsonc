@@ -15,6 +15,12 @@
   //   "GHSA-xxxx-xxxx-xxxx"
   // ]
   //
-  // No momento, nenhuma exceção ativa:
-  "allowlist": [],
+  "allowlist": [
+    // GHSA-fc5q-39xc-vjpf (picomatch <= 4.0.7, ReDoS com extglob) | Motivo: sem versão corrigida;
+    // só entra por ferramentas de desenvolvimento e CI (Vite, Vitest, typescript-eslint, via
+    // tinyglobby/fdir), fora das dependências de produção (`npm ls picomatch --omit=dev` vazio), e
+    // só recebe os padrões do próprio repositório, nunca entrada de usuário | Aprovador: Rafael |
+    // Validade: 2026-12-15
+    "GHSA-fc5q-39xc-vjpf",
+  ],
 }
