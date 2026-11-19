@@ -16,7 +16,7 @@ import {
 import type { ItemDaFila } from '@reservas/shared';
 import { Fragment, useState } from 'react';
 import { Link } from 'react-router';
-import { useSessao } from '../conduta';
+import { rotuloDasPenalidades30d, rotuloDoSuspensoAte, useSessao } from '../conduta';
 import { rotuloDoInstante, rotuloDoIntervalo } from '../reservas';
 import { Erro, useAgoraEmDiaNaBorda } from './botao';
 import {
@@ -43,6 +43,29 @@ const DECIDIDO = {
 } as const;
 const decidido = ({ serieId }: ItemDaFila, decisao: keyof typeof DECIDIDO) =>
   DECIDIDO[decisao][serieId === null ? 'pedido' : 'serie'];
+
+/**
+ * US11: a conduta do solicitante, para o Gestor decidir com contexto. Só informa: a Suspensão não
+ * impede a Aprovação (RN19).
+ */
+function SelosDaConduta({ solicitante }: { solicitante: ItemDaFila['solicitante'] }) {
+  const penalidades = rotuloDasPenalidades30d(solicitante.penalidades30d);
+  if (!penalidades && !solicitante.suspensoAte) return null;
+  return (
+    <Group gap={4} mt={4}>
+      {solicitante.suspensoAte && (
+        <Badge variant="light" color="red">
+          {rotuloDoSuspensoAte(solicitante.suspensoAte)}
+        </Badge>
+      )}
+      {penalidades && (
+        <Badge variant="light" color="yellow">
+          {penalidades}
+        </Badge>
+      )}
+    </Group>
+  );
+}
 
 /**
  * US11: o Gestor vê os Pedidos dos seus Recursos, aprova um ou vários e recusa com justificativa. A
@@ -232,6 +255,7 @@ export function FilaDePedidos() {
                           <Text size="sm" c="dimmed">
                             {item.solicitante.perfil}
                           </Text>
+                          <SelosDaConduta solicitante={item.solicitante} />
                         </Table.Td>
                         <Table.Td>{rotuloDasPessoas(item)}</Table.Td>
                         <Table.Td>{item.finalidade ?? '—'}</Table.Td>

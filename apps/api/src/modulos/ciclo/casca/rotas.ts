@@ -21,6 +21,7 @@ import type { Transacao } from '../../../comum/banco';
 import { ErroApi, proibidoPelaRegra, regraViolada } from '../../../comum/erros';
 import { paraIsoSaoPaulo } from '../../../comum/instante';
 import { exigirPerfil, exigirSessao } from '../../../comum/sessao';
+import { penalidadesNaJanela, suspensoAte } from '../../conduta';
 import { executar as executarEmReservas } from '../../reservas';
 import { decidirCancelamento } from '../nucleo/cancelamento';
 import { decidirCheckIn } from '../nucleo/check-in';
@@ -117,6 +118,39 @@ async function emitir(request: FastifyRequest, emitida: NotificacaoEmitida) {
     },
     emitida.evento,
   );
+}
+
+/**
+ * US11: os dados de conduta de cada solicitante da fila, numa consulta por tabela. As regras são
+ * do M1: as Penalidades dos últimos 30 dias e até quando vale a Suspensão em vigor (RN19).
+ */
+async function condutaDosSolicitantes(tx: Transacao, usuarioIds: number[], agora: Date) {
+  const ids = [...new Set(usuarioIds)];
+  const [penalidades, suspensoes] = await Promise.all([
+    tx.penalidade.findMany({
+      where: { usuarioId: { in: ids } },
+      select: { usuarioId: true, em: true },
+    }),
+    tx.suspensao.findMany({
+      where: { usuarioId: { in: ids } },
+      select: { usuarioId: true, inicio: true, fim: true },
+    }),
+  ]);
+  const conduta = new Map(
+    ids.map((usuarioId) => {
+      const fim = suspensoAte(
+        suspensoes.filter((s) => s.usuarioId === usuarioId),
+        agora,
+      );
+      const penalidades30d = penalidadesNaJanela(
+        penalidades.filter((p) => p.usuarioId === usuarioId),
+        agora,
+        POLITICA,
+      );
+      return [usuarioId, { penalidades30d, suspensoAte: fim && paraIsoSaoPaulo(fim) }];
+    }),
+  );
+  return (usuarioId: number) => conduta.get(usuarioId) ?? { penalidades30d: 0, suspensoAte: null };
 }
 
 /** Rotas do M4: a fila do Gestor (US11), o Check-in (US12), o Cancelamento (US13) e a Devolução (US14). */
@@ -239,6 +273,11 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
         },
         orderBy: [{ inicio: 'asc' }, { id: 'asc' }],
       });
+      const conduta = await condutaDosSolicitantes(
+        request.tx,
+        pedidos.map(({ usuario }) => usuario.id),
+        request.agora,
+      );
       return filaDoGestor(pedidos, POLITICA).map(
         ({ inicio, fim, expiraEm, reservas, usuario, ...item }) => ({
           ...item,
@@ -250,7 +289,7 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
             inicio: paraIsoSaoPaulo(ocorrencia.inicio),
             fim: paraIsoSaoPaulo(ocorrencia.fim),
           })),
-          solicitante: usuario,
+          solicitante: { ...usuario, ...conduta(usuario.id) },
         }),
       );
     },

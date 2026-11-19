@@ -20,7 +20,7 @@ import { Versao } from './Versao';
 
 // Uma entrada por módulo (M1 a M4), na ordem do docs/requisitos.md §4. Com `perfis`, só eles veem.
 const MENU: { para: string; rotulo: string; perfis?: Perfil[] }[] = [
-  { para: '/conduta', rotulo: 'Minha conduta' },
+  { para: '/conduta', rotulo: 'Minha conduta', perfis: ['Aluno', 'Docente'] },
   { para: '/recursos', rotulo: 'Recursos' },
   { para: '/gestao/recursos', rotulo: 'Meus recursos', perfis: ['Gestor'] },
   { para: '/reservas', rotulo: 'Minhas reservas', perfis: ['Aluno', 'Docente'] },
