@@ -105,7 +105,7 @@ const avulso: ItemDaFila = {
   participantes: 25,
   finalidade: null,
   recurso: { id: 1, nome: 'Laboratório de Química', tipo: 'Espaco', capacidade: 30 },
-  solicitante: { id: 7, nome: 'Ana', perfil: 'Aluno' },
+  solicitante: { id: 7, nome: 'Ana', perfil: 'Aluno', penalidades30d: 0, suspensoAte: null },
 };
 
 const daSerie: ItemDaFila = {
@@ -117,7 +117,7 @@ const daSerie: ItemDaFila = {
     inicio: `2026-11-${dia}T14:00:00-03:00`,
     fim: `2026-11-${dia}T16:00:00-03:00`,
   })),
-  solicitante: { id: 9, nome: 'Eduardo', perfil: 'Docente' },
+  solicitante: { id: 9, nome: 'Eduardo', perfil: 'Docente', penalidades30d: 0, suspensoAte: null },
 };
 
 describe('RN21 · Série como um item só na fila', () => {

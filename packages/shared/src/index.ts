@@ -40,6 +40,14 @@ export {
   type ResumoDoRecurso,
   type TipoRecurso,
 } from './recursos';
+export {
+  esquemaConduta,
+  esquemaMotivoPenalidade,
+  esquemaPenalidadeDaConduta,
+  type Conduta,
+  type MotivoPenalidade,
+  type PenalidadeDaConduta,
+} from './conduta';
 export { esquemaInstante } from './instante';
 export { POLITICA, type PerfilQueReserva, type Politica } from './politica';
 export {

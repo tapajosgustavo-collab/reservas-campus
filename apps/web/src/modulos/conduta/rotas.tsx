@@ -1,14 +1,4 @@
 import type { RouteObject } from 'react-router';
-import { EmConstrucao } from '../../comum/EmConstrucao';
+import { MinhaConduta } from './MinhaConduta';
 
-export const rotasConduta: RouteObject[] = [
-  {
-    path: 'conduta',
-    element: (
-      <EmConstrucao
-        titulo="Minha conduta"
-        descricao="Penalidades e Suspensão. Chega no Incremento 4."
-      />
-    ),
-  },
-];
+export const rotasConduta: RouteObject[] = [{ path: 'conduta', Component: MinhaConduta }];
