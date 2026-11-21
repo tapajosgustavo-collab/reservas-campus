@@ -330,7 +330,9 @@ comBanco('RNF10 · Seed', () => {
         recurso: { nome: 'Sala 101' },
       },
     ]);
-    expect(await banco.penalidade.count()).toBe(0);
+    expect(
+      await banco.penalidade.count({ where: { usuario: { email: 'ana.demo@unifesp.br' } } }),
+    ).toBe(0);
   });
 
   it('RN10 · o Laboratório de Informática 2 e o Auditório são restritos; os outros Recursos, comuns', async () => {
@@ -402,6 +404,60 @@ comBanco('RNF10 · Seed', () => {
 
     expect(resposta.statusCode).toBe(201);
     expect(resposta.json().status).toBe('Pendente');
+  });
+
+  it('cena 7 (RN15): as faltas do Bruno em D−12 e D−5 viram 2 Penalidades no sincronizar(T0), sem Suspensão ainda', async () => {
+    const { get } = await demoNoT0();
+
+    const conduta = await get('bruno.demo@unifesp.br', '/api/conduta');
+
+    expect(conduta).toMatchObject({
+      suspensoAte: null,
+      penalidadesQueContam: 2,
+      penalidades: [
+        {
+          motivo: 'NaoComparecimento',
+          em: '2026-11-05T10:15:00-03:00',
+          contaParaSuspensao: true,
+          reserva: {
+            inicio: '2026-11-05T10:00:00-03:00',
+            fim: '2026-11-05T12:00:00-03:00',
+            recurso: { nome: 'Projetor Epson P-123' },
+          },
+        },
+        {
+          motivo: 'NaoComparecimento',
+          em: '2026-10-29T14:15:00-03:00',
+          contaParaSuspensao: true,
+          reserva: {
+            inicio: '2026-10-29T14:00:00-03:00',
+            fim: '2026-10-29T16:00:00-03:00',
+            recurso: { nome: 'Sala de estudos 3' },
+          },
+        },
+      ],
+    });
+  });
+
+  it('cena 7: o Bruno recebeu uma Notificação de Penalidade por falta', async () => {
+    const { get } = await demoNoT0();
+
+    const { itens } = await get('bruno.demo@unifesp.br', '/api/notificacoes');
+
+    expect(
+      itens
+        .filter(({ tipo }: { tipo: string }) => tipo === 'Penalidade')
+        .map(({ em, mensagem }: { em: string; mensagem: string }) => ({ em, mensagem })),
+    ).toEqual([
+      {
+        em: '2026-11-05T10:15:00-03:00',
+        mensagem: expect.stringContaining('Não comparecimento na Reserva de Projetor Epson P-123'),
+      },
+      {
+        em: '2026-10-29T14:15:00-03:00',
+        mensagem: expect.stringContaining('Não comparecimento na Reserva de Sala de estudos 3'),
+      },
+    ]);
   });
 
   it('o T0 é o agora arredondado para a próxima meia hora (#18)', async () => {
