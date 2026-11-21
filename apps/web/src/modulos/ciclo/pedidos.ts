@@ -1,3 +1,4 @@
+import { TZDate } from '@date-fns/tz';
 import {
   esquemaFila,
   esquemaReserva,
@@ -5,9 +6,13 @@ import {
   type ItemDaFila,
 } from '@reservas/shared';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { ErroDaApi, buscarJson, enviarJson } from '../../comum/api';
 
+const FUSO = 'America/Sao_Paulo';
 const HORA_MS = 60 * 60 * 1000;
+
+const emSaoPaulo = (instante: string) => new TZDate(instante, FUSO);
 
 /**
  * US11: a cor do "Expira em" pelo `agora` da API (nunca pelo relógio do navegador): amarelo a menos
@@ -77,8 +82,8 @@ export function resumoDoLote(resultados: (Error | null)[]): string {
   return partes.join(', ');
 }
 
-/** "11/11" de um instante da API, que já vem com o deslocamento de São Paulo. */
-const diaEMes = (instante: string) => `${instante.slice(8, 10)}/${instante.slice(5, 7)}`;
+/** "11/11" do instante em São Paulo (RNF08). */
+const diaEMes = (instante: string) => format(emSaoPaulo(instante), 'dd/MM');
 
 /**
  * RN21: o que a fila mostra da Série, como "Série: 3 Ocorrências (11/11, 18/11 e 25/11)". O Pedido
@@ -101,10 +106,17 @@ export function chaveDoItem({ id, serieId }: ItemDaFila): string {
   return serieId === null ? `pedido-${id}` : `serie-${serieId}`;
 }
 
+/** Uma linha curta para os avisos: "Laboratório de Química, de Ana". */
+export function deQuem({
+  recurso,
+  solicitante,
+}: Pick<ItemDaFila, 'recurso' | 'solicitante'>): string {
+  return `${recurso.nome}, de ${solicitante.nome}`;
+}
+
 /** Nos botões e avisos: "o Pedido de Laboratório de Química, de Ana" ou "a Série de ...". */
-export function nomeDoItem({ serieId, recurso, solicitante }: ItemDaFila): string {
-  const doItem = `${recurso.nome}, de ${solicitante.nome}`;
-  return serieId === null ? `o Pedido de ${doItem}` : `a Série de ${doItem}`;
+export function nomeDoItem(item: ItemDaFila): string {
+  return item.serieId === null ? `o Pedido de ${deQuem(item)}` : `a Série de ${deQuem(item)}`;
 }
 
 /** RN21: a Série é decidida inteira, pela rota dela; o Pedido avulso, pela da Reserva. */
