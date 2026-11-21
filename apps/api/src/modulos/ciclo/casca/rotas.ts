@@ -161,7 +161,8 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
     '/api/reservas/:id/check-in',
     {
       schema: {
-        summary: 'Check-in: o dono chegou ao Espaço ou retirou o Equipamento (RN14)',
+        summary:
+          'Check-in: o dono chegou ao Espaço ou retirou o Equipamento; recusado com o Equipamento ainda fora (RN14, RN23)',
         tags: ['ciclo'],
         params: esquemaIdDaReserva,
         response: { 200: esquemaReserva },
@@ -173,11 +174,28 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
       const { params, tx, agora } = request;
       const reserva = await tx.reserva.findUnique({
         where: { id: params.id },
-        select: { id: true, usuarioId: true, inicio: true, status: true },
+        select: {
+          id: true,
+          usuarioId: true,
+          inicio: true,
+          status: true,
+          recurso: { select: { id: true, tipo: true } },
+        },
       });
       if (!reserva) throw new ErroApi('nao_encontrado', `Reserva ${params.id} não encontrada.`);
 
-      const decisao = decidirCheckIn({ reserva, politica: POLITICA }, quem, agora);
+      // RN23: quem decide se a anterior ainda está fora é o núcleo; a casca só carrega as Em uso.
+      const emUsoDoRecurso = await tx.reserva.findMany({
+        where: { recursoId: reserva.recurso.id, status: 'EmUso' },
+        select: {
+          id: true,
+          inicio: true,
+          status: true,
+          recurso: { select: { id: true, tipo: true } },
+        },
+      });
+
+      const decisao = decidirCheckIn({ reserva, politica: POLITICA, emUsoDoRecurso }, quem, agora);
       if (decisao.tipo === 'proibida') throw proibidoPelaRegra(decisao.violacoes);
       if (decisao.tipo === 'recusada') throw regraViolada(decisao.violacoes);
 

@@ -178,4 +178,90 @@ comBanco('US12 · Fazer Check-in', () => {
 
     expect(resposta.statusCode).toBe(401);
   });
+
+  it('RN23 · com a Reserva anterior do Notebook sem Devolução → 422 citando a regra; depois da Devolução, o Check-in segue normal', async () => {
+    const relogio = new RelogioFixo(as('09:50'));
+    const app = await umaApp({ banco, relogio });
+    const carlos = await umUsuario(banco, 'Gestor');
+    const eduardo = await umUsuario(banco, 'Docente');
+    const bia = await umUsuario(banco);
+    const notebook = await umEquipamento(banco, { gestorId: carlos.id });
+    const doEduardo = await umaReserva(banco, {
+      usuarioId: eduardo.id,
+      recursoId: notebook.id,
+      inicio: '2026-11-10T08:00:00-03:00',
+      fim: '2026-11-10T10:00:00-03:00',
+      status: 'EmUso',
+    });
+    const daBia = await umaReserva(banco, { usuarioId: bia.id, recursoId: notebook.id });
+
+    const recusado = await fazerCheckIn(app, bia.id, daBia.id);
+
+    expect(recusado.statusCode).toBe(422);
+    expect(recusado.json().erro.violacoes).toEqual([
+      {
+        rn: 'RN23',
+        nome: 'Equipamento ainda fora',
+        mensagem:
+          'O Equipamento ainda não foi devolvido pela Reserva anterior. Se ele não voltar até as 10:15, no fim da Tolerância, esta Reserva será cancelada sem Penalidade.',
+      },
+    ]);
+    expect((await abrir(app, bia.id, daBia.id)).json().status).toBe('Confirmada');
+
+    relogio.ir(as('10:05'));
+    const devolucao = await app.inject({
+      method: 'POST',
+      url: `/api/reservas/${doEduardo.id}/devolucao`,
+      cookies: sessaoDe(app, carlos.id),
+      payload: {},
+    });
+    expect(devolucao.statusCode).toBe(200);
+
+    const aceito = await fazerCheckIn(app, bia.id, daBia.id);
+    expect(aceito.statusCode).toBe(200);
+    expect(aceito.json().status).toBe('EmUso');
+  });
+
+  it('RN23 · a Reserva Em uso de outro Equipamento não segura o Check-in', async () => {
+    const app = await umaAppAs('09:50');
+    const bia = await umUsuario(banco);
+    const notebook = await umEquipamento(banco);
+    const outro = await umEquipamento(banco);
+    await umaReserva(banco, {
+      recursoId: outro.id,
+      inicio: '2026-11-10T08:00:00-03:00',
+      fim: '2026-11-10T10:00:00-03:00',
+      status: 'EmUso',
+    });
+    const daBia = await umaReserva(banco, { usuarioId: bia.id, recursoId: notebook.id });
+
+    expect((await fazerCheckIn(app, bia.id, daBia.id)).statusCode).toBe(200);
+  });
+
+  it('RN23 · mesmo dono nas duas Reservas: o Check-in da segunda é recusado e, sem Devolução, ela é cancelada pelo sistema sem Penalidade', async () => {
+    // Decidido no #131: a RN23 vale ao pé da letra, também para o mesmo dono.
+    const relogio = new RelogioFixo(as('09:50'));
+    const app = await umaApp({ banco, relogio });
+    const ana = await umUsuario(banco);
+    const notebook = await umEquipamento(banco);
+    const primeira = await umaReserva(banco, {
+      usuarioId: ana.id,
+      recursoId: notebook.id,
+      inicio: '2026-11-10T08:00:00-03:00',
+      fim: '2026-11-10T10:00:00-03:00',
+      status: 'EmUso',
+    });
+    const segunda = await umaReserva(banco, { usuarioId: ana.id, recursoId: notebook.id });
+
+    const recusado = await fazerCheckIn(app, ana.id, segunda.id);
+    expect(recusado.statusCode).toBe(422);
+    expect(recusado.json().erro.violacoes).toMatchObject([{ rn: 'RN23' }]);
+
+    relogio.ir(as('10:15'));
+    const reservaDepois = (await abrir(app, ana.id, segunda.id)).json();
+    expect(reservaDepois).toMatchObject({ status: 'Cancelada' });
+    expect(await banco.penalidade.findMany({ select: { reservaId: true, motivo: true } })).toEqual([
+      { reservaId: primeira.id, motivo: 'DevolucaoAtrasada' },
+    ]);
+  });
 });

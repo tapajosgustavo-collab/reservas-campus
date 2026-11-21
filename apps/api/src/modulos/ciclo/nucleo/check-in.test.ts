@@ -1,15 +1,42 @@
 import { describe, expect, it } from 'vitest';
 import { decidirCheckIn, type FatosDoCheckIn } from './check-in';
+import type { ReservaDoEquipamento } from './equipamento-fora';
 
 const ANA = { id: 7 };
+
+/** O Notebook Dell N-01. */
+const N01 = { id: 5, tipo: 'Equipamento' } as const;
 
 /** Terça, 10/11/2026, em São Paulo. */
 const em = (hora: string) => new Date(`2026-11-10T${hora}:00-03:00`);
 
-/** A Reserva Confirmada da Ana às 10h, com a janela da Política: 15 min antes e 15 depois. */
-const fatos = (reserva: Partial<FatosDoCheckIn['reserva']> = {}): FatosDoCheckIn => ({
-  reserva: { id: 42, usuarioId: ANA.id, inicio: em('10:00'), status: 'Confirmada', ...reserva },
+/**
+ * A Reserva Confirmada da Ana às 10h, com a janela da Política: 15 min antes e 15 depois. Sem
+ * Reserva anterior do mesmo Equipamento ainda fora (RN23).
+ */
+const fatos = (
+  reserva: Partial<FatosDoCheckIn['reserva']> = {},
+  emUsoDoRecurso: ReservaDoEquipamento[] = [],
+): FatosDoCheckIn => ({
+  reserva: {
+    id: 42,
+    usuarioId: ANA.id,
+    inicio: em('10:00'),
+    status: 'Confirmada',
+    recurso: N01,
+    ...reserva,
+  },
   politica: { checkInAntesDoInicioMin: 15, toleranciaMin: 15 },
+  emUsoDoRecurso,
+});
+
+/** RN23: a Reserva do Eduardo no mesmo N-01, das 10h às 12h, Em uso e sem Devolução. */
+const doEduardoEmUso = (dados: Partial<ReservaDoEquipamento> = {}): ReservaDoEquipamento => ({
+  id: 41,
+  inicio: em('10:00'),
+  status: 'EmUso',
+  recurso: N01,
+  ...dados,
 });
 
 describe('US12 · Fazer Check-in', () => {
@@ -145,4 +172,86 @@ describe('RN14 · Janela de Check-in', () => {
       });
     },
   );
+});
+
+describe('RN23 · Equipamento ainda fora', () => {
+  const ainda = 'O Equipamento ainda não foi devolvido pela Reserva anterior.';
+
+  it('RN23_Reserva do N-01 às 12h, Check-in às 11h55 com a anterior sem Devolução → recusado, dizendo que ele ainda não foi devolvido', () => {
+    expect(
+      decidirCheckIn(fatos({ inicio: em('12:00') }, [doEduardoEmUso()]), ANA, em('11:55')),
+    ).toEqual({
+      tipo: 'recusada',
+      violacoes: [
+        {
+          rn: 'RN23',
+          nome: 'Equipamento ainda fora',
+          mensagem: `${ainda} Se ele não voltar até as 12:15, no fim da Tolerância, esta Reserva será cancelada sem Penalidade.`,
+        },
+      ],
+    });
+  });
+
+  it('RN23_o Equipamento voltou antes do fim da Tolerância → o Check-in das 12h10 segue normal', () => {
+    expect(
+      decidirCheckIn(
+        fatos({ inicio: em('12:00') }, [doEduardoEmUso({ status: 'Concluida' })]),
+        ANA,
+        em('12:10'),
+      ).tipo,
+    ).toBe('aceita');
+  });
+
+  it('RN23_fora da janela e com o Equipamento fora → recusado com as duas regras', () => {
+    expect(
+      decidirCheckIn(fatos({ inicio: em('12:00') }, [doEduardoEmUso()]), ANA, em('11:40')),
+    ).toMatchObject({
+      tipo: 'recusada',
+      violacoes: [
+        { rn: 'RN14', mensagem: expect.stringContaining('abre às 11:45') },
+        { rn: 'RN23', mensagem: expect.stringContaining(ainda) },
+      ],
+    });
+  });
+
+  it('RN23_Reserva que já não aceita Check-in (Em uso) não fala do Equipamento', () => {
+    expect(
+      decidirCheckIn(
+        fatos({ status: 'EmUso', inicio: em('12:00') }, [doEduardoEmUso()]),
+        ANA,
+        em('10:05'),
+      ),
+    ).toMatchObject({
+      tipo: 'recusada',
+      violacoes: [{ rn: 'RN14' }],
+    });
+  });
+
+  it('RN23_outro Equipamento Em uso, ou uma Reserva Em uso que começa depois, não segura o Check-in', () => {
+    const outroNotebook = doEduardoEmUso({ recurso: { id: 6, tipo: 'Equipamento' } });
+    const depois = doEduardoEmUso({ inicio: em('14:00') });
+    expect(
+      decidirCheckIn(fatos({ inicio: em('12:00') }, [outroNotebook, depois]), ANA, em('11:55'))
+        .tipo,
+    ).toBe('aceita');
+  });
+
+  it('RN23_no Espaço não há Devolução: uma Reserva Em uso antes não segura o Check-in', () => {
+    const sala = { id: 9, tipo: 'Espaco' } as const;
+    expect(
+      decidirCheckIn(
+        fatos({ inicio: em('12:00'), recurso: sala }, [doEduardoEmUso({ recurso: sala })]),
+        ANA,
+        em('11:55'),
+      ).tipo,
+    ).toBe('aceita');
+  });
+
+  it('RN23_mesmo dono nas duas Reservas: o Check-in da segunda é recusado enquanto a primeira, também dele, está sem Devolução', () => {
+    // Decidido no #131: a regra olha o Equipamento, não quem está com ele.
+    const primeiraDaAna = doEduardoEmUso({ id: 40 });
+    expect(
+      decidirCheckIn(fatos({ inicio: em('12:00') }, [primeiraDaAna]), ANA, em('11:55')),
+    ).toMatchObject({ tipo: 'recusada', violacoes: [{ rn: 'RN23' }] });
+  });
 });

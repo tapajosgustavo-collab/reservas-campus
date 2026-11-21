@@ -19,6 +19,8 @@ export interface ReservaNaAgenda {
   status: Status;
   usuario?: UsuarioDaReserva;
   finalidade?: string | null;
+  /** RN17: o Equipamento passou do fim da Tolerância de Devolução e ainda não voltou (M4). */
+  devolucaoAtrasada?: boolean;
 }
 
 export interface IndisponibilidadeNaAgenda {
@@ -46,6 +48,8 @@ export interface OcupacaoNaAgenda {
   status?: StatusAtivo;
   usuario?: UsuarioDaReserva;
   finalidade?: string | null;
+  /** RN17: para qualquer Usuário; a tela pinta ocupado do `fim` até o `agora`. */
+  devolucaoAtrasada?: true;
 }
 
 export interface AgendaDoRecurso extends Omit<FatosDaAgenda, 'reservas'> {
@@ -59,18 +63,23 @@ function ehAtiva(reserva: ReservaNaAgenda): reserva is ReservaNaAgenda & { statu
 /**
  * US07: a agenda da semana de um Recurso como `quem` pode vê-la. Só as Reservas ativas ocupam.
  * RN22: o Gestor responsável vê quem reservou, o Status e a Finalidade; o dono vê a própria
- * Reserva e o Status; dos outros sai só o Intervalo.
+ * Reserva e o Status; dos outros sai só o Intervalo. RN17: a Devolução atrasada vai para todos,
+ * porque o Equipamento aparece ocupado até voltar.
  */
 export function agendaPara(quem: Quem, { reservas, ...fatos }: FatosDaAgenda): AgendaDoRecurso {
   const ehGestorResponsavel = quem.id === fatos.recurso.gestor.id;
   return {
     ...fatos,
-    ocupacoes: reservas
-      .filter(ehAtiva)
-      .map(({ id, usuarioId, inicio, fim, status, usuario, finalidade }): OcupacaoNaAgenda => {
-        if (ehGestorResponsavel) return { inicio, fim, reservaId: id, status, usuario, finalidade };
-        if (usuarioId === quem.id) return { inicio, fim, minha: true, reservaId: id, status };
-        return { inicio, fim };
-      }),
+    ocupacoes: reservas.filter(ehAtiva).map((reserva): OcupacaoNaAgenda => {
+      const { id, usuarioId, inicio, fim, status, usuario, finalidade } = reserva;
+      const intervalo = {
+        inicio,
+        fim,
+        ...(reserva.devolucaoAtrasada && { devolucaoAtrasada: true as const }),
+      };
+      if (ehGestorResponsavel) return { ...intervalo, reservaId: id, status, usuario, finalidade };
+      if (usuarioId === quem.id) return { ...intervalo, minha: true, reservaId: id, status };
+      return intervalo;
+    }),
   };
 }

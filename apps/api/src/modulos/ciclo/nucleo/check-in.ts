@@ -1,15 +1,13 @@
 import { violacao, type Status, type Violacao } from '@reservas/shared';
 import { horaEmSaoPaulo } from '../../../comum/instante';
 import type { StatusMudou } from '../../reservas';
+import { equipamentoAindaFora, type ReservaDoEquipamento } from './equipamento-fora';
 
 const MINUTO = 60_000;
 
 /** O que a regra precisa saber da Reserva do Check-in. */
-export interface ReservaDoCheckIn {
-  id: number;
+export interface ReservaDoCheckIn extends ReservaDoEquipamento {
   usuarioId: number;
-  inicio: Date;
-  status: Status;
 }
 
 /** A janela do Check-in na Política (RN14), em minutos em volta do início. */
@@ -21,6 +19,8 @@ export interface JanelaDaPolitica {
 export interface FatosDoCheckIn {
   reserva: ReservaDoCheckIn;
   politica: JanelaDaPolitica;
+  /** As Reservas Em uso do mesmo Recurso: a anterior sem Devolução segura o Check-in (RN23). */
+  emUsoDoRecurso: ReservaDoEquipamento[];
 }
 
 export type Decisao =
@@ -69,12 +69,27 @@ function naoConfirmada(status: Status): Violacao[] {
   }
 }
 
+/**
+ * RN23: o Equipamento ainda não voltou da Reserva anterior. Se não voltar até o fim da Tolerância,
+ * o `sincronizar` cancela esta Reserva sem Penalidade.
+ */
+function aindaFora(inicio: Date, politica: JanelaDaPolitica): Violacao[] {
+  const fecha = horaEmSaoPaulo(somarMinutos(inicio, politica.toleranciaMin));
+  return [
+    violacao(
+      'RN23',
+      'O Equipamento ainda não foi devolvido pela Reserva anterior. ' +
+        `Se ele não voltar até as ${fecha}, no fim da Tolerância, esta Reserva será cancelada sem Penalidade.`,
+    ),
+  ];
+}
+
 /** Só a Confirmada e a Pendente (que ainda pode ser aprovada) têm janela a explicar. */
 const temJanela = (status: Status) => status === 'Confirmada' || status === 'Pendente';
 
 /** US12: o dono registra que chegou ao Espaço ou retirou o Equipamento. */
 export function decidirCheckIn(
-  { reserva, politica }: FatosDoCheckIn,
+  { reserva, politica, emUsoDoRecurso }: FatosDoCheckIn,
   quem: { id: number },
   agora: Date,
 ): Decisao {
@@ -89,6 +104,9 @@ export function decidirCheckIn(
   const violacoes = [
     ...naoConfirmada(reserva.status),
     ...(temJanela(reserva.status) ? foraDaJanela(reserva.inicio, politica, agora) : []),
+    ...(reserva.status === 'Confirmada' && equipamentoAindaFora(reserva, emUsoDoRecurso)
+      ? aindaFora(reserva.inicio, politica)
+      : []),
   ];
   if (violacoes.length > 0) return { tipo: 'recusada', violacoes };
 
