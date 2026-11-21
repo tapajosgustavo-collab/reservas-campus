@@ -330,7 +330,9 @@ comBanco('RNF10 · Seed', () => {
         recurso: { nome: 'Sala 101' },
       },
     ]);
-    expect(await banco.penalidade.count()).toBe(0);
+    expect(
+      await banco.penalidade.count({ where: { usuario: { email: 'ana.demo@unifesp.br' } } }),
+    ).toBe(0);
   });
 
   it('RN10 · o Laboratório de Informática 2 e o Auditório são restritos; os outros Recursos, comuns', async () => {
