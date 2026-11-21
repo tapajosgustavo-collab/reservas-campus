@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { cancelarGeraPenalidade, msAteInicio, podeCancelar } from './cancelamento';
+import {
+  cancelarGeraPenalidade,
+  cancelarSerieGeraPenalidade,
+  dataDaOcorrencia,
+  msAteInicio,
+  ocorrenciasCancelaveisDaSerie,
+  podeCancelar,
+} from './cancelamento';
 
 /** A Reserva Confirmada das 14h de terça, 10/11/2026. */
 const dasQuatorze = { status: 'Confirmada', inicio: '2026-11-10T14:00:00-03:00' } as const;
@@ -65,5 +72,56 @@ describe('RN16 · a confirmação de cancelar avisa do Cancelamento tardio', () 
 
   it('Reserva Pendente nunca gera Penalidade → sem aviso', () => {
     expect(cancelarGeraPenalidade({ ...dasQuatorze, status: 'Pendente' }, as('13:00'))).toBe(false);
+  });
+});
+
+describe('US09 · US13 · RN16 · RN21 · Cancelar Série a partir de uma data na tela', () => {
+  const ocorrencias = [
+    {
+      id: 51,
+      status: 'Confirmada' as const,
+      inicio: '2026-11-10T14:00:00-03:00',
+      fim: '2026-11-10T16:00:00-03:00',
+    },
+    {
+      id: 52,
+      status: 'Confirmada' as const,
+      inicio: '2026-11-17T14:00:00-03:00',
+      fim: '2026-11-17T16:00:00-03:00',
+    },
+    {
+      id: 53,
+      status: 'Confirmada' as const,
+      inicio: '2026-11-24T14:00:00-03:00',
+      fim: '2026-11-24T16:00:00-03:00',
+    },
+  ];
+
+  it('RNF08 · extrai a data da Ocorrência no calendário de São Paulo, mesmo com instante em UTC', () => {
+    expect(dataDaOcorrencia({ inicio: '2026-11-18T01:00:00Z' })).toBe('2026-11-17');
+  });
+
+  it('RN16 · RN21 · filtra só as Ocorrências que ainda podem ser canceladas (Pendente ou Confirmada antes do início) e as ordena por início', () => {
+    const mistas = [
+      ocorrencias[2]!,
+      { ...ocorrencias[0]!, status: 'EmUso' as const },
+      ocorrencias[1]!,
+    ];
+
+    expect(ocorrenciasCancelaveisDaSerie(mistas, as('13:00')).map(({ id }) => id)).toEqual([
+      52, 53,
+    ]);
+    // Às 14h00 de 10/11 a primeira já começou: só 17/11 e 24/11 continuam canceláveis.
+    expect(ocorrenciasCancelaveisDaSerie(ocorrencias, as('14:00')).map(({ id }) => id)).toEqual([
+      52, 53,
+    ]);
+  });
+
+  it('RN16 · RN21 · indica quais Ocorrências serão canceladas a partir da data escolhida e se alguma gera Penalidade por Cancelamento tardio', () => {
+    // Às 12h30 de 10/11 (faltam 1h30 para a de 10/11): cancelar a partir de 10/11 gera Penalidade;
+    // cancelar a partir de 17/11 não gera Penalidade.
+    expect(cancelarSerieGeraPenalidade(ocorrencias, '2026-11-10', as('12:30'))).toBe(true);
+    expect(cancelarSerieGeraPenalidade(ocorrencias, '2026-11-17', as('12:30'))).toBe(false);
+    expect(cancelarSerieGeraPenalidade(ocorrencias, '2026-11-10', as('12:00'))).toBe(false);
   });
 });
