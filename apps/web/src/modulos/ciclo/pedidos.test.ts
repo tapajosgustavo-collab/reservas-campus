@@ -4,6 +4,7 @@ import { ErroDaApi } from '../../comum/api';
 import {
   chaveDoItem,
   corDoPrazo,
+  deQuem,
   enderecoDaDecisao,
   msAteMudarACor,
   nomeDoItem,
@@ -121,7 +122,7 @@ const daSerie: ItemDaFila = {
 };
 
 describe('RN21 · Série como um item só na fila', () => {
-  it('a chave do item da Série não muda quando a primeira Ocorrência sai da lista; a do avulso é o Pedido', () => {
+  it('RN21 · a chave do item da Série não muda quando a primeira Ocorrência sai da lista; a do avulso é o Pedido', () => {
     const semAPrimeira: ItemDaFila = {
       ...daSerie,
       id: 52,
@@ -135,24 +136,30 @@ describe('RN21 · Série como um item só na fila', () => {
     expect(chaveDoItem(avulso)).toBe('pedido-42');
   });
 
-  it('a Série e um Pedido avulso com o mesmo id da primeira Ocorrência têm chaves diferentes', () => {
+  it('RN21 · a Série e um Pedido avulso com o mesmo id da primeira Ocorrência têm chaves diferentes', () => {
     expect(chaveDoItem({ ...avulso, id: 5 })).not.toBe(chaveDoItem(daSerie));
   });
 
-  it('a Série mostra quantas Ocorrências e as datas; o Pedido avulso, nada a mais', () => {
+  it('RN21 · a Série mostra quantas Ocorrências e as datas em São Paulo; o Pedido avulso, nada a mais', () => {
     expect(rotuloDasOcorrencias(daSerie)).toBe('Série: 3 Ocorrências (11/11, 18/11 e 25/11)');
-    expect(rotuloDasOcorrencias({ ...daSerie, reservas: daSerie.reservas.slice(2) })).toBe(
-      'Série: 1 Ocorrência (25/11)',
-    );
+    expect(
+      rotuloDasOcorrencias({
+        ...daSerie,
+        // 01:00 UTC de 26/11 ainda é 22:00 de 25/11 em São Paulo (RNF08).
+        reservas: [{ id: 53, inicio: '2026-11-26T01:00:00Z', fim: '2026-11-26T02:00:00Z' }],
+      }),
+    ).toBe('Série: 1 Ocorrência (25/11)');
     expect(rotuloDasOcorrencias(avulso)).toBeNull();
   });
 
-  it('o nome do item nos botões e avisos diz se é a Série ou o Pedido', () => {
+  it('US11 · RN21 · deQuem e nomeDoItem montam "Recurso, de Pessoa" num lugar só para o Pedido e a Série', () => {
+    expect(deQuem(avulso)).toBe('Laboratório de Química, de Ana');
+    expect(deQuem(daSerie)).toBe('Laboratório de Química, de Eduardo');
     expect(nomeDoItem(avulso)).toBe('o Pedido de Laboratório de Química, de Ana');
     expect(nomeDoItem(daSerie)).toBe('a Série de Laboratório de Química, de Eduardo');
   });
 
-  it('a Série é aprovada e recusada pela rota da Série; o Pedido avulso, pela da Reserva', () => {
+  it('RN21 · a Série é aprovada e recusada pela rota da Série; o Pedido avulso, pela da Reserva', () => {
     expect(enderecoDaDecisao(daSerie, 'aprovacao')).toBe('/api/series/5/aprovacao');
     expect(enderecoDaDecisao(daSerie, 'recusa')).toBe('/api/series/5/recusa');
     expect(enderecoDaDecisao(avulso, 'aprovacao')).toBe('/api/reservas/42/aprovacao');
