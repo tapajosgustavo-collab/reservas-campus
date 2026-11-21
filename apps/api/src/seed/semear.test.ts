@@ -281,6 +281,75 @@ comBanco('RNF10 · Seed', () => {
     expect(await indisponibilidadesDe('Sala 101')).toEqual([]);
   });
 
+  it('cena 4: o Auditório está indisponível em D+16, quinta, o dia inteiro, pela "Colação de grau"', async () => {
+    const { get, idDoRecurso } = await demoNoT0();
+
+    const agenda = await get(
+      'eduardo.demo@unifesp.br',
+      `/api/recursos/${await idDoRecurso('Auditório')}/agenda?semana=2026-11-23`,
+    );
+
+    expect(agenda.indisponibilidades).toEqual([
+      {
+        inicio: '2026-11-26T00:00:00-03:00',
+        fim: '2026-11-27T00:00:00-03:00',
+        motivo: 'Colação de grau',
+      },
+    ]);
+  });
+
+  it('cena 4 (RN21, RN04): a Série do Eduardo no Auditório, toda quinta 19h–21h por 8 semanas, é recusada só em D+16; sem a data, 7 Ocorrências Pendentes', async () => {
+    const { app, entrarComo, idDoRecurso } = await demoNoT0();
+    const criarSerie = async (datasExcluidas: string[]) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/series',
+        cookies: await entrarComo('eduardo.demo@unifesp.br'),
+        payload: {
+          recursoId: await idDoRecurso('Auditório'),
+          inicio: '2026-11-12T19:00:00-03:00',
+          fim: '2026-11-12T21:00:00-03:00',
+          ate: '2026-12-31',
+          participantes: 120,
+          finalidade: 'Aula de Física I',
+          datasExcluidas,
+        },
+      });
+
+    const recusada = await criarSerie([]);
+    const semAColacao = await criarSerie(['2026-11-26']);
+
+    expect(recusada.statusCode).toBe(422);
+    expect(recusada.json().erro.violacoes).toEqual([
+      {
+        rn: 'RN04',
+        nome: 'Indisponibilidade',
+        data: '2026-11-26',
+        campo: 'intervalo',
+        mensagem: 'Este Recurso está indisponível neste Intervalo: Colação de grau.',
+      },
+    ]);
+    expect(semAColacao.statusCode).toBe(201);
+    expect(
+      semAColacao
+        .json()
+        .reservas.map(({ inicio, status }: { inicio: string; status: string }) => [
+          inicio.slice(0, 10),
+          status,
+        ]),
+    ).toEqual(
+      [
+        '2026-11-12',
+        '2026-11-19',
+        '2026-12-03',
+        '2026-12-10',
+        '2026-12-17',
+        '2026-12-24',
+        '2026-12-31',
+      ].map((dia) => [dia, 'Pendente']),
+    );
+  });
+
   it('cena 2 (US06): a Ana busca Espaço para 30 pessoas em D 10h–12h; a Sala 101 e a Sala 102 não aparecem', async () => {
     const { get } = await demoNoT0();
     const busca = new URLSearchParams({
