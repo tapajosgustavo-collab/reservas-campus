@@ -71,11 +71,17 @@ function indisponivelNa(
   );
 }
 
+/** Até quando a Ocupação ocupa: na Devolução atrasada, até o `agora` da API (RN17). */
+function fimDa(ocupacao: Ocupacao, agora: Date) {
+  const fim = Date.parse(ocupacao.fim);
+  return ocupacao.devolucaoAtrasada ? Math.max(fim, agora.getTime()) : fim;
+}
+
 /** A Ocupação que toca a meia hora que começa em `minuto`, se houver. */
-function ocupacaoNa(dia: DiaDaGrade, minuto: number, ocupacoes: Ocupacao[]) {
+function ocupacaoNa(dia: DiaDaGrade, minuto: number, ocupacoes: Ocupacao[], agora: Date) {
   const inicio = instanteDe(dia.data, minuto);
   const fim = instanteDe(dia.data, minuto + MEIA_HORA);
-  return ocupacoes.find((o) => Date.parse(o.inicio) < fim && Date.parse(o.fim) > inicio);
+  return ocupacoes.find((o) => Date.parse(o.inicio) < fim && fimDa(o, agora) > inicio);
 }
 
 /** Uma célula da grade: o estado e a Ocupação que a ocupa, achada uma vez só. */
@@ -99,7 +105,7 @@ export function celulaDaGrade(
   if (minuto < dia.abre || minuto + MEIA_HORA > dia.fecha) {
     return { estado: 'fechado', ocupacao: undefined };
   }
-  const ocupacao = ocupacaoNa(dia, minuto, ocupacoes);
+  const ocupacao = ocupacaoNa(dia, minuto, ocupacoes, agora);
   return { estado: estadoCom(dia, minuto, ocupacao, agora, indisponibilidades), ocupacao };
 }
 

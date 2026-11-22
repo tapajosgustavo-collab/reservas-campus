@@ -22,6 +22,7 @@ import { Erro, useAgoraEmDiaNaBorda } from './botao';
 import {
   chaveDoItem,
   corDoPrazo,
+  deQuem,
   msAteMudarACor,
   nomeDoItem,
   podeConfirmarRecusa,
@@ -32,9 +33,6 @@ import {
   useFila,
   useRecusarPedido,
 } from './pedidos';
-
-/** Uma linha curta para os avisos: "Laboratório de Química, de Ana". */
-const deQuem = ({ recurso, solicitante }: ItemDaFila) => `${recurso.nome}, de ${solicitante.nome}`;
 
 /** O começo do aviso depois de decidir: "Pedido aprovado" ou, na Série (RN21), "Série aprovada". */
 const DECIDIDO = {

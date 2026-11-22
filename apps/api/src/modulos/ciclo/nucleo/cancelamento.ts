@@ -1,5 +1,11 @@
-import { violacao, type Politica, type Status, type Violacao } from '@reservas/shared';
-import { horaEmSaoPaulo, intervaloEmSaoPaulo } from '../../../comum/instante';
+import {
+  violacao,
+  type CancelarSerie,
+  type Politica,
+  type Status,
+  type Violacao,
+} from '@reservas/shared';
+import { emSaoPaulo, horaEmSaoPaulo, intervaloEmSaoPaulo } from '../../../comum/instante';
 import type { PenalidadeGerada } from '../../conduta';
 import type { StatusMudou } from '../../reservas';
 import type { NotificacaoEmitida } from './notificacao';
@@ -125,4 +131,112 @@ export function decidirCancelamento(
     tipo: 'aceita',
     efeitos: [cancelada, ...penalidadeDoTardio(reserva, politica, agora)],
   };
+}
+
+/** Uma Ocorrência da Série, como o Cancelamento a partir de uma data precisa dela. */
+export interface OcorrenciaDoCancelamento {
+  id: number;
+  inicio: Date;
+  fim: Date;
+  status: Status;
+}
+
+export interface FatosDoCancelamentoDaSerie {
+  serie: {
+    id: number;
+    usuarioId: number;
+    recurso: { nome: string };
+    ocorrencias: OcorrenciaDoCancelamento[];
+  };
+  politica: Politica;
+}
+
+export type EfeitoDoCancelamento = StatusMudou | PenalidadeGerada | NotificacaoEmitida;
+
+export type DecisaoDaSerie =
+  | { tipo: 'aceita'; efeitos: EfeitoDoCancelamento[] }
+  | { tipo: 'recusada'; violacoes: Violacao[] }
+  | { tipo: 'proibida'; violacoes: Violacao[] };
+
+const CAMPO_A_PARTIR_DE = 'aPartirDe';
+
+/** `2026-11-17` → `17/11/2026`. */
+function rotuloDaData(data: string) {
+  const [ano, mes, dia] = data.split('-');
+  return `${dia}/${mes}/${ano}`;
+}
+
+/**
+ * US09, US13, RN16 e RN21: o dono cancela as Ocorrências da Série a partir de `aPartirDe` (no
+ * calendário de São Paulo). Cancela todas as Ocorrências Pendentes ou Confirmadas antes do início
+ * a partir daquela data, aplicando a regra do Cancelamento tardio (RN16) a cada uma.
+ */
+export function decidirCancelamentoDaSerie(
+  { serie, politica }: FatosDoCancelamentoDaSerie,
+  { aPartirDe }: CancelarSerie,
+  quem: { id: number },
+  agora: Date,
+): DecisaoDaSerie {
+  // RN16, regra de dono: só quem criou a Série pode cancelá-la (403).
+  if (quem.id !== serie.usuarioId) {
+    return {
+      tipo: 'proibida',
+      violacoes: [violacao('RN16', 'Só quem criou a Série pode cancelá-la.')],
+    };
+  }
+
+  const doCorteEmDiante = [...serie.ocorrencias]
+    .filter(({ inicio }) => emSaoPaulo(inicio).data >= aPartirDe)
+    .sort((a, b) => a.inicio.getTime() - b.inicio.getTime());
+
+  if (doCorteEmDiante.length === 0) {
+    return {
+      tipo: 'recusada',
+      violacoes: [
+        violacao(
+          'RN16',
+          `Não há Ocorrências na Série a partir de ${rotuloDaData(aPartirDe)}.`,
+          CAMPO_A_PARTIR_DE,
+        ),
+      ],
+    };
+  }
+
+  const elegiveis = doCorteEmDiante.filter(
+    ({ status, inicio }) => (status === 'Pendente' || status === 'Confirmada') && agora < inicio,
+  );
+
+  if (elegiveis.length === 0) {
+    const todasJaCanceladas = doCorteEmDiante.every(({ status }) => status === 'Cancelada');
+    return {
+      tipo: 'recusada',
+      violacoes: [
+        violacao(
+          'RN16',
+          todasJaCanceladas
+            ? `As Ocorrências a partir de ${rotuloDaData(aPartirDe)} já foram canceladas.`
+            : `Não há Ocorrências que possam ser canceladas a partir de ${rotuloDaData(aPartirDe)}: elas já começaram ou foram encerradas.`,
+        ),
+      ],
+    };
+  }
+
+  const efeitos: EfeitoDoCancelamento[] = [];
+  for (const ocorrencia of elegiveis) {
+    const reserva: ReservaDoCancelamento = {
+      ...ocorrencia,
+      usuarioId: serie.usuarioId,
+      recurso: serie.recurso,
+    };
+    efeitos.push({
+      evento: 'StatusMudou',
+      reservaId: ocorrencia.id,
+      transicao: { de: ocorrencia.status, para: 'Cancelada', em: agora, porId: quem.id },
+    });
+    if (ehTardio(reserva, politica, agora)) {
+      efeitos.push(...penalidadeDoTardio(reserva, politica, agora));
+    }
+  }
+
+  return { tipo: 'aceita', efeitos };
 }
