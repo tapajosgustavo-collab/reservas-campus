@@ -1,5 +1,6 @@
 import { POLITICA } from '@reservas/shared';
 import type { Transacao } from '../../../comum/banco';
+import type { Prisma } from '../../../generated/prisma/client';
 import { executar as executarEmReservas } from '../../reservas';
 import {
   sincronizar as sincronizarNucleo,
@@ -14,12 +15,22 @@ const MINUTO = 60_000;
 const selectReservaCiclo = {
   id: true,
   usuarioId: true,
+  usuario: { select: { nome: true } },
   status: true,
   inicio: true,
   fim: true,
   serieId: true,
-  recurso: { select: { nome: true, tipo: true } },
-} as const;
+  recurso: { select: { id: true, nome: true, tipo: true, gestorId: true } },
+  penalidade: { select: { id: true } },
+} satisfies Prisma.ReservaSelect;
+
+type ReservaLida = Prisma.ReservaGetPayload<{ select: typeof selectReservaCiclo }>;
+
+/** RN17: a Penalidade da Reserva (`reserva_id` único) marca o atraso já penalizado. */
+const paraOCiclo = ({ penalidade, ...reserva }: ReservaLida): ReservaDoCiclo => ({
+  ...reserva,
+  penalizada: penalidade !== null,
+});
 
 /**
  * Aplica tudo o que o tempo fez vencer até `agora` (#12, #51) e devolve quantos efeitos gravou.
@@ -27,8 +38,11 @@ const selectReservaCiclo = {
  * RN12: Pedido não decidido expira no prazo de decisão (2h antes do início).
  * RN15: Confirmada sem Check-in até o fim da Tolerância vira Não comparecimento, com Penalidade
  * (que pode iniciar uma Suspensão, RN19).
+ * RN17: Equipamento Em uso sem Devolução no fim da Tolerância de Devolução gera uma Penalidade
+ * (que também pode iniciar uma Suspensão, RN19).
  * RN18: Espaço Em uso vira Concluída no fim do Intervalo.
  * RN19: o fim da Suspensão é avisado, se nenhuma outra cobrir o instante.
+ * RN23: a Reserva seguinte do Equipamento ainda fora é cancelada sem Penalidade, não vira RN15.
  * US16: Reserva Confirmada recebe lembrete 1h antes do início (descartado se já passou do início).
  * ADR 0004: Janela temporal nas consultas evita ler todo o banco sob o lock e descarta lembretes passados.
  */
@@ -44,9 +58,11 @@ async function sincronizarReservas(tx: Transacao, agora: Date): Promise<number> 
   const limiteLembrete = new Date(agora.getTime() + POLITICA.lembreteAntesDoInicioMin * MINUTO);
   const limiteDecisao = new Date(agora.getTime() + POLITICA.prazoDeDecisaoMin * MINUTO);
   const limiteTolerancia = new Date(agora.getTime() - POLITICA.toleranciaMin * MINUTO);
+  const limiteDevolucao = new Date(agora.getTime() - POLITICA.toleranciaDeDevolucaoMin * MINUTO);
 
   // Busca pedidos que atingiram o prazo de decisão, reservas confirmadas na janela de lembrete ou
-  // com a Tolerância vencida, e Espaços Em uso que já passaram do fim.
+  // com a Tolerância vencida, Espaços Em uso que já passaram do fim e Equipamentos Em uso que
+  // passaram da Tolerância de Devolução sem a Penalidade (RN17).
   const candidatas = await tx.reserva.findMany({
     where: {
       OR: [
@@ -68,6 +84,12 @@ async function sincronizarReservas(tx: Transacao, agora: Date): Promise<number> 
           fim: { lte: agora },
           recurso: { tipo: 'Espaco' },
         },
+        {
+          status: 'EmUso',
+          fim: { lte: limiteDevolucao },
+          recurso: { tipo: 'Equipamento' },
+          penalidade: { is: null },
+        },
       ],
     },
     select: selectReservaCiclo,
@@ -87,7 +109,7 @@ async function sincronizarReservas(tx: Transacao, agora: Date): Promise<number> 
     ),
   );
 
-  let reservas: ReservaDoCiclo[] = candidatas;
+  let reservas: ReservaLida[] = candidatas;
 
   if (seriesIds.length > 0) {
     const idsJaCarregados = candidatas.map((r) => r.id);
@@ -104,7 +126,31 @@ async function sincronizarReservas(tx: Transacao, agora: Date): Promise<number> 
     }
   }
 
-  const { efeitos } = sincronizarNucleo({ reservas, suspensoes: [], politica: POLITICA }, agora);
+  // RN23: para a Reserva de Equipamento com a Tolerância vencida, o núcleo precisa ver se a
+  // anterior do mesmo Equipamento ainda está Em uso, sem Devolução.
+  const equipamentosIds = Array.from(
+    new Set(
+      candidatas
+        .filter((r) => r.status === 'Confirmada' && r.recurso.tipo === 'Equipamento')
+        .map((r) => r.recurso.id),
+    ),
+  );
+  if (equipamentosIds.length > 0) {
+    const anterioresEmUso = await tx.reserva.findMany({
+      where: {
+        status: 'EmUso',
+        recursoId: { in: equipamentosIds },
+        id: { notIn: reservas.map((r) => r.id) },
+      },
+      select: selectReservaCiclo,
+    });
+    reservas = [...reservas, ...anterioresEmUso];
+  }
+
+  const { efeitos } = sincronizarNucleo(
+    { reservas: reservas.map(paraOCiclo), suspensoes: [], politica: POLITICA },
+    agora,
+  );
   return executarEfeitos(tx, efeitos);
 }
 

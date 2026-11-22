@@ -9,6 +9,9 @@ import {
 
 const ANA = { id: 7 };
 const BRUNO = { id: 8 };
+const CARLOS = { id: 9 };
+const EDUARDO = { id: 10 };
+const BIA = { id: 11 };
 
 /** Em São Paulo. Quarta, 11/11/2026. */
 const em = (diaHora: string) => new Date(`2026-11-${diaHora}:00-03:00`);
@@ -17,17 +20,64 @@ const POLITICA = {
   prazoDeDecisaoMin: 120,
   lembreteAntesDoInicioMin: 60,
   toleranciaMin: 15,
+  toleranciaDeDevolucaoMin: 15,
 };
 
-const umaReserva = (dados: Partial<ReservaDoCiclo> = {}): ReservaDoCiclo => ({
+type DadosDaReserva = Partial<Omit<ReservaDoCiclo, 'recurso'>> & {
+  recurso?: Partial<ReservaDoCiclo['recurso']>;
+};
+
+const umaReserva = ({ recurso, ...dados }: DadosDaReserva = {}): ReservaDoCiclo => ({
   id: 42,
   usuarioId: ANA.id,
+  usuario: { nome: 'Ana Souza' },
   status: 'Pendente',
   inicio: em('11T14:00'),
   fim: em('11T16:00'),
-  recurso: { nome: 'Laboratório de Química', tipo: 'Espaco' },
+  recurso: {
+    id: 1,
+    nome: 'Laboratório de Química',
+    tipo: 'Espaco',
+    gestorId: CARLOS.id,
+    ...recurso,
+  },
+  penalizada: false,
   ...dados,
 });
+
+/** O Notebook Dell N-01 do Carlos, como no seed da cena 6. */
+const N01 = {
+  id: 5,
+  nome: 'Notebook Dell N-01',
+  tipo: 'Equipamento',
+  gestorId: CARLOS.id,
+} as const;
+
+/** Exemplo da RN23: o Eduardo com o N-01 Em uso das 10h às 12h, sem Devolução. */
+const doEduardo = (dados: DadosDaReserva = {}) =>
+  umaReserva({
+    id: 80,
+    usuarioId: EDUARDO.id,
+    usuario: { nome: 'Eduardo Prado' },
+    status: 'EmUso',
+    inicio: em('11T10:00'),
+    fim: em('11T12:00'),
+    recurso: N01,
+    ...dados,
+  });
+
+/** Exemplo da RN23: a Bia com o N-01 Confirmado das 12h às 14h, encostado no do Eduardo. */
+const daBia = (dados: DadosDaReserva = {}) =>
+  umaReserva({
+    id: 81,
+    usuarioId: BIA.id,
+    usuario: { nome: 'Bia Costa' },
+    status: 'Confirmada',
+    inicio: em('11T12:00'),
+    fim: em('11T14:00'),
+    recurso: N01,
+    ...dados,
+  });
 
 /** A Suspensão da Ana de 04/11 a 11/11, às 10h15, com o fim ainda não avisado. */
 const umaSuspensao = (dados: Partial<SuspensaoDoCiclo> = {}): SuspensaoDoCiclo => ({
@@ -101,6 +151,31 @@ describe('vencimentos(mundo)', () => {
       { regra: 'RN12', em: em('11T14:00'), id: 30 },
       { regra: 'RN15', em: em('11T14:15'), id: 20 },
     ]);
+  });
+
+  it('ADR 0004_empate no mesmo instante (12h15) segue a ordem RN17 → RN12 → RN15 → RN23 → RN18 → lembrete, não o id', () => {
+    const lista = vencimentos({
+      reservas: [
+        // US16: Confirmada às 13h15, lembrete às 12h15.
+        umaReserva({ id: 1, status: 'Confirmada', inicio: em('11T13:15'), fim: em('11T14:00') }),
+        // RN18: Espaço Em uso até 12h15.
+        umaReserva({ id: 2, status: 'EmUso', inicio: em('11T11:00'), fim: em('11T12:15') }),
+        // RN23: a Bia no N-01 às 12h, com o do Eduardo ainda fora.
+        daBia({ id: 3 }),
+        // RN15: Confirmada às 12h num Espaço, sem Check-in.
+        umaReserva({ id: 4, status: 'Confirmada', inicio: em('11T12:00'), fim: em('11T13:00') }),
+        // RN12: Pedido às 14h15, Prazo de decisão às 12h15.
+        umaReserva({ id: 5, status: 'Pendente', inicio: em('11T14:15'), fim: em('11T15:00') }),
+        // RN17: o Eduardo com o N-01 até 12h, Tolerância de Devolução até 12h15.
+        doEduardo({ id: 6 }),
+      ],
+      suspensoes: [],
+      politica: POLITICA,
+    });
+
+    expect(
+      lista.filter((v) => v.em.getTime() === em('11T12:15').getTime()).map((v) => v.regra),
+    ).toEqual(['RN17', 'RN12', 'RN15', 'RN23', 'RN18', 'US16']);
   });
 
   it('RN21 · Ocorrências da mesma Série em recurso restrito expiram juntas no prazo da 1ª ocorrência', () => {
@@ -433,7 +508,253 @@ describe('sincronizar(mundo, agora)', () => {
         { reservas: [emUso('Equipamento')], suspensoes: [], politica: POLITICA },
         em('11T15:00'),
       );
+      expect(resultado.efeitos.filter((e) => e.evento === 'StatusMudou')).toEqual([]);
+      expect(resultado.mundo.reservas[0]?.status).toBe('EmUso');
+    });
+  });
+
+  describe('RN17 · Devolução atrasada', () => {
+    const penalidadeDoEduardo = {
+      evento: 'PenalidadeGerada',
+      penalidade: {
+        usuarioId: EDUARDO.id,
+        reservaId: 80,
+        motivo: 'DevolucaoAtrasada',
+        em: em('11T12:15'),
+      },
+    };
+    const notificacoesDaDevolucaoAtrasada = [
+      {
+        evento: 'NotificacaoEmitida',
+        notificacao: {
+          destinatarioId: EDUARDO.id,
+          tipo: 'DevolucaoAtrasada',
+          mensagem:
+            'Você recebeu uma Penalidade por Devolução atrasada: Notebook Dell N-01 (11/11/2026, das 10:00 às 12:00) não foi devolvido até o fim da Tolerância de Devolução, às 12:15.',
+          em: em('11T12:15'),
+          reservaId: 80,
+        },
+      },
+      {
+        evento: 'NotificacaoEmitida',
+        notificacao: {
+          destinatarioId: CARLOS.id,
+          tipo: 'DevolucaoAtrasada',
+          mensagem:
+            'Eduardo Prado não devolveu Notebook Dell N-01 (11/11/2026, das 10:00 às 12:00) até o fim da Tolerância de Devolução, às 12:15. A Reserva continua Em uso até a Devolução.',
+          em: em('11T12:15'),
+          reservaId: 80,
+        },
+      },
+    ];
+
+    it('RN17_Equipamento Em uso até 12h sem Devolução, agora às 12h14 (dentro da Tolerância de Devolução) → nenhum efeito', () => {
+      const resultado = sincronizar(
+        { reservas: [doEduardo()], suspensoes: [], politica: POLITICA },
+        em('11T12:14'),
+      );
       expect(resultado.efeitos).toEqual([]);
+    });
+
+    it('RN17_às 12h15 sem Devolução → uma Penalidade e Notificação ao Usuário e ao Gestor responsável; a Reserva continua Em uso', () => {
+      const resultado = sincronizar(
+        { reservas: [doEduardo()], suspensoes: [], politica: POLITICA },
+        em('11T12:15'),
+      );
+
+      expect(resultado.efeitos).toEqual([...notificacoesDaDevolucaoAtrasada, penalidadeDoEduardo]);
+      expect(resultado.mundo.reservas[0]).toMatchObject({ status: 'EmUso', penalizada: true });
+    });
+
+    it('RN17_servidor dormindo: processado às 18h, a Penalidade fica datada às 12h15 e sai uma vez só', () => {
+      const primeira = sincronizar(
+        { reservas: [doEduardo()], suspensoes: [], politica: POLITICA },
+        em('11T18:00'),
+      );
+
+      expect(primeira.efeitos).toEqual([...notificacoesDaDevolucaoAtrasada, penalidadeDoEduardo]);
+      expect(sincronizar(primeira.mundo, em('11T18:00')).efeitos).toEqual([]);
+      expect(sincronizar(primeira.mundo, em('12T09:00')).efeitos).toEqual([]);
+    });
+
+    it('RN17_Reserva que já tem a Penalidade (reserva_id único) não gera outra', () => {
+      const resultado = sincronizar(
+        { reservas: [doEduardo({ penalizada: true })], suspensoes: [], politica: POLITICA },
+        em('11T18:00'),
+      );
+      expect(resultado.efeitos).toEqual([]);
+    });
+
+    it('RN17_a Tolerância de Devolução sai da Política: com 30 min, às 12h15 ainda não há Penalidade', () => {
+      const politica = { ...POLITICA, toleranciaDeDevolucaoMin: 30 };
+      expect(
+        sincronizar({ reservas: [doEduardo()], suspensoes: [], politica }, em('11T12:15')).efeitos,
+      ).toEqual([]);
+      expect(
+        sincronizar(
+          { reservas: [doEduardo()], suspensoes: [], politica },
+          em('11T12:30'),
+        ).efeitos.map((e) => e.evento),
+      ).toEqual(['NotificacaoEmitida', 'NotificacaoEmitida', 'PenalidadeGerada']);
+    });
+
+    it('RN17_Espaço Em uso não tem Devolução: conclui no fim (RN18), sem Penalidade', () => {
+      const espaco = umaReserva({ status: 'EmUso', inicio: em('11T10:00'), fim: em('11T12:00') });
+      const resultado = sincronizar(
+        { reservas: [espaco], suspensoes: [], politica: POLITICA },
+        em('11T18:00'),
+      );
+      expect(resultado.efeitos.map((e) => e.evento)).toEqual(['StatusMudou']);
+    });
+  });
+
+  describe('RN23 · Equipamento ainda fora', () => {
+    const cancelamentoDaBia = [
+      {
+        evento: 'StatusMudou',
+        reservaId: 81,
+        transicao: {
+          de: 'Confirmada',
+          para: 'Cancelada',
+          em: em('11T12:15'),
+          porId: null,
+          observacao:
+            'Cancelamento pelo sistema: o Equipamento não foi devolvido pela Reserva anterior até o fim da Tolerância do Check-in (RN23).',
+        },
+      },
+      {
+        evento: 'NotificacaoEmitida',
+        notificacao: {
+          destinatarioId: BIA.id,
+          tipo: 'CancelamentoPeloSistema',
+          mensagem:
+            'Sua Reserva de Notebook Dell N-01 (11/11/2026, das 12:00 às 14:00) foi cancelada pelo sistema, sem Penalidade: o Equipamento não foi devolvido pela Reserva anterior até o fim da Tolerância do Check-in.',
+          em: em('11T12:15'),
+          reservaId: 81,
+        },
+      },
+    ];
+
+    it('RN23_exemplo das 12h15: Reservas que se encostam (10h–12h e 12h–14h), sem Devolução → a primeira leva a Penalidade (RN17) e a segunda é cancelada pelo sistema, sem Penalidade, no mesmo instante', () => {
+      const resultado = sincronizar(
+        { reservas: [daBia(), doEduardo()], suspensoes: [], politica: POLITICA },
+        em('11T12:15'),
+      );
+
+      expect(resultado.efeitos.map((e) => e.evento)).toEqual([
+        'NotificacaoEmitida',
+        'NotificacaoEmitida',
+        'PenalidadeGerada',
+        'StatusMudou',
+        'NotificacaoEmitida',
+      ]);
+      expect(resultado.efeitos[2]).toMatchObject({ penalidade: { reservaId: 80 } });
+      expect(resultado.efeitos.slice(3)).toEqual(cancelamentoDaBia);
+      expect(resultado.mundo.reservas.map(({ id, status }) => ({ id, status }))).toEqual([
+        { id: 81, status: 'Cancelada' },
+        { id: 80, status: 'EmUso' },
+      ]);
+    });
+
+    it('RN23_às 12h14 a Reserva seguinte ainda espera: nenhum efeito', () => {
+      const resultado = sincronizar(
+        { reservas: [daBia(), doEduardo()], suspensoes: [], politica: POLITICA },
+        em('11T12:14'),
+      );
+      expect(resultado.efeitos).toEqual([]);
+    });
+
+    it('RN23_vale mesmo sem as Reservas se encostarem: Eduardo 8h–10h sem Devolução, Bia às 12h → cancelada sem Penalidade', () => {
+      const resultado = sincronizar(
+        {
+          reservas: [
+            doEduardo({ inicio: em('11T08:00'), fim: em('11T10:00'), penalizada: true }),
+            daBia(),
+          ],
+          suspensoes: [],
+          politica: POLITICA,
+        },
+        em('11T12:15'),
+      );
+      expect(resultado.efeitos).toEqual(cancelamentoDaBia);
+    });
+
+    it('RN23_servidor dormindo: processado às 15h, o Cancelamento fica datado às 12h15 e sai uma vez só', () => {
+      const primeira = sincronizar(
+        {
+          reservas: [doEduardo({ penalizada: true }), daBia()],
+          suspensoes: [],
+          politica: POLITICA,
+        },
+        em('11T15:00'),
+      );
+      expect(primeira.efeitos).toEqual(cancelamentoDaBia);
+      expect(sincronizar(primeira.mundo, em('11T15:00')).efeitos).toEqual([]);
+    });
+
+    it('RN23_o Equipamento voltou antes (anterior Concluída) → a Reserva sem Check-in segue a RN15, com Penalidade', () => {
+      const resultado = sincronizar(
+        {
+          reservas: [doEduardo({ status: 'Concluida' }), daBia()],
+          suspensoes: [],
+          politica: POLITICA,
+        },
+        em('11T12:15'),
+      );
+      expect(resultado.efeitos.map((e) => e.evento)).toEqual([
+        'StatusMudou',
+        'NotificacaoEmitida',
+        'PenalidadeGerada',
+      ]);
+      expect(resultado.efeitos[0]).toMatchObject({
+        reservaId: 81,
+        transicao: { para: 'NaoComparecimento' },
+      });
+    });
+
+    it('RN23_mesmo dono nas duas Reservas: o Check-in da segunda é recusado e, sem Devolução, ela é cancelada pelo sistema sem Penalidade', () => {
+      // Decidido no #131: a RN23 vale ao pé da letra. O Gestor registra a Devolução da primeira e o
+      // Usuário faz o Check-in da segunda de novo.
+      const segundaDoEduardo = daBia({
+        usuarioId: EDUARDO.id,
+        usuario: { nome: 'Eduardo Prado' },
+      });
+      const resultado = sincronizar(
+        { reservas: [doEduardo(), segundaDoEduardo], suspensoes: [], politica: POLITICA },
+        em('11T12:15'),
+      );
+
+      expect(resultado.efeitos.map((e) => e.evento)).toEqual([
+        'NotificacaoEmitida',
+        'NotificacaoEmitida',
+        'PenalidadeGerada',
+        'StatusMudou',
+        'NotificacaoEmitida',
+      ]);
+      expect(resultado.efeitos[2]).toMatchObject({ penalidade: { reservaId: 80 } });
+      expect(resultado.efeitos[3]).toMatchObject({
+        reservaId: 81,
+        transicao: { para: 'Cancelada', porId: null },
+      });
+      expect(resultado.efeitos[4]).toMatchObject({
+        notificacao: { destinatarioId: EDUARDO.id, tipo: 'CancelamentoPeloSistema' },
+      });
+    });
+
+    it('RN23_outro Equipamento fora não segura esta Reserva: sem Check-in, segue a RN15', () => {
+      const outroNotebook = { ...N01, id: 6, nome: 'Notebook Dell N-02' };
+      const resultado = sincronizar(
+        {
+          reservas: [doEduardo({ recurso: outroNotebook, penalizada: true }), daBia()],
+          suspensoes: [],
+          politica: POLITICA,
+        },
+        em('11T12:15'),
+      );
+      expect(resultado.efeitos[0]).toMatchObject({
+        reservaId: 81,
+        transicao: { para: 'NaoComparecimento' },
+      });
     });
   });
 
