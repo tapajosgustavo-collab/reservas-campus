@@ -446,4 +446,231 @@ comBanco('sincronizar (casca e integração)', () => {
     const aplicados2 = await banco.$transaction((tx) => sincronizar(tx, agora));
     expect(aplicados2).toBe(0);
   });
+
+  /** Exemplo das 12h15 (RN17, RN23): o Eduardo com o N-01 das 10h às 12h, a Bia das 12h às 14h. */
+  async function notebookQueNaoVoltou() {
+    const carlos = await umUsuario(banco, 'Gestor', { nome: 'Carlos' });
+    const eduardo = await umUsuario(banco, 'Docente', { nome: 'Eduardo Prado' });
+    const bia = await umUsuario(banco, 'Aluno', { nome: 'Bia' });
+    const notebook = await umEquipamento(banco, {
+      gestorId: carlos.id,
+      nome: 'Notebook Dell N-01',
+      patrimonio: 'N-01',
+    });
+    const doEduardo = await umaReserva(banco, {
+      usuarioId: eduardo.id,
+      recursoId: notebook.id,
+      inicio: '2026-11-11T10:00:00-03:00',
+      fim: '2026-11-11T12:00:00-03:00',
+      status: 'EmUso',
+    });
+    const daBia = await umaReserva(banco, {
+      usuarioId: bia.id,
+      recursoId: notebook.id,
+      inicio: '2026-11-11T12:00:00-03:00',
+      fim: '2026-11-11T14:00:00-03:00',
+    });
+    return { carlos, eduardo, bia, notebook, doEduardo, daBia };
+  }
+
+  const notificacoesDa = (reservaId: number) =>
+    banco.notificacao.findMany({
+      where: { reservaId },
+      select: { destinatarioId: true, tipo: true, em: true },
+      orderBy: { id: 'asc' },
+    });
+
+  it('RN17 · Equipamento sem Devolução: no fim da Tolerância de Devolução, uma Penalidade e Notificação ao Usuário e ao Gestor, mesmo com o servidor dormindo; continua Em uso até a Devolução', async () => {
+    const relogio = new RelogioFixo(as('11T12:14'));
+    const app = await umaApp({ banco, relogio });
+    const { carlos, eduardo, doEduardo } = await notebookQueNaoVoltou();
+
+    await banco.$transaction((tx) => sincronizar(tx, relogio.agora()));
+    expect(await banco.penalidade.count()).toBe(0);
+
+    // O servidor dormiu das 12h14 às 18h: a primeira requisição põe o tempo em dia.
+    relogio.ir(as('11T18:00'));
+    const emUso = await app.inject({
+      method: 'GET',
+      url: '/api/gestao/em-uso',
+      cookies: sessaoDe(app, carlos.id, relogio.agora()),
+    });
+    expect(emUso.json()).toMatchObject([{ id: doEduardo.id, devolucaoAtrasada: true }]);
+
+    expect(
+      await banco.penalidade.findMany({
+        select: { reservaId: true, usuarioId: true, motivo: true, em: true },
+      }),
+    ).toEqual([
+      {
+        reservaId: doEduardo.id,
+        usuarioId: eduardo.id,
+        motivo: 'DevolucaoAtrasada',
+        em: as('11T12:15'),
+      },
+    ]);
+    expect(await notificacoesDa(doEduardo.id)).toEqual([
+      { destinatarioId: eduardo.id, tipo: 'DevolucaoAtrasada', em: as('11T12:15') },
+      { destinatarioId: carlos.id, tipo: 'DevolucaoAtrasada', em: as('11T12:15') },
+    ]);
+    expect((await banco.reserva.findUniqueOrThrow({ where: { id: doEduardo.id } })).status).toBe(
+      'EmUso',
+    );
+
+    // Requisições seguintes não repetem nada: o reserva_id único marca o atraso já penalizado.
+    expect(await banco.$transaction((tx) => sincronizar(tx, as('11T18:00')))).toBe(0);
+    expect(await banco.$transaction((tx) => sincronizar(tx, as('12T09:00')))).toBe(0);
+
+    // A Devolução que vem depois encerra a Reserva sem outra Penalidade.
+    const devolucao = await app.inject({
+      method: 'POST',
+      url: `/api/reservas/${doEduardo.id}/devolucao`,
+      cookies: sessaoDe(app, carlos.id, relogio.agora()),
+      payload: {},
+    });
+    expect(devolucao.json().status).toBe('Concluida');
+    expect(await banco.penalidade.count()).toBe(1);
+  });
+
+  it('RN23 · exemplo das 12h15: sem Devolução, a Reserva seguinte do Equipamento é cancelada pelo sistema, sem Penalidade e com Notificação, no mesmo instante da Penalidade da anterior', async () => {
+    const relogio = new RelogioFixo(as('11T12:15'));
+    const app = await umaApp({ banco, relogio });
+    const { bia, eduardo, doEduardo, daBia } = await notebookQueNaoVoltou();
+
+    // A Bia nem tentou o Check-in: só abre as Notificações dela.
+    const notificacoes = await app.inject({
+      method: 'GET',
+      url: '/api/notificacoes',
+      cookies: sessaoDe(app, bia.id, relogio.agora()),
+    });
+    expect(notificacoes.json().itens).toMatchObject([
+      {
+        tipo: 'CancelamentoPeloSistema',
+        mensagem: expect.stringContaining('foi cancelada pelo sistema, sem Penalidade'),
+        em: '2026-11-11T12:15:00-03:00',
+        reservaId: daBia.id,
+      },
+    ]);
+
+    const reservaDaBia = await banco.reserva.findUniqueOrThrow({
+      where: { id: daBia.id },
+      include: { transicoes: true, penalidade: true },
+    });
+    expect(reservaDaBia.status).toBe('Cancelada');
+    expect(reservaDaBia.penalidade).toBeNull();
+    expect(reservaDaBia.transicoes).toEqual([
+      expect.objectContaining({
+        de: 'Confirmada',
+        para: 'Cancelada',
+        em: as('11T12:15'),
+        porId: null,
+        observacao: expect.stringContaining('RN23'),
+      }),
+    ]);
+    expect(
+      await banco.penalidade.findMany({ select: { usuarioId: true, reservaId: true } }),
+    ).toEqual([{ usuarioId: eduardo.id, reservaId: doEduardo.id }]);
+  });
+
+  it('RN23 · servidor dormindo: processado às 16h, a Reserva seguinte vira Cancelada às 12h15, não Não comparecimento', async () => {
+    const { daBia } = await notebookQueNaoVoltou();
+
+    // RN17: Penalidade e duas Notificações; RN23: Cancelamento e uma Notificação.
+    expect(await banco.$transaction((tx) => sincronizar(tx, as('11T16:00')))).toBe(5);
+
+    const reservaDaBia = await banco.reserva.findUniqueOrThrow({
+      where: { id: daBia.id },
+      include: { transicoes: true, penalidade: true },
+    });
+    expect(reservaDaBia).toMatchObject({ status: 'Cancelada', penalidade: null });
+    expect(reservaDaBia.transicoes).toMatchObject([{ para: 'Cancelada', em: as('11T12:15') }]);
+    expect(await banco.$transaction((tx) => sincronizar(tx, as('11T16:00')))).toBe(0);
+  });
+
+  it('RN23 · o Equipamento voltou antes do fim da Tolerância: a Reserva seguinte sem Check-in segue a RN15', async () => {
+    const { bia, doEduardo, daBia } = await notebookQueNaoVoltou();
+    await banco.reserva.update({ where: { id: doEduardo.id }, data: { status: 'Concluida' } });
+
+    await banco.$transaction((tx) => sincronizar(tx, as('11T12:15')));
+
+    expect((await banco.reserva.findUniqueOrThrow({ where: { id: daBia.id } })).status).toBe(
+      'NaoComparecimento',
+    );
+    expect(await banco.penalidade.findMany({ select: { usuarioId: true, motivo: true } })).toEqual([
+      { usuarioId: bia.id, motivo: 'NaoComparecimento' },
+    ]);
+  });
+
+  it('RN23 · a anterior já penalizada numa passada antes (o tique): a Reserva seguinte ainda é cancelada sem Penalidade, não vira Não comparecimento', async () => {
+    const { eduardo, doEduardo, daBia } = await notebookQueNaoVoltou();
+    // As Reservas não se encostam: o Eduardo das 8h às 10h, a Bia às 12h.
+    await banco.reserva.update({
+      where: { id: doEduardo.id },
+      data: { inicio: as('11T08:00'), fim: as('11T10:00') },
+    });
+
+    // 10h15: o tique grava a Penalidade do Eduardo (RN17). Depois disso ele não é mais candidato.
+    await banco.$transaction((tx) => sincronizar(tx, as('11T10:15')));
+    // 12h15: só a consulta das Reservas Em uso do Equipamento faz o núcleo ver que ele ainda está fora.
+    await banco.$transaction((tx) => sincronizar(tx, as('11T12:15')));
+
+    expect(
+      await banco.reserva.findUniqueOrThrow({
+        where: { id: daBia.id },
+        include: { penalidade: true },
+      }),
+    ).toMatchObject({ status: 'Cancelada', penalidade: null });
+    expect(
+      await banco.penalidade.findMany({ select: { usuarioId: true, reservaId: true, em: true } }),
+    ).toEqual([{ usuarioId: eduardo.id, reservaId: doEduardo.id, em: as('11T10:15') }]);
+  });
+
+  it('RN17 · a Devolução atrasada que é a 3ª Penalidade em 30 dias abre a Suspensão (RN19), com o aviso dela por cima do aviso do atraso', async () => {
+    const { carlos, eduardo, notebook, doEduardo, daBia } = await notebookQueNaoVoltou();
+    await banco.reserva.delete({ where: { id: daBia.id } });
+    // Duas faltas do Eduardo antes, na Sala 101, nos dias 09 e 10 (RN15).
+    const sala = await umEspaco(banco, { gestorId: carlos.id, nome: 'Sala 101' });
+    for (const dia of ['09', '10']) {
+      await umaReserva(banco, {
+        usuarioId: eduardo.id,
+        recursoId: sala.id,
+        inicio: `2026-11-${dia}T10:00:00-03:00`,
+        fim: `2026-11-${dia}T12:00:00-03:00`,
+      });
+    }
+    const relogio = new RelogioFixo(as('11T18:00'));
+    const app = await umaApp({ banco, relogio });
+
+    const notificacoes = await app.inject({
+      method: 'GET',
+      url: '/api/notificacoes',
+      cookies: sessaoDe(app, eduardo.id, relogio.agora()),
+    });
+
+    expect(notificacoes.json().itens.slice(0, 2)).toMatchObject([
+      { tipo: 'InicioSuspensao', em: '2026-11-11T12:15:00-03:00' },
+      { tipo: 'DevolucaoAtrasada', em: '2026-11-11T12:15:00-03:00', reservaId: doEduardo.id },
+    ]);
+    expect(
+      await banco.suspensao.findMany({
+        select: {
+          usuarioId: true,
+          inicio: true,
+          fim: true,
+          _count: { select: { penalidades: true } },
+        },
+      }),
+    ).toEqual([
+      {
+        usuarioId: eduardo.id,
+        inicio: as('11T12:15'),
+        fim: as('18T12:15'),
+        _count: { penalidades: 3 },
+      },
+    ]);
+    // O Equipamento continua com ele: a Suspensão não mexe na Reserva Em uso (RN17).
+    expect(
+      (await banco.reserva.findFirstOrThrow({ where: { recursoId: notebook.id } })).status,
+    ).toBe('EmUso');
+  });
 });

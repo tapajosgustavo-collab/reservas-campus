@@ -276,3 +276,248 @@ comBanco('US13 · Cancelar', () => {
     expect(resposta.statusCode).toBe(401);
   });
 });
+
+function cancelarSerie(app: App, usuarioId: number, serieId: number, payload: object) {
+  return app.inject({
+    method: 'POST',
+    url: `/api/series/${serieId}/cancelamento`,
+    cookies: sessaoDe(app, usuarioId),
+    payload,
+  });
+}
+
+/** As terças da Série do Eduardo, das 10h às 12h: 10/11, 17/11 e 24/11. */
+const TERCAS = ['10', '17', '24'].map((dia) => ({
+  inicio: `2026-11-${dia}T10:00:00-03:00`,
+  fim: `2026-11-${dia}T12:00:00-03:00`,
+}));
+
+/** A Sala 101 e a Série do Eduardo nela, com as três Ocorrências Confirmadas (inseridas fora de ordem). */
+async function umaSerie(status: 'Confirmada' | 'Pendente' = 'Confirmada') {
+  const eduardo = await umUsuario(banco, 'Docente', { nome: 'Eduardo' });
+  const sala = await umEspaco(banco, {
+    nome: 'Sala 101',
+    horarios: {
+      create: [1, 2, 3, 4, 5].map((diaSemana) => ({ diaSemana, abre: 7 * 60, fecha: 23 * 60 })),
+    },
+  });
+  const serie = await banco.serie.create({
+    data: {
+      usuarioId: eduardo.id,
+      recursoId: sala.id,
+      criadaEm: new Date('2026-11-01T08:00:00-03:00'),
+    },
+  });
+  const porIndice = new Map<number, Awaited<ReturnType<typeof umaReserva>>>();
+  for (const i of [2, 0, 1] as const) {
+    porIndice.set(
+      i,
+      await umaReserva(banco, {
+        usuarioId: eduardo.id,
+        recursoId: sala.id,
+        serieId: serie.id,
+        ...TERCAS[i]!,
+        participantes: 20,
+        finalidade: 'Aula de Cálculo',
+        status,
+      }),
+    );
+  }
+  const ocorrencias = [porIndice.get(0)!, porIndice.get(1)!, porIndice.get(2)!];
+  return { eduardo, sala, serie, ocorrencias };
+}
+
+comBanco('US09 · US13 · RN16 · RN21 · Cancelar Série a partir de uma data', () => {
+  beforeAll(() => {
+    banco = bancoDeTeste();
+  });
+  afterAll(() => banco.$disconnect());
+  beforeEach(() => esvaziar(banco));
+
+  it('RN16 · RN21 · o Docente cancela a Série a partir da 2ª data → 200 { canceladas, penalidades: [] }, a 1ª continua Confirmada e as datas canceladas ficam livres', async () => {
+    const app = await umaAppAs('08:00');
+    const { eduardo, sala, serie, ocorrencias } = await umaSerie();
+    const ana = await umUsuario(banco, 'Aluno');
+
+    const resposta = await cancelarSerie(app, eduardo.id, serie.id, { aPartirDe: '2026-11-17' });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json()).toEqual({
+      canceladas: [1, 2].map((i) => ({
+        id: ocorrencias[i]!.id,
+        recursoId: sala.id,
+        ...TERCAS[i],
+        participantes: 20,
+        finalidade: 'Aula de Cálculo',
+        status: 'Cancelada',
+        criadaEm: '2026-11-01T08:00:00-03:00',
+      })),
+      penalidades: [],
+    });
+    expect((await abrir(app, eduardo.id, ocorrencias[0]!.id)).json().status).toBe('Confirmada');
+    for (const i of [1, 2] as const) {
+      expect((await abrir(app, eduardo.id, ocorrencias[i]!.id)).json().historico).toEqual([
+        {
+          de: 'Confirmada',
+          para: 'Cancelada',
+          em: '2026-11-10T08:00:00-03:00',
+          por: { id: eduardo.id, nome: 'Eduardo' },
+          observacao: null,
+        },
+      ]);
+    }
+    const nova = await app.inject({
+      method: 'POST',
+      url: '/api/reservas',
+      cookies: sessaoDe(app, ana.id),
+      payload: {
+        recursoId: sala.id,
+        ...TERCAS[1],
+        participantes: 15,
+      },
+    });
+    expect(nova.statusCode).toBe(201);
+    expect(await banco.penalidade.count()).toBe(0);
+  });
+
+  it('RN16 · RN19 · RN21 · cancelar a Série a menos de 2h da 1ª Ocorrência gera Penalidade nela (e Suspensão na 3ª em 30 dias), sem Penalidade nas seguintes', async () => {
+    const app = await umaAppAs('08:30');
+    const { eduardo, serie, ocorrencias } = await umaSerie();
+    for (const dia of ['02', '03']) {
+      await umaReserva(banco, {
+        usuarioId: eduardo.id,
+        inicio: `2026-11-${dia}T10:00:00-03:00`,
+        fim: `2026-11-${dia}T12:00:00-03:00`,
+      });
+    }
+
+    const resposta = await cancelarSerie(app, eduardo.id, serie.id, { aPartirDe: '2026-11-10' });
+
+    expect(resposta.statusCode).toBe(200);
+    const { canceladas, penalidades } = resposta.json();
+    expect(
+      canceladas.map(({ id, status }: { id: number; status: string }) => [id, status]),
+    ).toEqual(ocorrencias.map(({ id }) => [id, 'Cancelada']));
+    expect(penalidades).toEqual([
+      {
+        id: expect.any(Number),
+        motivo: 'CancelamentoTardio',
+        em: '2026-11-10T08:30:00-03:00',
+      },
+    ]);
+    expect(
+      await banco.penalidade.findMany({ where: { motivo: 'CancelamentoTardio' } }),
+    ).toMatchObject([{ reservaId: ocorrencias[0]!.id, usuarioId: eduardo.id }]);
+    const suspensao = await banco.suspensao.findFirstOrThrow({ include: { penalidades: true } });
+    expect(suspensao.usuarioId).toBe(eduardo.id);
+    expect(suspensao.penalidades).toHaveLength(3);
+  });
+
+  it('RN07 · RN21 · cancelar parcialmente a Série mantém 1 vaga ocupada na Cota; cancelar todas as Ocorrências ativas restantes devolve a vaga', async () => {
+    const app = await umaAppAs('08:00');
+    const { eduardo, sala, serie } = await umaSerie();
+    for (let hora = 7; hora < 16; hora++) {
+      await umaReserva(banco, {
+        usuarioId: eduardo.id,
+        inicio: `2026-11-12T${String(hora).padStart(2, '0')}:00:00-03:00`,
+        fim: `2026-11-12T${String(hora).padStart(2, '0')}:30:00-03:00`,
+      });
+    }
+    const tentarDecimaPrimeira = () =>
+      app.inject({
+        method: 'POST',
+        url: '/api/reservas',
+        cookies: sessaoDe(app, eduardo.id),
+        payload: {
+          recursoId: sala.id,
+          inicio: '2026-11-13T10:00:00-03:00',
+          fim: '2026-11-13T11:00:00-03:00',
+          participantes: 10,
+        },
+      });
+
+    // Cancela a partir de 17/11: a Ocorrência de 10/11 ainda está ativa → a Série continua contando 1 na Cota.
+    expect(
+      (await cancelarSerie(app, eduardo.id, serie.id, { aPartirDe: '2026-11-17' })).statusCode,
+    ).toBe(200);
+    expect((await tentarDecimaPrimeira()).statusCode).toBe(422);
+
+    // Cancela a partir de 10/11: nenhuma Ocorrência ativa sobra → a vaga na Cota é devolvida.
+    expect(
+      (await cancelarSerie(app, eduardo.id, serie.id, { aPartirDe: '2026-11-10' })).statusCode,
+    ).toBe(200);
+    expect((await tentarDecimaPrimeira()).statusCode).toBe(201);
+  });
+
+  it('RN16 · nenhuma Ocorrência cancelável a partir da data → 422 citando a regra', async () => {
+    const app = await umaAppAs('08:00');
+    const { eduardo, serie } = await umaSerie();
+
+    const resposta = await cancelarSerie(app, eduardo.id, serie.id, { aPartirDe: '2026-12-01' });
+
+    expect(resposta.statusCode).toBe(422);
+    expect(resposta.json()).toEqual({
+      erro: {
+        codigo: 'regra_violada',
+        mensagem: 'Não foi possível concluir: 1 regra impede a operação.',
+        violacoes: [
+          {
+            rn: 'RN16',
+            nome: 'Cancelamento',
+            mensagem: 'Não há Ocorrências na Série a partir de 01/12/2026.',
+            campo: 'aPartirDe',
+          },
+        ],
+      },
+    });
+  });
+
+  it('RN16 · outra pessoa tentando cancelar a Série → 403 citando a RN16, e as Ocorrências continuam Confirmadas', async () => {
+    const app = await umaAppAs('08:00');
+    const { eduardo, serie, ocorrencias } = await umaSerie();
+    const outro = await umUsuario(banco, 'Docente');
+
+    const resposta = await cancelarSerie(app, outro.id, serie.id, { aPartirDe: '2026-11-10' });
+
+    expect(resposta.statusCode).toBe(403);
+    expect(resposta.json()).toEqual({
+      erro: {
+        codigo: 'proibido',
+        mensagem: 'RN16 · Cancelamento: Só quem criou a Série pode cancelá-la.',
+        violacoes: [
+          {
+            rn: 'RN16',
+            nome: 'Cancelamento',
+            mensagem: 'Só quem criou a Série pode cancelá-la.',
+          },
+        ],
+      },
+    });
+    for (const { id } of ocorrencias) {
+      expect((await abrir(app, eduardo.id, id)).json().status).toBe('Confirmada');
+    }
+  });
+
+  it('Série que não existe → 404; entrada inválida → 400; sem sessão → 401', async () => {
+    const app = await umaAppAs('08:00');
+    const { eduardo, serie } = await umaSerie();
+
+    const naoExiste = await cancelarSerie(app, eduardo.id, 999, { aPartirDe: '2026-11-10' });
+    const dataInvalida = await cancelarSerie(app, eduardo.id, serie.id, {
+      aPartirDe: '10/11/2026',
+    });
+    const semSessao = await app.inject({
+      method: 'POST',
+      url: `/api/series/${serie.id}/cancelamento`,
+      payload: { aPartirDe: '2026-11-10' },
+    });
+
+    expect(naoExiste.statusCode).toBe(404);
+    expect(naoExiste.json().erro).toMatchObject({
+      codigo: 'nao_encontrado',
+      mensagem: 'Série 999 não encontrada.',
+    });
+    expect(dataInvalida.statusCode).toBe(400);
+    expect(semSessao.statusCode).toBe(401);
+  });
+});
