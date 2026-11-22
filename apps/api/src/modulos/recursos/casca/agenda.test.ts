@@ -7,6 +7,7 @@ import {
   comBanco,
   esvaziar,
   umaReserva,
+  umEquipamento,
   umEspaco,
   umUsuario,
 } from '../../../teste/banco';
@@ -302,5 +303,63 @@ comBanco('US07 · Agenda do Recurso', () => {
     const resposta = await app.inject({ method: 'GET', url: `/api/recursos/${lab.id}/agenda` });
 
     expect(resposta.statusCode).toBe(401);
+  });
+
+  it('RN17 · Equipamento que passou do fim da Tolerância de Devolução vem com devolucaoAtrasada, para a tela pintar ocupado até o agora', async () => {
+    const app = await umaApp({
+      banco,
+      relogio: new RelogioFixo(new Date('2026-11-10T13:10:00-03:00')),
+    });
+    const ana = await umUsuario(banco, 'Aluno', { nome: 'Ana' });
+    const notebook = await umEquipamento(banco);
+    await umaReserva(banco, { recursoId: notebook.id, status: 'EmUso' });
+    await umaReserva(banco, {
+      recursoId: notebook.id,
+      inicio: '2026-11-10T14:00:00-03:00',
+      fim: '2026-11-10T16:00:00-03:00',
+    });
+
+    const resposta = await app.inject({
+      method: 'GET',
+      url: `/api/recursos/${notebook.id}/agenda?semana=2026-11-09`,
+      cookies: sessaoDe(app, ana.id),
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json().ocupacoes).toEqual([
+      {
+        inicio: '2026-11-10T10:00:00-03:00',
+        fim: '2026-11-10T12:00:00-03:00',
+        devolucaoAtrasada: true,
+      },
+      { inicio: '2026-11-10T14:00:00-03:00', fim: '2026-11-10T16:00:00-03:00' },
+    ]);
+  });
+
+  it('RN17 · a Devolução atrasada que começou na semana anterior aparece na semana do agora', async () => {
+    const segunda = new Date('2026-11-16T09:00:00-03:00');
+    const app = await umaApp({ banco, relogio: new RelogioFixo(segunda) });
+    const ana = await umUsuario(banco, 'Aluno', { nome: 'Ana' });
+    const notebook = await umEquipamento(banco);
+    await umaReserva(banco, {
+      recursoId: notebook.id,
+      inicio: '2026-11-13T16:00:00-03:00',
+      fim: '2026-11-13T18:00:00-03:00',
+      status: 'EmUso',
+    });
+
+    const resposta = await app.inject({
+      method: 'GET',
+      url: `/api/recursos/${notebook.id}/agenda?semana=2026-11-16`,
+      cookies: sessaoDe(app, ana.id, segunda),
+    });
+
+    expect(resposta.json().ocupacoes).toEqual([
+      {
+        inicio: '2026-11-13T16:00:00-03:00',
+        fim: '2026-11-13T18:00:00-03:00',
+        devolucaoAtrasada: true,
+      },
+    ]);
   });
 });

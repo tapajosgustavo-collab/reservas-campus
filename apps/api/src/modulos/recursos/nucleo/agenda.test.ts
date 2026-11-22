@@ -141,3 +141,32 @@ describe('US07 · Agenda do Recurso', () => {
     ).toEqual({ agora, recurso: lab, indisponibilidades: [manutencao], ocupacoes: [] });
   });
 });
+
+describe('RN17 · Devolução atrasada na agenda', () => {
+  const atrasada = () => doBruno({ status: 'EmUso', devolucaoAtrasada: true });
+
+  it('RN17 · o Equipamento que passou do fim sem Devolução vem com devolucaoAtrasada para qualquer Usuário, sem nomes', () => {
+    expect(agenda([atrasada()]).ocupacoes).toEqual([
+      {
+        inicio: new Date('2026-11-10T10:00:00-03:00'),
+        fim: new Date('2026-11-10T12:00:00-03:00'),
+        devolucaoAtrasada: true,
+      },
+    ]);
+  });
+
+  it('RN17 · o dono e o Gestor responsável também veem a Devolução atrasada', () => {
+    expect(agenda([atrasada()], bruno).ocupacoes).toEqual([
+      expect.objectContaining({ minha: true, status: 'EmUso', devolucaoAtrasada: true }),
+    ]);
+    expect(agenda([atrasada()], carlos).ocupacoes).toEqual([
+      expect.objectContaining({ reservaId: 50, status: 'EmUso', devolucaoAtrasada: true }),
+    ]);
+  });
+
+  it('RN17 · Reserva sem atraso não traz o campo', () => {
+    expect(agenda([doBruno({ status: 'EmUso' })]).ocupacoes[0]).not.toHaveProperty(
+      'devolucaoAtrasada',
+    );
+  });
+});

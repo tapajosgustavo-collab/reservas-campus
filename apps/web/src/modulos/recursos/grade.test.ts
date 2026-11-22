@@ -248,3 +248,28 @@ describe('US07 · Grade semanal da agenda', () => {
     expect(linhasDaGrade(dias)).toHaveLength(32);
   });
 });
+
+describe('RN17 · Devolução atrasada na grade', () => {
+  /** O Notebook devia voltar às 12h e, às 13h10, ainda não voltou. */
+  const atrasada: Ocupacao = { ...dasDezAoMeioDia, devolucaoAtrasada: true };
+  const asTreze = new Date('2026-11-10T13:10:00-03:00');
+
+  it('RN17 · o Equipamento aparece ocupado do fim até o agora', () => {
+    expect(estadoDaCelula(terca, 12 * 60, [atrasada], asTreze)).toBe('ocupado');
+    expect(estadoDaCelula(terca, 12 * 60 + 30, [atrasada], asTreze)).toBe('ocupado');
+    expect(estadoDaCelula(terca, 13 * 60, [atrasada], asTreze)).toBe('ocupado');
+    expect(estadoDaCelula(terca, 13 * 60 + 30, [atrasada], asTreze)).toBe('livre');
+  });
+
+  it('RN17 · sem o atraso, o que passou do fim é Passado', () => {
+    expect(estadoDaCelula(terca, 12 * 60, [dasDezAoMeioDia], asTreze)).toBe('passado');
+  });
+
+  it('RN17 · a célula do atraso traz a Ocupação, para o dono e o Gestor abrirem a Reserva', () => {
+    expect(celulaDaGrade(terca, 12 * 60 + 30, [atrasada], asTreze).ocupacao).toBe(atrasada);
+  });
+
+  it('RN17 · antes do fim, o atraso não estica nada', () => {
+    expect(estadoDaCelula(terca, 12 * 60, [atrasada], agora)).toBe('livre');
+  });
+});

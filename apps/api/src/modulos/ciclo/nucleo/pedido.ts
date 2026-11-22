@@ -237,16 +237,15 @@ function serieNaoDecidivel(
   ];
 }
 
-/** "3 Ocorrências, de 11/11/2026 a 25/11/2026, das 14:00 às 16:00", como a Notificação mostra. */
+/** "3 Ocorrências, 11/11/2026, 18/11/2026 e 25/11/2026, das 14:00 às 16:00", como a Notificação mostra. */
 function rotuloDasOcorrencias(aDecidir: readonly OcorrenciaDaSerie[]): string {
   const primeira = aDecidir[0]!;
-  const ultima = aDecidir[aDecidir.length - 1]!;
+  const quantas = aDecidir.length === 1 ? '1 Ocorrência' : `${aDecidir.length} Ocorrências`;
+  const datas = aDecidir.map(({ inicio }) => dataEmSaoPaulo(inicio));
+  const ultima = datas.pop();
+  const lista = datas.length > 0 ? `${datas.join(', ')} e ${ultima}` : ultima;
   const horario = `das ${horaEmSaoPaulo(primeira.inicio)} às ${horaEmSaoPaulo(primeira.fim)}`;
-  if (aDecidir.length === 1) {
-    return `1 Ocorrência, ${dataEmSaoPaulo(primeira.inicio)}, ${horario}`;
-  }
-  const datas = `de ${dataEmSaoPaulo(primeira.inicio)} a ${dataEmSaoPaulo(ultima.inicio)}`;
-  return `${aDecidir.length} Ocorrências, ${datas}, ${horario}`;
+  return `${quantas}, ${lista}, ${horario}`;
 }
 
 /**

@@ -97,15 +97,19 @@ export const esquemaDetalheDaReserva = esquemaItemDeReserva.extend({
 
 export type DetalheDaReserva = z.infer<typeof esquemaDetalheDaReserva>;
 
+/** US13: a Penalidade gerada pelo Cancelamento tardio de uma Reserva Confirmada (RN16). */
+export const esquemaPenalidadeDoCancelamento = z.object({
+  id: z.number().int(),
+  motivo: z.literal('CancelamentoTardio'),
+  em: esquemaInstante,
+});
+
+export type PenalidadeDoCancelamento = z.infer<typeof esquemaPenalidadeDoCancelamento>;
+
 /** US13: o Cancelamento, com a Penalidade quando é tardio (RN16). */
 export const esquemaCancelamento = z.object({
   reserva: esquemaReserva,
-  penalidade: z
-    .object({
-      id: z.number().int(),
-      motivo: z.literal('CancelamentoTardio'),
-      em: esquemaInstante,
-    })
+  penalidade: esquemaPenalidadeDoCancelamento
     .nullable()
     .describe('`null` = sem Penalidade: Pendente, ou Confirmada a 2h ou mais do início (RN16)'),
 });

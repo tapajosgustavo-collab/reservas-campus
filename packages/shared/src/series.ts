@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import { POLITICA } from './politica';
 import { esquemaInstante } from './instante';
-import { esquemaCriarReserva, esquemaIdDaReserva, esquemaReserva } from './reservas';
+import {
+  esquemaCriarReserva,
+  esquemaIdDaReserva,
+  esquemaPenalidadeDoCancelamento,
+  esquemaReserva,
+} from './reservas';
 
 const esquemaData = z.iso.date();
 
@@ -65,3 +70,22 @@ export const esquemaSerieDecidida = z.object({
 });
 
 export type SerieDecidida = z.infer<typeof esquemaSerieDecidida>;
+
+/** US09, US13, RN16 e RN21: o dono cancela as Ocorrências da Série a partir de uma data. */
+export const esquemaCancelarSerie = z.strictObject({
+  aPartirDe: esquemaData.describe(
+    'Primeira data (`YYYY-MM-DD`, em São Paulo) a cancelar na Série (RN16, RN21)',
+  ),
+});
+
+export type CancelarSerie = z.infer<typeof esquemaCancelarSerie>;
+
+/** US09, US13, RN16 e RN21: as Ocorrências canceladas da Série e as Penalidades geradas. */
+export const esquemaCancelamentoDaSerie = z.object({
+  canceladas: z.array(esquemaReserva).describe('As Ocorrências canceladas, da primeira à última'),
+  penalidades: z
+    .array(esquemaPenalidadeDoCancelamento)
+    .describe('As Penalidades de Cancelamento tardio geradas (RN16)'),
+});
+
+export type CancelamentoDaSerie = z.infer<typeof esquemaCancelamentoDaSerie>;

@@ -36,6 +36,12 @@ export const esquemaOcupacao = z.object({
     .nullable()
     .optional()
     .describe('`null` = sem Finalidade; só para o Gestor responsável (RN22)'),
+  devolucaoAtrasada: z
+    .literal(true)
+    .optional()
+    .describe(
+      'RN17: o Equipamento passou do fim da Tolerância de Devolução sem voltar; a tela pinta ocupado do `fim` até o `agora`',
+    ),
 });
 
 export type Ocupacao = z.infer<typeof esquemaOcupacao>;

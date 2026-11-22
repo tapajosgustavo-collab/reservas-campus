@@ -9,6 +9,7 @@ import {
   esquemaIndisponibilidadeCriada,
   esquemaRecurso,
   esquemaRecursos,
+  POLITICA,
 } from '@reservas/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
@@ -19,7 +20,7 @@ import type { Prisma } from '../../../generated/prisma/client';
 import { agendaPara } from '../nucleo/agenda';
 import { decidirIndisponibilidade } from '../nucleo/indisponibilidade';
 import { decidirCadastro, decidirEdicao, type Efeito } from '../nucleo/recurso';
-import { executar as executarEmCiclo } from '../../ciclo';
+import { devolucaoAtrasada, executar as executarEmCiclo } from '../../ciclo';
 import { executar as executarEmReservas, violacoesDoIntervalo } from '../../reservas';
 import { executar } from './efeitos';
 
@@ -330,9 +331,15 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
       const semana = request.query.semana ?? segundaDaSemana(request.agora);
       const { inicio, fim } = limitesDaSemana(semana);
       // Todas as Reservas que tocam a semana: quem escolhe as ativas é o núcleo. Quem reservou e
-      // a Finalidade só são lidos para o Gestor responsável, o único que os vê (RN22).
+      // a Finalidade só são lidos para o Gestor responsável, o único que os vê (RN22). A Em uso
+      // que começou antes entra mesmo terminando antes da semana: na Devolução atrasada, o
+      // Equipamento continua ocupado até o agora (RN17).
       const consulta = {
-        where: { recursoId: recurso.id, inicio: { lt: fim }, fim: { gt: inicio } },
+        where: {
+          recursoId: recurso.id,
+          inicio: { lt: fim },
+          OR: [{ fim: { gt: inicio } }, { status: 'EmUso' }],
+        },
         orderBy: [{ inicio: 'asc' }, { id: 'asc' }],
       } satisfies Prisma.ReservaFindManyArgs;
       const colunas = { id: true, usuarioId: true, inicio: true, fim: true, status: true } as const;
@@ -357,11 +364,16 @@ export function registrarRotasDeRecursos(app: FastifyInstance) {
         select: { inicio: true, fim: true, motivo: true },
         orderBy: [{ inicio: 'asc' }, { id: 'asc' }],
       });
+      // RN17 é do M4: a agenda só mostra o Equipamento em Devolução atrasada como ocupado.
+      const atrasada = (reserva: { status: string; fim: Date }) =>
+        recurso.tipo === 'Equipamento' &&
+        reserva.status === 'EmUso' &&
+        devolucaoAtrasada(reserva.fim, POLITICA, request.agora);
       const agenda = agendaPara(quem, {
         agora: request.agora,
         recurso,
         indisponibilidades,
-        reservas,
+        reservas: reservas.map((reserva) => ({ ...reserva, devolucaoAtrasada: atrasada(reserva) })),
       });
       return {
         ...agenda,
