@@ -1,6 +1,16 @@
-import { esquemaCancelamento, POLITICA, type Reserva } from '@reservas/shared';
+import { TZDate } from '@date-fns/tz';
+import {
+  esquemaCancelamento,
+  esquemaCancelamentoDaSerie,
+  POLITICA,
+  type Reserva,
+} from '@reservas/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { enviarJson } from '../../comum/api';
+
+const FUSO = 'America/Sao_Paulo';
+const emSaoPaulo = (instante: string) => new TZDate(instante, FUSO);
 
 type ReservaDoBotao = Pick<Reserva, 'status' | 'inicio'>;
 
@@ -40,6 +50,52 @@ export function useCancelarReserva() {
       enviarJson('POST', `/api/reservas/${reservaId}/cancelamento`, undefined, esquemaCancelamento),
     // Aceito, a Reserva vai para Encerradas em Minhas reservas, muda no detalhe e libera a agenda.
     // Recusado, o `agora` da sessão estava velho (o início chegou com a tela aberta).
+    onSettled: () => cliente.invalidateQueries(),
+  });
+}
+
+/** RNF08: a data (`YYYY-MM-DD`) da Ocorrência no calendário de São Paulo. */
+export function dataDaOcorrencia({ inicio }: Pick<Reserva, 'inicio'>): string {
+  return format(emSaoPaulo(inicio), 'yyyy-MM-dd');
+}
+
+/**
+ * RN16 e RN21: as Ocorrências da Série que ainda podem ser canceladas (Pendente ou Confirmada antes
+ * do início, pelo `agora` da API), da primeira à última.
+ */
+export function ocorrenciasCancelaveisDaSerie<T extends ReservaDoBotao>(
+  ocorrencias: readonly T[],
+  agora: string,
+): T[] {
+  return ocorrencias
+    .filter((ocorrencia) => podeCancelar(ocorrencia, agora))
+    .sort((a, b) => Date.parse(a.inicio) - Date.parse(b.inicio));
+}
+
+/**
+ * RN16 e RN21: cancelar a Série a partir de `aPartirDe` gera Penalidade em alguma Ocorrência?
+ * Só se alguma Ocorrência cancelável com data `>= aPartirDe` estiver Confirmada a menos de 2h do início.
+ */
+export function cancelarSerieGeraPenalidade(
+  ocorrencias: readonly ReservaDoBotao[],
+  aPartirDe: string,
+  agora: string,
+): boolean {
+  return ocorrenciasCancelaveisDaSerie(ocorrencias, agora)
+    .filter((ocorrencia) => dataDaOcorrencia(ocorrencia) >= aPartirDe)
+    .some((ocorrencia) => cancelarGeraPenalidade(ocorrencia, agora));
+}
+
+export function useCancelarSerie() {
+  const cliente = useQueryClient();
+  return useMutation({
+    mutationFn: ({ serieId, aPartirDe }: { serieId: number; aPartirDe: string }) =>
+      enviarJson(
+        'POST',
+        `/api/series/${serieId}/cancelamento`,
+        { aPartirDe },
+        esquemaCancelamentoDaSerie,
+      ),
     onSettled: () => cliente.invalidateQueries(),
   });
 }

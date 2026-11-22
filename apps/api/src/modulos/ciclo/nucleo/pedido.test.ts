@@ -383,7 +383,7 @@ describe('RN21 · Série tudo-ou-nada na fila', () => {
             destinatarioId: EDUARDO.id,
             tipo: 'Aprovacao',
             mensagem:
-              'Seu Pedido em Série de Laboratório de Química (3 Ocorrências, de 11/11/2026 a 25/11/2026, das 14:00 às 16:00) foi aprovado.',
+              'Seu Pedido em Série de Laboratório de Química (3 Ocorrências, 11/11/2026, 18/11/2026 e 25/11/2026, das 14:00 às 16:00) foi aprovado.',
             em: em('10T09:00'),
             reservaId: 51,
           },
@@ -414,7 +414,7 @@ describe('RN21 · Série tudo-ou-nada na fila', () => {
             destinatarioId: EDUARDO.id,
             tipo: 'Recusa',
             mensagem:
-              'Seu Pedido em Série de Laboratório de Química (3 Ocorrências, de 11/11/2026 a 25/11/2026, das 14:00 às 16:00) foi recusado: Laboratório em reforma no semestre.',
+              'Seu Pedido em Série de Laboratório de Química (3 Ocorrências, 11/11/2026, 18/11/2026 e 25/11/2026, das 14:00 às 16:00) foi recusado: Laboratório em reforma no semestre.',
             em: em('10T09:00'),
             reservaId: 51,
           },
@@ -423,12 +423,17 @@ describe('RN21 · Série tudo-ou-nada na fila', () => {
     });
   });
 
-  it('RN21 · só as Ocorrências Pendentes são decididas: a cancelada fica de fora', () => {
+  it('RN21 · só as Ocorrências Pendentes são decididas: a cancelada fica de fora e a Notificação lista as datas que sobraram', () => {
     const decisao = decidirAprovacaoDaSerie(
       fatosDaSerie([
         { id: 51, status: 'Cancelada', inicio: em('11T14:00'), fim: em('11T16:00') },
         { id: 52, status: 'Pendente', inicio: em('18T14:00'), fim: em('18T16:00') },
-        { id: 53, status: 'Pendente', inicio: em('25T14:00'), fim: em('25T16:00') },
+        {
+          id: 54,
+          status: 'Pendente',
+          inicio: new Date('2026-12-02T14:00:00-03:00'),
+          fim: new Date('2026-12-02T16:00:00-03:00'),
+        },
       ]),
       CARLOS,
       em('10T09:00'),
@@ -437,11 +442,11 @@ describe('RN21 · Série tudo-ou-nada na fila', () => {
     expect(decisao).toMatchObject({
       tipo: 'aceita',
       efeitos: [
-        { reservaIds: [52, 53] },
+        { reservaIds: [52, 54] },
         {
           notificacao: {
             mensagem:
-              'Seu Pedido em Série de Laboratório de Química (2 Ocorrências, de 18/11/2026 a 25/11/2026, das 14:00 às 16:00) foi aprovado.',
+              'Seu Pedido em Série de Laboratório de Química (2 Ocorrências, 18/11/2026 e 02/12/2026, das 14:00 às 16:00) foi aprovado.',
             reservaId: 52,
           },
         },

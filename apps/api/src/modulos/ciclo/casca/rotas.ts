@@ -1,6 +1,8 @@
 import {
   esquemaBuscarNotificacoes,
   esquemaCancelamento,
+  esquemaCancelamentoDaSerie,
+  esquemaCancelarSerie,
   esquemaDevolucao,
   esquemaEmUso,
   esquemaFila,
@@ -23,7 +25,7 @@ import { paraIsoSaoPaulo } from '../../../comum/instante';
 import { exigirPerfil, exigirSessao } from '../../../comum/sessao';
 import { penalidadesNaJanela, suspensoAte } from '../../conduta';
 import { executar as executarEmReservas } from '../../reservas';
-import { decidirCancelamento } from '../nucleo/cancelamento';
+import { decidirCancelamento, decidirCancelamentoDaSerie } from '../nucleo/cancelamento';
 import { decidirCheckIn } from '../nucleo/check-in';
 import { decidirDevolucao, devolucaoAtrasada } from '../nucleo/devolucao';
 import {
@@ -265,6 +267,83 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
     },
   );
 
+  rotas.post(
+    '/api/series/:id/cancelamento',
+    {
+      schema: {
+        summary:
+          'Cancela as Ocorrências Pendentes ou Confirmadas da Série a partir de uma data, ' +
+          'cada uma seguindo a regra de Cancelamento (US09, US13, RN16, RN21)',
+        tags: ['ciclo'],
+        params: esquemaIdDaSerie,
+        body: esquemaCancelarSerie,
+        response: { 200: esquemaCancelamentoDaSerie },
+      },
+    },
+    async (request) => {
+      const quem = await exigirSessao(request);
+      const { params, body, tx, agora } = request;
+      const serie = await tx.serie.findUnique({
+        where: { id: params.id },
+        select: {
+          id: true,
+          usuarioId: true,
+          recurso: { select: { nome: true } },
+          reservas: { select: { id: true, inicio: true, fim: true, status: true } },
+        },
+      });
+      if (!serie) throw new ErroApi('nao_encontrado', `Série ${params.id} não encontrada.`);
+
+      const { reservas: ocorrencias, ...resto } = serie;
+      const decisao = decidirCancelamentoDaSerie(
+        { serie: { ...resto, ocorrencias }, politica: POLITICA },
+        body,
+        quem,
+        agora,
+      );
+      if (decisao.tipo === 'proibida') throw proibidoPelaRegra(decisao.violacoes);
+      if (decisao.tipo === 'recusada') throw regraViolada(decisao.violacoes);
+
+      const canceladas = [];
+      const penalidades = [];
+      const notificados = new Set<number>();
+      for (const efeito of decisao.efeitos) {
+        if (efeito.evento === 'StatusMudou') {
+          const cancelada = await executarEmReservas(tx, efeito);
+          request.log.info({ evento: efeito.evento, reservaId: cancelada.id }, efeito.evento);
+          canceladas.push(paraResposta(cancelada));
+        } else if (efeito.evento === 'PenalidadeGerada') {
+          const aviso = decisao.efeitos.find(
+            (e): e is NotificacaoEmitida =>
+              e.evento === 'NotificacaoEmitida' &&
+              e.notificacao.reservaId === efeito.penalidade.reservaId,
+          );
+          if (aviso) {
+            await executar(tx, aviso);
+            notificados.add(efeito.penalidade.reservaId);
+          }
+          const { penalidade } = await registrarPenalidadeEAvisar(tx, efeito);
+          request.log.info(
+            { evento: efeito.evento, reservaId: efeito.penalidade.reservaId },
+            efeito.evento,
+          );
+          penalidades.push({
+            id: penalidade.id,
+            motivo: 'CancelamentoTardio' as const,
+            em: paraIsoSaoPaulo(penalidade.em),
+          });
+        } else if (
+          efeito.evento === 'NotificacaoEmitida' &&
+          (efeito.notificacao.reservaId === undefined ||
+            !notificados.has(efeito.notificacao.reservaId))
+        ) {
+          await executar(tx, efeito);
+        }
+      }
+      return { canceladas, penalidades };
+    },
+  );
+
   rotas.get(
     '/api/gestao/pedidos',
     {
@@ -289,7 +368,6 @@ export function registrarRotasDoCiclo(app: FastifyInstance) {
           recurso: { select: { id: true, nome: true, tipo: true, capacidade: true } },
           usuario: { select: { id: true, nome: true, perfil: true } },
         },
-        orderBy: [{ inicio: 'asc' }, { id: 'asc' }],
       });
       const conduta = await condutaDosSolicitantes(
         request.tx,
