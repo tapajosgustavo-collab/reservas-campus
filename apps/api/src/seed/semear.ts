@@ -1,6 +1,6 @@
 import { TZDate } from '@date-fns/tz';
 import type { CadastrarRecurso } from '@reservas/shared';
-import { addDays, addHours } from 'date-fns';
+import { addDays, addHours, startOfDay } from 'date-fns';
 import type { Banco } from '../comum/banco';
 import { FUSO } from '../comum/instante';
 import * as recursos from '../modulos/recursos';
@@ -154,18 +154,22 @@ const RESERVAS: {
 
 /**
  * As Indisponibilidades do #18 (§3), de T0 + `dias` até T0 + `ateDias`, ou sem fim com
- * `ateDias: null`. Cada uma foi criada pelo Gestor no próprio início.
+ * `ateDias: null`; com `daMeiaNoite`, da 0h desses dias. Cada uma foi criada pelo Gestor no
+ * próprio início ou, se começa depois do T0, no T0.
  */
 const INDISPONIBILIDADES: {
   recurso: string;
   dias: number;
   ateDias: number | null;
   motivo: string;
+  daMeiaNoite?: true;
 }[] = [
   // Do T0 a D+2: tira a Sala 102 da busca da Ana (cena 2).
   { recurso: 'Sala 102', dias: 0, ateDias: 2, motivo: 'Manutenção do ar-condicionado' },
   // Desde D−3, sem fim: o Recurso tirado de uso da cena 1.
   { recurso: 'Projetor Epson P-124', dias: -3, ateDias: null, motivo: 'Extraviado' },
+  // D+16, quinta, o dia inteiro: a única data recusada da Série do Eduardo (RN04, cena 4).
+  { recurso: 'Auditório', dias: 16, ateDias: 17, motivo: 'Colação de grau', daMeiaNoite: true },
 ];
 
 const MEIA_HORA = 30 * 60_000;
@@ -181,6 +185,11 @@ function t0De(agora: Date) {
 /** T0 + dias do calendário de São Paulo + horas. */
 function noT0(t0: Date, dias: number, horas = 0) {
   return new Date(addHours(addDays(new TZDate(t0, FUSO), dias), horas).getTime());
+}
+
+/** A 0h de T0 + dias, no calendário de São Paulo. */
+function meiaNoiteNoT0(t0: Date, dias: number) {
+  return new Date(startOfDay(addDays(new TZDate(t0, FUSO), dias)).getTime());
 }
 
 // Usuários, Recursos e Reservas em sequência: com o Neon longe do runner do reset, os 5 s padrão
@@ -264,16 +273,17 @@ export async function semear(banco: Banco, agora: Date): Promise<'semeado' | 'ig
       }
     }
 
-    for (const { recurso, dias, ateDias, motivo } of INDISPONIBILIDADES) {
-      const inicio = noT0(t0, dias);
+    for (const { recurso, dias, ateDias, motivo, daMeiaNoite } of INDISPONIBILIDADES) {
+      const noDia = daMeiaNoite ? meiaNoiteNoT0 : noT0;
+      const inicio = noDia(t0, dias);
       await recursos.executar(tx, {
         evento: 'IndisponibilidadeCriada',
         indisponibilidade: {
           recursoId: idDoRecurso(recurso),
           inicio,
-          fim: ateDias === null ? null : noT0(t0, ateDias),
+          fim: ateDias === null ? null : noDia(t0, ateDias),
           motivo,
-          criadaEm: inicio,
+          criadaEm: inicio < t0 ? inicio : t0,
         },
       });
     }
