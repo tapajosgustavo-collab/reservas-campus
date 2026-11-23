@@ -18,6 +18,14 @@ const T0 = new Date('2026-11-10T08:00:00-03:00');
 async function demoNoT0(agora = T0) {
   await semear(banco, agora);
   await banco.$transaction((tx) => sincronizar(tx, agora));
+  return demoNoRelogio(agora);
+}
+
+/**
+ * A app sobre o banco já semeado, com o relógio em `agora`: o "Avançar relógio" da demo (cena 6
+ * às 9h). Cada requisição roda o `sincronizar(agora)` antes do comando, como em produção.
+ */
+async function demoNoRelogio(agora: Date) {
   const app = await umaApp({ banco, relogio: new RelogioFixo(agora) });
 
   const sessoes = new Map<string, { sessao: string }>();
@@ -45,7 +53,20 @@ async function demoNoT0(agora = T0) {
     return recursos.find((recurso) => recurso.nome === nome)!.id;
   }
 
-  return { app, entrarComo, get, idDoRecurso };
+  async function post(email: string, url: string, payload: object = {}) {
+    return app.inject({ method: 'POST', url, payload, cookies: await entrarComo(email) });
+  }
+
+  /** O id da Reserva ativa (Confirmada, Pendente ou Em uso) do Usuário no Recurso. */
+  async function idDaReserva(email: string, recurso: string): Promise<number> {
+    const { itens }: { itens: { id: number; recurso: { nome: string } }[] } = await get(
+      email,
+      '/api/reservas?situacao=ativas',
+    );
+    return itens.find((item) => item.recurso.nome === recurso)!.id;
+  }
+
+  return { app, entrarComo, get, post, idDoRecurso, idDaReserva };
 }
 
 comBanco('RNF10 · Seed', () => {
@@ -375,12 +396,134 @@ comBanco('RNF10 · Seed', () => {
       `/api/recursos/${await idDoRecurso('Notebook Dell N-01')}/agenda`,
     );
 
-    expect(agenda.ocupacoes).toMatchObject([
+    // Antes dela, o notebook do Eduardo, em Devolução atrasada e sem o nome dele (RN17, RN22).
+    expect(agenda.ocupacoes).toEqual([
       {
+        inicio: '2026-11-09T14:00:00-03:00',
+        fim: '2026-11-09T18:00:00-03:00',
+        devolucaoAtrasada: true,
+      },
+      expect.objectContaining({
         inicio: '2026-11-10T09:00:00-03:00',
         fim: '2026-11-10T11:00:00-03:00',
         minha: true,
         status: 'Confirmada',
+      }),
+    ]);
+  });
+
+  it('cena 6 (RN17): o Eduardo retirou o N-01 em D−1 e não devolveu → no sincronizar(T0), 1 Penalidade às 18h15 e a Reserva continua Em uso', async () => {
+    const { get } = await demoNoT0();
+
+    const conduta = await get('eduardo.demo@unifesp.br', '/api/conduta');
+    expect(conduta).toMatchObject({
+      suspensoAte: null,
+      penalidadesQueContam: 1,
+      penalidades: [
+        {
+          motivo: 'DevolucaoAtrasada',
+          em: '2026-11-09T18:15:00-03:00',
+          contaParaSuspensao: true,
+          reserva: {
+            inicio: '2026-11-09T14:00:00-03:00',
+            fim: '2026-11-09T18:00:00-03:00',
+            recurso: { nome: 'Notebook Dell N-01' },
+          },
+        },
+      ],
+    });
+
+    // Devolução atrasada não é Status: a Reserva continua Em uso, na lista do Carlos (US14).
+    expect(await get('carlos.demo@unifesp.br', '/api/gestao/em-uso')).toMatchObject([
+      {
+        inicio: '2026-11-09T14:00:00-03:00',
+        fim: '2026-11-09T18:00:00-03:00',
+        devolucaoAtrasada: true,
+        recurso: { nome: 'Notebook Dell N-01' },
+        usuario: { nome: 'Eduardo Prado' },
+      },
+    ]);
+  });
+
+  it('cena 6 (RN17, US16): a Devolução atrasada avisa o Eduardo e o Carlos, às 18h15 de D−1', async () => {
+    const { get } = await demoNoT0();
+
+    const atrasos = async (email: string) => {
+      const { itens } = await get(email, '/api/notificacoes');
+      return itens
+        .filter(({ tipo }: { tipo: string }) => tipo === 'DevolucaoAtrasada')
+        .map(({ em, mensagem }: { em: string; mensagem: string }) => ({ em, mensagem }));
+    };
+
+    expect(await atrasos('eduardo.demo@unifesp.br')).toEqual([
+      {
+        em: '2026-11-09T18:15:00-03:00',
+        mensagem: expect.stringContaining('Penalidade por Devolução atrasada: Notebook Dell N-01'),
+      },
+    ]);
+    expect(await atrasos('carlos.demo@unifesp.br')).toEqual([
+      {
+        em: '2026-11-09T18:15:00-03:00',
+        mensagem: expect.stringContaining('Eduardo Prado não devolveu Notebook Dell N-01'),
+      },
+    ]);
+  });
+
+  it('cena 6 (RN23, RN13, RN14): às 9h, o Check-in da Bia é recusado; o Carlos registra a Devolução e o Check-in dela passa', async () => {
+    await demoNoT0();
+    const as9 = new Date('2026-11-10T09:00:00-03:00');
+    const { post, idDaReserva } = await demoNoRelogio(as9);
+    const daBia = await idDaReserva('bia.demo@unifesp.br', 'Notebook Dell N-01');
+    const doEduardo = await idDaReserva('eduardo.demo@unifesp.br', 'Notebook Dell N-01');
+
+    const recusado = await post('bia.demo@unifesp.br', `/api/reservas/${daBia}/check-in`);
+    expect(recusado.statusCode).toBe(422);
+    expect(recusado.json().erro.violacoes).toMatchObject([
+      { rn: 'RN23', mensagem: expect.stringContaining('ainda não foi devolvido') },
+    ]);
+
+    const devolucao = await post('carlos.demo@unifesp.br', `/api/reservas/${doEduardo}/devolucao`);
+    expect(devolucao.statusCode).toBe(200);
+    expect(devolucao.json().status).toBe('Concluida');
+
+    const checkIn = await post('bia.demo@unifesp.br', `/api/reservas/${daBia}/check-in`);
+    expect(checkIn.statusCode).toBe(200);
+    expect(checkIn.json().status).toBe('EmUso');
+
+    // A Devolução depois do atraso não gera outra Penalidade (RN17).
+    expect(
+      await banco.penalidade.count({ where: { usuario: { email: 'eduardo.demo@unifesp.br' } } }),
+    ).toBe(1);
+  });
+
+  it('cena 6 (RN23): sem a Devolução até 9h15, a Reserva da Bia é cancelada pelo sistema, sem Penalidade e com Notificação', async () => {
+    await demoNoT0();
+    const as916 = new Date('2026-11-10T09:16:00-03:00');
+    await banco.$transaction((tx) => sincronizar(tx, as916));
+    const { get } = await demoNoRelogio(as916);
+
+    const { itens } = await get('bia.demo@unifesp.br', '/api/reservas?situacao=encerradas');
+    expect(itens).toMatchObject([
+      {
+        inicio: '2026-11-10T09:00:00-03:00',
+        fim: '2026-11-10T11:00:00-03:00',
+        status: 'Cancelada',
+        recurso: { nome: 'Notebook Dell N-01' },
+      },
+    ]);
+    expect(
+      await banco.penalidade.count({ where: { usuario: { email: 'bia.demo@unifesp.br' } } }),
+    ).toBe(0);
+
+    const notificacoes = await get('bia.demo@unifesp.br', '/api/notificacoes');
+    expect(
+      notificacoes.itens
+        .filter(({ tipo }: { tipo: string }) => tipo === 'CancelamentoPeloSistema')
+        .map(({ em, mensagem }: { em: string; mensagem: string }) => ({ em, mensagem })),
+    ).toEqual([
+      {
+        em: '2026-11-10T09:15:00-03:00',
+        mensagem: expect.stringContaining('Notebook Dell N-01'),
       },
     ]);
   });
@@ -399,7 +542,9 @@ comBanco('RNF10 · Seed', () => {
         recurso: { nome: 'Sala 101' },
       },
     ]);
-    expect(await banco.penalidade.count()).toBe(0);
+    expect(
+      await banco.penalidade.count({ where: { usuario: { email: 'ana.demo@unifesp.br' } } }),
+    ).toBe(0);
   });
 
   it('RN10 · o Laboratório de Informática 2 e o Auditório são restritos; os outros Recursos, comuns', async () => {
@@ -473,6 +618,60 @@ comBanco('RNF10 · Seed', () => {
     expect(resposta.json().status).toBe('Pendente');
   });
 
+  it('cena 7 (RN15): as faltas do Bruno em D−12 e D−5 viram 2 Penalidades no sincronizar(T0), sem Suspensão ainda', async () => {
+    const { get } = await demoNoT0();
+
+    const conduta = await get('bruno.demo@unifesp.br', '/api/conduta');
+
+    expect(conduta).toMatchObject({
+      suspensoAte: null,
+      penalidadesQueContam: 2,
+      penalidades: [
+        {
+          motivo: 'NaoComparecimento',
+          em: '2026-11-05T10:15:00-03:00',
+          contaParaSuspensao: true,
+          reserva: {
+            inicio: '2026-11-05T10:00:00-03:00',
+            fim: '2026-11-05T12:00:00-03:00',
+            recurso: { nome: 'Projetor Epson P-123' },
+          },
+        },
+        {
+          motivo: 'NaoComparecimento',
+          em: '2026-10-29T14:15:00-03:00',
+          contaParaSuspensao: true,
+          reserva: {
+            inicio: '2026-10-29T14:00:00-03:00',
+            fim: '2026-10-29T16:00:00-03:00',
+            recurso: { nome: 'Sala de estudos 3' },
+          },
+        },
+      ],
+    });
+  });
+
+  it('cena 7: o Bruno recebeu uma Notificação de Penalidade por falta', async () => {
+    const { get } = await demoNoT0();
+
+    const { itens } = await get('bruno.demo@unifesp.br', '/api/notificacoes');
+
+    expect(
+      itens
+        .filter(({ tipo }: { tipo: string }) => tipo === 'Penalidade')
+        .map(({ em, mensagem }: { em: string; mensagem: string }) => ({ em, mensagem })),
+    ).toEqual([
+      {
+        em: '2026-11-05T10:15:00-03:00',
+        mensagem: expect.stringContaining('Não comparecimento na Reserva de Projetor Epson P-123'),
+      },
+      {
+        em: '2026-10-29T14:15:00-03:00',
+        mensagem: expect.stringContaining('Não comparecimento na Reserva de Sala de estudos 3'),
+      },
+    ]);
+  });
+
   it('o T0 é o agora arredondado para a próxima meia hora (#18)', async () => {
     const { get, idDoRecurso } = await demoNoT0(new Date('2026-11-10T08:10:00-03:00'));
 
@@ -482,6 +681,7 @@ comBanco('RNF10 · Seed', () => {
     );
 
     expect(agenda.ocupacoes).toMatchObject([
+      { inicio: '2026-11-09T14:30:00-03:00', fim: '2026-11-09T18:30:00-03:00' },
       { inicio: '2026-11-10T09:30:00-03:00', fim: '2026-11-10T11:30:00-03:00' },
     ]);
   });

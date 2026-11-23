@@ -88,9 +88,38 @@ const RESERVAS: {
     criadaNoDia: -8,
     checkInMinAntes: 5,
   },
+  // D−12, 14h–16h, e D−5, 10h–12h, sem Check-in: o sincronizar(T0) faz delas as 2 primeiras
+  // Penalidades do Bruno, às 14h15 e às 10h15 (RN15, cena 7).
+  {
+    quem: 'bruno.demo@unifesp.br',
+    recurso: 'Sala de estudos 3',
+    dias: -12,
+    das: 6,
+    ate: 8,
+    criadaNoDia: -13,
+  },
+  {
+    quem: 'bruno.demo@unifesp.br',
+    recurso: 'Projetor Epson P-123',
+    dias: -5,
+    das: 2,
+    ate: 4,
+    criadaNoDia: -6,
+  },
   // D, 10h–12h: tira a Sala 101 da busca da Ana (cena 2), dá o Conflito da cena 3 e é a falta
-  // que suspende o Bruno (cena 7).
+  // que suspende o Bruno (cena 7), a 3ª Penalidade em 30 dias (RN19).
   { quem: 'bruno.demo@unifesp.br', recurso: 'Sala 101', dias: 0, das: 2, ate: 4, criadaNoDia: -2 },
+  // D−1, 14h–18h, retirado às 13h55 e não devolvido: o sincronizar(T0) gera a Devolução atrasada
+  // às 18h15, com a Penalidade do Eduardo e a Notificação para ele e para o Carlos (RN17, cena 6).
+  {
+    quem: 'eduardo.demo@unifesp.br',
+    recurso: 'Notebook Dell N-01',
+    dias: -1,
+    das: 6,
+    ate: 10,
+    criadaNoDia: -2,
+    checkInMinAntes: 5,
+  },
   // D, 9h–11h: a próxima Reserva do notebook que o Eduardo não devolveu (RN23, cena 6).
   {
     quem: 'bia.demo@unifesp.br',
